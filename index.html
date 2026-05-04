@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tarefas Estratégicas · Cebraspe</title>
+  <meta name="description" content="Cadastrador de tarefas estratégicas com matriz de Eisenhower, agenda, revisão executiva e geração de despachos e e-mails — Plano Diretor Cebraspe 2023–2026." />
+  <link rel="preconnect" href="https://api.fontshare.com" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Homemade+Apple&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=20260504k" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a3d7a'/%3E%3Cpath d='M9 11h14M9 16h14M9 21h9' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='25.5' cy='21' r='2' fill='%23f08000'/%3E%3C/svg%3E" />
+
+  <!-- Bibliotecas: jsPDF, html2canvas, SheetJS, Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="container topbar__inner">
+      <div class="brand">
+        <svg class="brand__mark" viewBox="0 0 40 40" aria-hidden="true">
+          <rect width="40" height="40" rx="8" fill="currentColor"/>
+          <path d="M11 13h18M11 20h18M11 27h11" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round"/>
+          <circle cx="29" cy="27" r="2.6" fill="#f08000"/>
+        </svg>
+        <div>
+          <div class="brand__title">Tarefas Estratégicas</div>
+          <div class="brand__sub">Cebraspe · Plano Diretor 2023–2026</div>
+        </div>
+      </div>
+      <div class="kpis-block" aria-label="Indicadores">
+        <div class="kpis-mini" aria-label="Resumo geral">
+          <span><strong id="k-total">0</strong> total</span>
+          <span><strong id="k-andamento">0</strong> andamento</span>
+          <span><strong id="k-concluidas">0</strong> concluídas</span>
+          <span class="warn"><strong id="k-atrasadas">0</strong> atrasadas</span>
+        </div>
+        <div class="kpis-quad" aria-label="Distribuição por quadrante">
+          <span class="kq kq--q1"><strong id="k-q1">0</strong> Q1</span>
+          <span class="kq kq--q2"><strong id="k-q2">0</strong> Q2</span>
+          <span class="kq kq--q3"><strong id="k-q3">0</strong> Q3</span>
+          <span class="kq kq--q4"><strong id="k-q4">0</strong> Q4</span>
+          <span class="kq kq--nc"><strong id="k-nc">0</strong> Não class.</span>
+          <span class="spark-wrap" title="% Q2 nas últimas 8 semanas">
+            <canvas id="spark-q2" width="90" height="28"></canvas>
+            <span id="spark-placeholder" class="spark-placeholder">histórico em construção</span>
+          </span>
+        </div>
+      </div>
+    </div>
+    <nav class="tabs container" role="tablist" aria-label="Navegação principal">
+      <button class="tab is-active" data-tab="tarefas" role="tab" aria-selected="true">Tarefas</button>
+      <button class="tab" data-tab="agenda" role="tab" aria-selected="false">Agenda</button>
+      <button class="tab" data-tab="reunioes" role="tab" aria-selected="false">Reuniões</button>
+      <button class="tab" data-tab="revisao" role="tab" aria-selected="false">Revisão Semanal</button>
+      <button class="tab" data-tab="config" role="tab" aria-selected="false">Configurações</button>
+    </nav>
+  </header>
+
+  <main class="container main">
+
+    <!-- =================== ABA TAREFAS =================== -->
+    <section class="tab-panel is-active" id="panel-tarefas" role="tabpanel">
+      <!-- FORMULÁRIO -->
+      <section class="card form-card">
+        <div class="form-card__head">
+          <div>
+            <h2>Cadastro rápido</h2>
+            <p class="muted">Classifique cada tarefa pela matriz de Eisenhower. <kbd>Ctrl</kbd>+<kbd>Enter</kbd> salva.</p>
+          </div>
+        </div>
+
+        <form id="form" class="form" novalidate>
+          <input type="hidden" id="f-id" />
+
+          <label class="field field--full">
+            <span>Tarefa <span class="req">*</span></span>
+            <input type="text" id="f-titulo" required maxlength="180" placeholder="Ex.: Revisar processo de prospecção comercial" autocomplete="off" />
+          </label>
+
+          <div class="field field--full">
+            <div class="oe-label-row">
+              <span>Objetivo Estratégico <span class="muted">(opcional)</span></span>
+              <button type="button" class="btn-link-icon" id="btn-oe-guia" title="Abrir guia dos OEs" aria-label="Abrir guia dos OEs">Guia dos OEs</button>
+            </div>
+            <select id="f-objetivo"></select>
+            <div id="f-objetivo-detalhe" class="oe-detalhe" hidden></div>
+          </div>
+
+          <div class="field field--full eisen-row">
+            <span>Classificação Eisenhower</span>
+            <div class="eisen-toggles">
+              <label class="toggle" title="Importante = contribui para metas estratégicas">
+                <input type="checkbox" id="f-importante" />
+                <span class="toggle__track"></span>
+                <span class="toggle__label">Importante</span>
+              </label>
+              <label class="toggle" title="Urgente = pressão de tempo iminente">
+                <input type="checkbox" id="f-urgente" />
+                <span class="toggle__track"></span>
+                <span class="toggle__label">Urgente</span>
+              </label>
+              <label class="toggle toggle--neutral" title="Marque se a tarefa ainda não foi classificada">
+                <input type="checkbox" id="f-naoclass" checked />
+                <span class="toggle__track"></span>
+                <span class="toggle__label">Não classificar agora</span>
+              </label>
+            </div>
+            <div id="quad-preview" class="quad-chip quad-chip--nc">Não classificada · classificar depois</div>
+          </div>
+
+          <label class="field">
+            <span>Responsável</span>
+            <input type="text" id="f-responsavel" list="responsaveis" placeholder="Você ou equipe" autocomplete="off" />
+            <datalist id="responsaveis"></datalist>
+          </label>
+
+          <label class="field">
+            <span>Data de início</span>
+            <input type="date" id="f-data-inicio" />
+          </label>
+
+          <label class="field">
+            <span>Prazo (data de conclusão)</span>
+            <input type="date" id="f-prazo" />
+          </label>
+
+          <label class="field">
+            <span>Prioridade</span>
+            <select id="f-prioridade">
+              <option value="alta">Alta</option>
+              <option value="media" selected>Média</option>
+              <option value="baixa">Baixa</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Status</span>
+            <select id="f-status">
+              <option value="a-fazer" selected>A fazer</option>
+              <option value="em-andamento">Em andamento</option>
+              <option value="concluida">Concluída</option>
+              <option value="bloqueada">Bloqueada</option>
+            </select>
+          </label>
+
+          <label class="field field--full">
+            <span>Resultado esperado <span class="muted">(opcional)</span></span>
+            <input type="text" id="f-resultado" maxlength="200" placeholder="O que estará entregue quando concluída?" autocomplete="off" />
+          </label>
+
+          <div class="form__actions">
+            <button type="submit" class="btn btn--primary" id="btn-salvar">Salvar tarefa</button>
+            <button type="button" class="btn btn--ghost" id="btn-cancelar" hidden>Cancelar edição</button>
+            <span id="msg" class="msg" role="status" aria-live="polite"></span>
+          </div>
+        </form>
+      </section>
+
+      <!-- TOOLBAR -->
+      <section class="list-section">
+        <div class="list-toolbar">
+          <input type="search" id="busca" class="search" placeholder="Buscar título, responsável, resultado…" aria-label="Buscar" />
+          <select id="filtro-objetivo" aria-label="Filtrar por objetivo"><option value="">Todos os OEs</option></select>
+          <select id="filtro-status" aria-label="Filtrar por status">
+            <option value="">Todos os status</option>
+            <option value="a-fazer">A fazer</option>
+            <option value="em-andamento">Em andamento</option>
+            <option value="concluida">Concluída</option>
+            <option value="bloqueada">Bloqueada</option>
+          </select>
+          <select id="filtro-quadrante" aria-label="Filtrar por quadrante">
+            <option value="">Todos os quadrantes</option>
+            <option value="Q1">Q1 — Crise</option>
+            <option value="Q2">Q2 — Estratégia</option>
+            <option value="Q3">Q3 — Interrupção</option>
+            <option value="Q4">Q4 — Trivial</option>
+            <option value="NC">Não classificada</option>
+          </select>
+          <select id="filtro-importante" aria-label="Filtrar por importante">
+            <option value="">Importante: todos</option>
+            <option value="sim">Importante: sim</option>
+            <option value="nao">Importante: não</option>
+          </select>
+          <select id="filtro-urgente" aria-label="Filtrar por urgente">
+            <option value="">Urgente: todos</option>
+            <option value="sim">Urgente: sim</option>
+            <option value="nao">Urgente: não</option>
+          </select>
+          <select id="ordenacao" aria-label="Ordenar">
+            <option value="quad-prazo">Quadrante e prazo</option>
+            <option value="prazo">Prazo (mais próximo)</option>
+            <option value="prioridade">Prioridade</option>
+            <option value="recente">Mais recentes</option>
+          </select>
+        </div>
+
+        <div class="list-toolbar list-toolbar--secondary">
+          <div class="seg" role="tablist" aria-label="Modo de agrupamento">
+            <button class="seg__btn is-active" data-group="quadrante">Por Quadrante</button>
+            <button class="seg__btn" data-group="oe">Por OE</button>
+            <button class="seg__btn" data-group="responsavel">Por Responsável</button>
+          </div>
+          <div class="spacer"></div>
+          <div class="export-group">
+            <button class="btn btn--export" id="btn-pdf" title="Exportar PDF">PDF</button>
+            <button class="btn btn--export" id="btn-xlsx" title="Exportar Excel">Excel</button>
+            <button class="btn btn--export" id="btn-csv" title="Exportar CSV">CSV</button>
+            <button class="btn btn--export" id="btn-json" title="Exportar JSON">JSON</button>
+            <label class="btn btn--ghost btn--sm" for="file-import" title="Importar JSON">Importar</label>
+            <input type="file" id="file-import" accept="application/json" hidden />
+          </div>
+        </div>
+
+        <div id="grupos" class="grupos"></div>
+        <div id="vazio" class="empty" hidden>
+          <p>Nenhuma tarefa por aqui. Cadastre a primeira acima.</p>
+        </div>
+      </section>
+
+      <!-- Barra flutuante de seleção -->
+      <div class="selecao-bar" id="selecao-bar" hidden>
+        <span><strong id="selecao-count">0</strong> tarefa(s) selecionada(s)</span>
+        <button class="btn btn--ghost btn--sm" id="btn-limpar-selecao">Limpar</button>
+        <button class="btn btn--primary btn--sm" id="btn-criar-reuniao">Criar reunião com selecionadas</button>
+      </div>
+
+    </section>
+
+    <!-- =================== ABA AGENDA =================== -->
+    <section class="tab-panel" id="panel-agenda" role="tabpanel" hidden>
+      <div class="agenda-header card">
+        <h2>Agenda</h2>
+        <p class="agenda-summary" id="agenda-summary">Próximos sete dias: 0 tarefas, sendo 0 do Q1.</p>
+      </div>
+      <div class="agenda-grid">
+        <div class="agenda-list card">
+          <div class="agenda-list__head">
+            <h3 id="agenda-title">Cronograma</h3>
+            <button class="btn btn--ghost btn--sm" id="btn-agenda-clear" hidden>Limpar filtro de dia</button>
+          </div>
+          <div id="agenda-sections"></div>
+        </div>
+        <div class="agenda-cal card">
+          <div class="cal__head">
+            <button class="btn btn--ghost btn--sm" id="cal-prev" aria-label="Mês anterior">‹</button>
+            <strong id="cal-title">—</strong>
+            <button class="btn btn--ghost btn--sm" id="cal-next" aria-label="Próximo mês">›</button>
+            <button class="btn btn--ghost btn--sm" id="cal-month-btn" title="Voltar à visão geral do mês">Visão geral</button>
+          </div>
+          <div class="cal__weekdays">
+            <span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span>
+          </div>
+          <div class="cal__grid" id="cal-grid"></div>
+          <div class="cal__legend">
+            <span class="legend-dot" style="background:#c0392b"></span>Q1
+            <span class="legend-dot" style="background:#0a3d7a"></span>Q2
+            <span class="legend-dot" style="background:#e67e22"></span>Q3
+            <span class="legend-dot" style="background:#7f8c8d"></span>Q4
+            <span class="legend-dot" style="background:#bdc3c7"></span>NC
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== ABA REUNIÕES =================== -->
+    <section class="tab-panel" id="panel-reunioes" role="tabpanel" hidden>
+      <div class="reunioes-grid">
+        <!-- Coluna esquerda: lista -->
+        <div class="card" style="padding:18px 20px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+            <h2>Reuniões</h2>
+            <button class="btn btn--primary btn--sm" id="btn-nova-reuniao">+ Nova reunião</button>
+          </div>
+          <div style="margin-bottom:12px">
+            <select id="filtro-reuniao-status" class="" style="width:100%">
+              <option value="">Todas</option>
+              <option value="planejada">Planejadas</option>
+              <option value="realizada">Realizadas</option>
+              <option value="cancelada">Canceladas</option>
+            </select>
+          </div>
+          <div id="reunioes-lista"><p class="muted">Nenhuma reunião cadastrada ainda.</p></div>
+        </div>
+        <!-- Coluna direita: detalhes -->
+        <div class="card" id="reuniao-detalhe" style="padding:18px 20px">
+          <p class="muted" id="reuniao-detalhe-placeholder">Selecione uma reunião à esquerda ou crie uma nova.</p>
+          <div id="reuniao-detalhe-conteudo" hidden></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== ABA REVISÃO =================== -->
+    <section class="tab-panel" id="panel-revisao" role="tabpanel" hidden>
+      <div class="card revisao-intro">
+        <h2>Revisão Executiva Semanal</h2>
+        <p class="muted">Arraste tarefas entre quadrantes para reclassificar. Ao concluir a revisão, registramos um snapshot da matriz para acompanhamento de evolução.</p>
+      </div>
+
+      <div class="eisen-matrix" id="eisen-matrix">
+        <div class="eisen-axis eisen-axis--y"><span>Importante</span><span>Não importante</span></div>
+        <div class="eisen-axis eisen-axis--x"><span>Urgente</span><span>Não urgente</span></div>
+        <div class="eisen-quad eisen-quad--q1" data-quad="Q1">
+          <header><strong>Q1 — Crise</strong><em>atender com prioridade absoluta</em></header>
+          <div class="eisen-drop" data-quad="Q1"></div>
+        </div>
+        <div class="eisen-quad eisen-quad--q2" data-quad="Q2">
+          <header><strong>Q2 — Estratégia</strong><em>proteger e investir</em></header>
+          <div class="eisen-drop" data-quad="Q2"></div>
+        </div>
+        <div class="eisen-quad eisen-quad--q3" data-quad="Q3">
+          <header><strong>Q3 — Interrupção</strong><em>delegar ou recusar</em></header>
+          <div class="eisen-drop" data-quad="Q3"></div>
+        </div>
+        <div class="eisen-quad eisen-quad--q4" data-quad="Q4">
+          <header><strong>Q4 — Trivial</strong><em>eliminar ou postergar</em></header>
+          <div class="eisen-drop" data-quad="Q4"></div>
+        </div>
+      </div>
+
+      <div class="eisen-unclass card">
+        <h3>A classificar</h3>
+        <p class="muted">Arraste estas tarefas para um dos quatro quadrantes acima.</p>
+        <div class="eisen-drop eisen-drop--nc" data-quad="NC"></div>
+      </div>
+
+      <div class="revisao-bottom">
+        <div class="card revisao-snapshot">
+          <h3>Concluir revisão</h3>
+          <label class="field field--full">
+            <span>Observações da semana</span>
+            <textarea id="rev-obs" rows="4" placeholder="Notas livres sobre a semana, decisões, riscos…"></textarea>
+          </label>
+          <button class="btn btn--primary" id="btn-rev-concluir">Concluir revisão (gerar snapshot)</button>
+
+          <h4 style="margin-top:18px">Revisões anteriores</h4>
+          <div id="rev-lista" class="rev-lista"><p class="muted">Nenhuma revisão registrada ainda.</p></div>
+        </div>
+        <div class="card revisao-chart">
+          <h3>Evolução por quadrante</h3>
+          <div class="chart-wrap"><canvas id="rev-chart"></canvas></div>
+          <p class="muted" id="rev-chart-empty" hidden>Sem snapshots ainda — registre uma revisão para começar a acompanhar a evolução.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== ABA CONFIG =================== -->
+    <section class="tab-panel" id="panel-config" role="tabpanel" hidden>
+      <div class="card config-section">
+        <h2>Integração com Planner</h2>
+        <p class="muted">Ao tocar em <strong>Planner</strong> em qualquer tarefa, o app abre um formulário Microsoft Forms já pré-preenchido com título, OE/bucket, prioridade, datas e anotações. Você só toca em <em>Enviar</em>, e o Power Automate cria a tarefa no plano <strong>DE - Geral</strong>, no bucket correto, sem caracteres HTML.</p>
+        <ul class="muted-list" style="font-size:0.92em;">
+          <li><strong>Bucket por OE:</strong> definido pelo nome da opção no Forms (já fixo).</li>
+          <li><strong>Prioridade:</strong> Urgente / Importante / Média / Baixa (mapeada automaticamente da prioridade do app).</li>
+          <li><strong>Datas:</strong> Data de início (default: hoje) e Prazo (data de conclusão).</li>
+          <li><strong>ID do app:</strong> enviado junto para futura sincronização de status.</li>
+        </ul>
+      </div>
+
+      <div class="card config-section" id="sec-config">
+        <h2>Segurança e privacidade</h2>
+        <p class="muted" id="sec-status">Carregando...</p>
+        <div class="form__actions" style="flex-wrap:wrap;gap:0.5em;">
+          <button class="btn btn--ghost btn--sm" id="btn-sec-trocar" hidden>Trocar senha</button>
+          <button class="btn btn--ghost btn--sm" id="btn-sec-bloquear" hidden>Bloquear agora</button>
+          <button class="btn btn--danger btn--sm" id="btn-sec-apagar" hidden>Esqueci a senha (apaga tudo)</button>
+        </div>
+        <p class="muted" style="margin-top:0.75em;font-size:0.88em;">
+          Os dados ficam apenas neste navegador, criptografados com a sua senha. Não há servidor, login externo nem recuperação de senha — faça backup com <em>Exportar JSON</em>.
+        </p>
+      </div>
+
+      <div class="card config-section">
+        <h2>Exemplos do Plano de Ação 2026</h2>
+        <p class="muted">Carrega 8 tarefas-exemplo extraídas do Plano de Ação 2026 do Cebraspe (Eixos Norteadores), já mapeadas para os Objetivos Estratégicos do app.</p>
+        <div class="form__actions" style="flex-wrap:wrap;gap:0.5em;">
+          <button class="btn btn--primary btn--sm" id="btn-exemplos-acrescentar">Acrescentar 8 exemplos</button>
+          <button class="btn btn--ghost btn--sm" id="btn-exemplos-substituir">Substituir tudo pelos exemplos</button>
+          <span id="exemplos-msg" class="msg" role="status" aria-live="polite"></span>
+        </div>
+        <p class="muted" style="margin-top:0.75em;font-size:0.88em;">
+          Antes de substituir é feito um backup automático no armazenamento do navegador.
+        </p>
+      </div>
+
+      <div class="card config-section">
+        <h2>Sobre o app</h2>
+        <ul class="muted-list">
+          <li><strong>Versão:</strong> v3</li>
+          <li><strong>Persistência:</strong> armazenamento do navegador (com fallback em memória quando o sandbox bloqueia)</li>
+          <li><strong>Plano Diretor 2023–2026:</strong> 8 Objetivos Estratégicos do Cebraspe — agora opcionais por tarefa.</li>
+          <li><strong>Matriz de Eisenhower:</strong> Q1 — Crise · Q2 — Estratégia · Q3 — Interrupção · Q4 — Trivial.</li>
+          <li><strong>Bilhetes e e-mails:</strong> registro corporativo cordial, ancorado no Manual de Redação da Presidência da República (3ª ed.).</li>
+        </ul>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>Dados salvos localmente no seu navegador. Exporte para backup.</p>
+    </div>
+  </footer>
+
+  <!-- Modal de confirmação -->
+  <dialog id="dlg" class="modal">
+    <form method="dialog" class="modal__inner" id="dlg-form">
+      <h3 id="dlg-title">Confirmar</h3>
+      <p id="dlg-msg" class="muted"></p>
+      <div class="modal__actions">
+        <button value="cancel" class="btn btn--ghost btn--sm">Cancelar</button>
+        <button value="ok" class="btn btn--danger btn--sm">Confirmar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Modal de importação (3 escolhas) -->
+  <dialog id="dlg-import" class="modal">
+    <form method="dialog" class="modal__inner" id="dlg-import-form">
+      <h3>Como importar?</h3>
+      <p id="dlg-import-msg" class="muted"></p>
+      <p class="muted" style="font-size:0.85em;margin-top:0.5em;">Antes de substituir, é feito um backup automático no armazenamento do navegador (recuperável até a próxima substituição).</p>
+      <div class="modal__actions" style="flex-wrap:wrap;gap:0.5em;">
+        <button value="cancel" class="btn btn--ghost btn--sm">Cancelar</button>
+        <button value="acrescentar" class="btn btn--ghost btn--sm">Acrescentar</button>
+        <button value="substituir" class="btn btn--danger btn--sm">Substituir tudo</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Modal de edição de tarefa -->
+  <dialog id="dlg-edit" class="modal modal--lg">
+    <form method="dialog" class="modal__inner" id="dlg-edit-form">
+      <h3>Editar tarefa</h3>
+      <div class="form form--modal">
+        <label class="field field--full"><span>Tarefa</span><input type="text" id="ef-titulo" required maxlength="180" /></label>
+        <div class="field field--full">
+          <div class="oe-label-row">
+            <span>Objetivo Estratégico</span>
+            <button type="button" class="btn-link-icon" id="btn-oe-guia-edit" title="Abrir guia dos OEs">Guia dos OEs</button>
+          </div>
+          <select id="ef-objetivo"></select>
+          <div id="ef-objetivo-detalhe" class="oe-detalhe" hidden></div>
+        </div>
+        <div class="field field--full eisen-row">
+          <span>Classificação Eisenhower</span>
+          <div class="eisen-toggles">
+            <label class="toggle"><input type="checkbox" id="ef-importante" /><span class="toggle__track"></span><span class="toggle__label">Importante</span></label>
+            <label class="toggle"><input type="checkbox" id="ef-urgente" /><span class="toggle__track"></span><span class="toggle__label">Urgente</span></label>
+            <label class="toggle toggle--neutral"><input type="checkbox" id="ef-naoclass" /><span class="toggle__track"></span><span class="toggle__label">Não classificar</span></label>
+          </div>
+          <div id="ef-quad-preview" class="quad-chip quad-chip--nc">Não classificada</div>
+        </div>
+        <label class="field"><span>Responsável</span><input type="text" id="ef-responsavel" /></label>
+        <label class="field"><span>Data de início</span><input type="date" id="ef-data-inicio" /></label>
+        <label class="field"><span>Prazo (data de conclusão)</span><input type="date" id="ef-prazo" /></label>
+        <label class="field"><span>Prioridade</span>
+          <select id="ef-prioridade"><option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option></select>
+        </label>
+        <label class="field"><span>Status</span>
+          <select id="ef-status"><option value="a-fazer">A fazer</option><option value="em-andamento">Em andamento</option><option value="concluida">Concluída</option><option value="bloqueada">Bloqueada</option></select>
+        </label>
+        <label class="field field--full"><span>Resultado esperado</span><input type="text" id="ef-resultado" maxlength="200" /></label>
+      </div>
+      <div class="modal__actions">
+        <button value="cancel" type="button" class="btn btn--ghost btn--sm" id="ef-cancel">Cancelar</button>
+        <button value="ok" class="btn btn--primary btn--sm" id="ef-save">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Modal de bilhete único -->
+  <dialog id="dlg-bilhete" class="modal modal--lg">
+    <div class="modal__inner">
+      <header class="modal__head">
+        <h3 id="bilhete-title">Despacho</h3>
+        <button class="btn btn--ghost btn--sm" id="bilhete-close" type="button">Fechar</button>
+      </header>
+      <div class="bilhete-modes">
+        <button class="seg__btn is-active" data-bmode="digital" type="button">Modo digital</button>
+        <button class="seg__btn" data-bmode="papel" type="button">Modo papel</button>
+      </div>
+      <div id="bilhete-digital" class="bilhete-digital"></div>
+      <div id="bilhete-papel" class="bilhete-papel" hidden></div>
+      <div class="modal__actions">
+        <button class="btn btn--primary btn--sm" id="btn-bilhete-copy" type="button">Copiar</button>
+        <button class="btn btn--ghost btn--sm" id="btn-bilhete-copy-plain" type="button">Copiar (sem marcação)</button>
+        <button class="btn btn--ghost btn--sm" id="btn-bilhete-print" type="button">Imprimir como papel</button>
+        <button class="btn btn--ghost btn--sm" id="btn-bilhete-pdf" type="button">PDF</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Modal de e-mail -->
+  <dialog id="dlg-email" class="modal modal--lg">
+    <div class="modal__inner">
+      <header class="modal__head">
+        <h3>Gerador de e-mail</h3>
+        <button class="btn btn--ghost btn--sm" id="email-close" type="button">Fechar</button>
+      </header>
+      <div class="email-controls">
+        <label class="field"><span>Template</span>
+          <select id="email-template">
+            <option value="solicitacao">1. Solicitação inicial</option>
+            <option value="lembrete">2. Lembrete cordial</option>
+            <option value="cobranca">3. Cobrança formal</option>
+            <option value="conclusao">4. Registro de conclusão</option>
+            <option value="reagendamento">5. Reagendamento</option>
+          </select>
+        </label>
+        <label class="field"><span>Tratamento</span>
+          <select id="email-tratamento">
+            <option value="voce">Você (informal)</option>
+            <option value="vsa">V.Sa. (formal)</option>
+            <option value="nome">Nome próprio</option>
+          </select>
+        </label>
+        <label class="field" id="email-nome-wrap" hidden>
+          <span>Nome próprio</span>
+          <input type="text" id="email-nome" placeholder="Ex.: Ana Paula" />
+        </label>
+      </div>
+      <label class="field field--full"><span>Assunto</span><input type="text" id="email-assunto" /></label>
+      <label class="field field--full"><span>Corpo</span><textarea id="email-corpo" rows="14"></textarea></label>
+      <div class="modal__actions">
+        <button class="btn btn--primary btn--sm" id="btn-email-copy" type="button">Copiar (assunto + corpo)</button>
+        <button class="btn btn--ghost btn--sm" id="btn-email-copy-body" type="button">Copiar (somente corpo)</button>
+        <button class="btn btn--ghost btn--sm" id="btn-email-mailto" type="button">Abrir no cliente padrão</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Modal de reunião (criação/edição) -->
+  <dialog id="dlg-reuniao" class="modal modal--lg">
+    <form method="dialog" class="modal__inner" id="dlg-reuniao-form">
+      <h3 id="dlg-reuniao-title">Nova reunião</h3>
+      <div class="form form--modal">
+        <label class="field field--full"><span>Título <span class="req">*</span></span><input type="text" id="rf-titulo" required maxlength="180" placeholder="Ex.: Reunião com Pablo (CRI) — alinhamentos do Eixo 1" /></label>
+        <label class="field"><span>Data <span class="req">*</span></span><input type="date" id="rf-data" required /></label>
+        <label class="field"><span>Hora (opcional)</span><input type="time" id="rf-hora" /></label>
+        <label class="field field--full"><span>Local / link</span><input type="text" id="rf-local" maxlength="200" placeholder="Sala 401, Teams, Google Meet…" /></label>
+        <label class="field field--full"><span>Participantes</span>
+          <div class="participantes-input">
+            <div id="rf-participantes-tags" class="tags"></div>
+            <input type="text" id="rf-participante-novo" placeholder="Digite um nome e pressione Enter" />
+          </div>
+        </label>
+        <label class="field field--full"><span>Tarefas vinculadas</span>
+          <div id="rf-tarefas-vinculadas" class="tarefas-vinculadas"></div>
+          <button type="button" class="btn btn--ghost btn--sm" id="rf-add-tarefa">+ Vincular outra tarefa</button>
+        </label>
+        <label class="field field--full"><span>Observações (opcional)</span><textarea id="rf-observacoes" rows="2" maxlength="500"></textarea></label>
+      </div>
+      <div class="modal__actions">
+        <button value="cancel" type="button" class="btn btn--ghost btn--sm" id="rf-cancelar">Cancelar</button>
+        <button value="ok" type="submit" class="btn btn--primary btn--sm" id="rf-salvar">Salvar reunião</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Modal pequeno: vincular tarefa -->
+  <dialog id="dlg-vincular-tarefa" class="modal">
+    <form method="dialog" class="modal__inner">
+      <h3>Vincular tarefa</h3>
+      <label class="field field--full"><span>Selecione</span>
+        <select id="vt-select"></select>
+      </label>
+      <div class="modal__actions">
+        <button value="cancel" class="btn btn--ghost btn--sm">Cancelar</button>
+        <button value="ok" type="button" class="btn btn--primary btn--sm" id="vt-confirmar">Vincular</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Modal de detalhes de revisão -->
+  <dialog id="dlg-rev" class="modal modal--lg">
+    <div class="modal__inner">
+      <header class="modal__head">
+        <h3 id="rev-detail-title">Detalhes da revisão</h3>
+        <button class="btn btn--ghost btn--sm" id="rev-detail-close" type="button">Fechar</button>
+      </header>
+      <div id="rev-detail-body"></div>
+    </div>
+  </dialog>
+
+  <dialog id="dlg-oe-guia" class="modal modal--lg">
+    <div class="modal__inner">
+      <h3>Objetivos Estratégicos — Plano Diretor 2023–2026</h3>
+      <p class="muted" style="margin-top:-4px">Os oito Objetivos Estratégicos do Cebraspe, com detalhamento da visão de futuro e indicadores sugeridos para mensuração.</p>
+      <div id="oe-guia-conteudo" class="oe-guia"></div>
+      <div class="modal__actions">
+        <button type="button" class="btn" id="btn-oe-guia-fechar">Fechar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Modal de bloqueio (senha) -->
+  <dialog id="dlg-lock" class="modal modal--lock">
+    <div class="modal__inner">
+      <!-- Modo: cadastro de senha -->
+      <div id="lock-setup" hidden>
+        <h3>Proteger este aplicativo com senha</h3>
+        <p class="muted">
+          Antes de cadastrar tarefas, defina uma senha para criptografar os dados deste navegador.
+        </p>
+        <div class="privacy-note">
+          <strong>Aviso de privacidade</strong>
+          <ul>
+            <li>Os dados ficam <strong>apenas neste navegador</strong>, em armazenamento local. Não há servidor, login externo nem nuvem.</li>
+            <li>Tudo é cifrado com a sua senha (AES-GCM 256, derivada via PBKDF2 com 200 mil iterações).</li>
+            <li><strong>Não há recuperação de senha.</strong> Se você esquecer, não tem como recuperar — só apagar tudo e começar de novo.</li>
+            <li>Faça backup periódico em <em>Exportar JSON</em> para não perder os dados.</li>
+            <li>Cada navegador tem sua base própria — quem abrir o link em outro dispositivo começa do zero, com sua própria senha.</li>
+          </ul>
+        </div>
+        <form id="lock-setup-form" class="form form--modal">
+          <label class="field field--full">
+            <span>Nova senha (mínimo 6 caracteres)</span>
+            <input type="password" id="lock-setup-pwd" autocomplete="new-password" minlength="6" required />
+          </label>
+          <label class="field field--full">
+            <span>Confirme a senha</span>
+            <input type="password" id="lock-setup-pwd2" autocomplete="new-password" minlength="6" required />
+          </label>
+          <p id="lock-setup-msg" class="msg" role="status" aria-live="polite"></p>
+          <div class="modal__actions">
+            <button type="submit" class="btn btn--primary btn--sm">Cadastrar senha</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Modo: desbloquear -->
+      <div id="lock-unlock" hidden>
+        <h3>Aplicativo bloqueado</h3>
+        <p class="muted">Digite a senha para abrir os dados criptografados deste navegador.</p>
+        <form id="lock-unlock-form" class="form form--modal">
+          <label class="field field--full">
+            <span>Senha</span>
+            <input type="password" id="lock-unlock-pwd" autocomplete="current-password" required autofocus />
+          </label>
+          <p id="lock-unlock-msg" class="msg" role="status" aria-live="polite"></p>
+          <div class="modal__actions">
+            <button type="button" class="btn btn--ghost btn--sm" id="lock-unlock-forget">Esqueci a senha (apaga tudo)</button>
+            <button type="submit" class="btn btn--primary btn--sm">Entrar</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Modo: trocar senha -->
+      <div id="lock-change" hidden>
+        <h3>Trocar senha</h3>
+        <p class="muted">A nova senha será usada para reencriptar todos os dados deste navegador.</p>
+        <form id="lock-change-form" class="form form--modal">
+          <label class="field field--full">
+            <span>Nova senha (mínimo 6 caracteres)</span>
+            <input type="password" id="lock-change-pwd" autocomplete="new-password" minlength="6" required />
+          </label>
+          <label class="field field--full">
+            <span>Confirme a senha</span>
+            <input type="password" id="lock-change-pwd2" autocomplete="new-password" minlength="6" required />
+          </label>
+          <p id="lock-change-msg" class="msg" role="status" aria-live="polite"></p>
+          <div class="modal__actions">
+            <button type="button" class="btn btn--ghost btn--sm" id="lock-change-cancel">Cancelar</button>
+            <button type="submit" class="btn btn--primary btn--sm">Trocar senha</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="crypto.js?v=20260504n"></script>
+  <script src="app.js?v=20260504n"></script>
+</body>
+</html>
