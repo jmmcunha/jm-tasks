@@ -3295,6 +3295,14 @@ window.carregarRevisoes = carregarRevisoes;
 window.carregarReunioes = carregarReunioes;
 window.carregarConfig = carregarConfig;
 window.renderTudo = renderTudo;
+// para o módulo quick-capture.js
+window.salvarTarefas = salvarTarefas;
+window.popularResponsaveis = popularResponsaveis;
+window.uid = uid;
+Object.defineProperty(window, 'tarefas', {
+  get(){ return tarefas; },
+  set(v){ tarefas = v; }
+});
 document.addEventListener('DOMContentLoaded', function () {
   // Se firebase-sync já marcou que assumiu o boot, não chama init.
   if (window.__firebaseSyncActive) return;
