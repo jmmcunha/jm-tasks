@@ -364,16 +364,21 @@ function salvarReunioes() { _write(KEY_REUNIOES_V1, reunioes); }
    =================================================================== */
 
 function init() {
-  // Gate de senha: SEMPRE exige senha antes de carregar dados.
-  // - Primeira abertura (sem senha cadastrada) → tela de cadastro obrigatório.
-  // - Próximas aberturas → tela de desbloqueio.
-  bindLockDialog();
-  if (window.Sec && window.Sec.isEnabled()) {
-    abrirLockUnlock();
+  // Autenticação delegada ao Firebase (firebase-sync.js).
+  // O firebase-sync mostra a tela de login e, após autenticar,
+  // hidrata o localStorage com dados do Firestore e chama initApp().
+  // Se, por algum motivo, o firebase-sync não tiver carregado, fazemos um
+  // fallback que apenas inicializa o app a partir do localStorage.
+  if (window.__firebaseSyncActive) {
+    // firebase-sync vai assumir o controle
     return;
   }
-  abrirLockSetup();
-  // initApp() será chamado após o cadastro/desbloqueio.
+  if (typeof window.firebase === 'undefined') {
+    console.warn('[init] Firebase não carregou — modo fallback (sem nuvem).');
+    initApp();
+    return;
+  }
+  // firebase-sync vai chamar initApp() no momento certo
 }
 
 function initApp() {
@@ -3223,6 +3228,14 @@ function bindSecurityConfig() {
   const btnBloquear = $('#btn-sec-bloquear');
   const btnApagar = $('#btn-sec-apagar');
 
+  // Modo Firebase: cadeado local desativado.
+  if (!window.Sec) {
+    if (btnTrocar) btnTrocar.hidden = true;
+    if (btnBloquear) btnBloquear.hidden = true;
+    if (btnApagar) btnApagar.hidden = true;
+    return;
+  }
+
   if (btnTrocar) btnTrocar.addEventListener('click', abrirLockChange);
   if (btnBloquear) btnBloquear.addEventListener('click', () => {
     if (!window.Sec.isEnabled()) return;
@@ -3248,6 +3261,17 @@ function atualizarStatusSeguranca() {
   const btnApagar = $('#btn-sec-apagar');
   if (!status) return;
 
+  // Modo Firebase: autenticação via nuvem (Google Firebase Auth).
+  if (!window.Sec) {
+    const email = (window.firebase && window.firebase.auth && window.firebase.auth().currentUser && window.firebase.auth().currentUser.email) || '';
+    status.textContent = 'Login em nuvem ativo' + (email ? ' (' + email + ')' : '') + '. Dados sincronizados no Firebase Firestore.';
+    status.classList.add('is-on'); status.classList.remove('is-off');
+    if (btnTrocar) btnTrocar.hidden = true;
+    if (btnBloquear) btnBloquear.hidden = true;
+    if (btnApagar) btnApagar.hidden = true;
+    return;
+  }
+
   // Senha agora é sempre obrigatória — quando este código roda, ela já está ativa.
   status.textContent = 'Senha ativa. Os dados deste navegador estão criptografados (AES-GCM 256, PBKDF2 200k).';
   status.classList.add('is-on'); status.classList.remove('is-off');
@@ -3261,4 +3285,14 @@ function atualizarStatusSeguranca() {
    =================================================================== */
 
 window.__appInited = false;
-document.addEventListener('DOMContentLoaded', init);
+// expõe funções para o firebase-sync.js
+window.init = init;
+window.initApp = initApp;
+window._read = _read;
+window._write = _write;
+document.addEventListener('DOMContentLoaded', function () {
+  // Se firebase-sync já marcou que assumiu o boot, não chama init.
+  if (window.__firebaseSyncActive) return;
+  // chama via window.init para permitir que firebase-sync interfira se necessário
+  (window.init || init)();
+});
