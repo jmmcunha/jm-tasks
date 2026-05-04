@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Migração — usuário individual → equipe compartilhada</title>
+  <style>
+    body{font-family:system-ui,sans-serif;max-width:680px;margin:40px auto;padding:0 20px;color:#1a2333;}
+    h1{color:#0a3d7a;}
+    .step{background:#f4f6fa;border-left:4px solid #0a3d7a;padding:14px 18px;margin:14px 0;border-radius:6px;}
+    button{background:#0a3d7a;color:#fff;border:0;padding:11px 22px;border-radius:8px;font-size:15px;cursor:pointer;font-weight:600;}
+    button:disabled{opacity:.5;cursor:not-allowed;}
+    button.danger{background:#b00020;}
+    #log{background:#0d1117;color:#7ee787;font:13px/1.6 ui-monospace,Menlo,monospace;padding:14px;border-radius:8px;margin-top:18px;white-space:pre-wrap;min-height:200px;max-height:420px;overflow:auto;}
+    input{width:100%;padding:10px;border:1px solid #cdd5e0;border-radius:6px;font-size:14px;box-sizing:border-box;margin-top:6px;}
+    label{font-size:13px;font-weight:600;display:block;margin-top:10px;color:#3a4654;}
+  </style>
+</head>
+<body>
+  <h1>Migração: dados pessoais → equipe</h1>
+  <p>Esta página faz uma operação <strong>única</strong>: copia seus dados antigos
+  (em <code>users/{seu-uid}/data/</code>) para o novo caminho compartilhado
+  (<code>shared/team/data/</code>) que toda a equipe vai usar.</p>
+
+  <div class="step">
+    <strong>Passo 1.</strong> Faça login com a conta cuja agenda você quer usar
+    como base da equipe.
+    <label>E‑mail</label>
+    <input id="email" type="email" autocomplete="username" />
+    <label>Senha</label>
+    <input id="pass" type="password" autocomplete="current-password" />
+    <p><button id="btn-login">Entrar</button> <span id="login-status"></span></p>
+  </div>
+
+  <div class="step">
+    <strong>Passo 2.</strong> Após logar, clique para copiar os dados.
+    <p>
+      <button id="btn-migrate" disabled>Copiar dados → equipe</button>
+      <button id="btn-check" disabled>Só verificar (sem copiar)</button>
+    </p>
+  </div>
+
+  <div id="log">Aguardando…</div>
+
+  <p style="margin-top:30px;font-size:13px;color:#5a6677;">
+    Depois de migrar, você pode apagar esta página. O app principal continua em
+    <a href="./index.html">index.html</a>.
+  </p>
+
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script>
+    const TEAM_ID = 'team';
+    const KEYS = ['cebraspe_tarefas_v3','cebraspe_revisoes_v1','cebraspe_config_v1','cebraspe_reunioes_v1'];
+    const logEl = document.getElementById('log');
+    function log(msg){ logEl.textContent += '\n' + msg; logEl.scrollTop = logEl.scrollHeight; }
+
+    firebase.initializeApp(window.FIREBASE_CONFIG);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    document.getElementById('btn-login').addEventListener('click', async () => {
+      const email = document.getElementById('email').value.trim();
+      const pass = document.getElementById('pass').value;
+      const status = document.getElementById('login-status');
+      status.textContent = 'Entrando…';
+      try {
+        await auth.signInWithEmailAndPassword(email, pass);
+        status.textContent = '✓ logado como ' + auth.currentUser.email + ' (uid: ' + auth.currentUser.uid + ')';
+        document.getElementById('btn-migrate').disabled = false;
+        document.getElementById('btn-check').disabled = false;
+        log('Logado: ' + auth.currentUser.email);
+        log('UID: ' + auth.currentUser.uid);
+      } catch (e) {
+        status.textContent = '✗ ' + (e.message || 'erro');
+      }
+    });
+
+    async function readSource(uid){
+      const out = {};
+      const snap = await db.collection('users').doc(uid).collection('data').get();
+      snap.forEach(d => { out[d.id] = d.data(); });
+      return out;
+    }
+    async function readTarget(){
+      const out = {};
+      const snap = await db.collection('shared').doc(TEAM_ID).collection('data').get();
+      snap.forEach(d => { out[d.id] = d.data(); });
+      return out;
+    }
+
+    document.getElementById('btn-check').addEventListener('click', async () => {
+      logEl.textContent = '— Verificando —';
+      const uid = auth.currentUser.uid;
+      const src = await readSource(uid);
+      const tgt = await readTarget();
+      log('Origem (users/' + uid + '/data):');
+      KEYS.forEach(k => {
+        if (src[k]) {
+          const v = src[k].value;
+          const tam = Array.isArray(v) ? v.length + ' itens' : (typeof v === 'object' ? Object.keys(v).length + ' chaves' : '?');
+          log('  ✓ ' + k + ' (' + tam + ')');
+        } else {
+          log('  – ' + k + ' (vazio)');
+        }
+      });
+      log('\nDestino (shared/' + TEAM_ID + '/data):');
+      KEYS.forEach(k => {
+        if (tgt[k]) {
+          const v = tgt[k].value;
+          const tam = Array.isArray(v) ? v.length + ' itens' : (typeof v === 'object' ? Object.keys(v).length + ' chaves' : '?');
+          log('  ✓ ' + k + ' (' + tam + ', updatedBy=' + (tgt[k].updatedBy||'?') + ')');
+        } else {
+          log('  – ' + k + ' (vazio)');
+        }
+      });
+    });
+
+    document.getElementById('btn-migrate').addEventListener('click', async () => {
+      logEl.textContent = '— Migrando —';
+      const uid = auth.currentUser.uid;
+      const src = await readSource(uid);
+      const tgt = await readTarget();
+      let copied = 0, skipped = 0;
+      for (const k of KEYS) {
+        if (!src[k]) { log('• ' + k + ': sem origem, pulando'); continue; }
+        if (tgt[k]) {
+          if (!confirm('"' + k + '" já existe na equipe. Sobrescrever com sua versão pessoal?')) {
+            log('• ' + k + ': mantida a versão da equipe (não sobrescrito)');
+            skipped++;
+            continue;
+          }
+        }
+        try {
+          await db.collection('shared').doc(TEAM_ID).collection('data').doc(k).set({
+            value: src[k].value,
+            updatedAt: Date.now(),
+            updatedBy: auth.currentUser.email + ' (migração inicial)'
+          });
+          log('✓ ' + k + ' copiado');
+          copied++;
+        } catch (e) {
+          log('✗ ' + k + ' FALHOU: ' + e.message);
+        }
+      }
+      log('\nConcluído. ' + copied + ' copiados, ' + skipped + ' mantidos.');
+      log('Agora abra index.html e a equipe verá os mesmos dados.');
+    });
+  </script>
+</body>
+</html>

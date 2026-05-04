@@ -3285,11 +3285,16 @@ function atualizarStatusSeguranca() {
    =================================================================== */
 
 window.__appInited = false;
-// expõe funções para o firebase-sync.js
+// expõe funções para o firebase-sync.js (login + sync da equipe)
 window.init = init;
 window.initApp = initApp;
 window._read = _read;
 window._write = _write;
+window.carregarTarefas = carregarTarefas;
+window.carregarRevisoes = carregarRevisoes;
+window.carregarReunioes = carregarReunioes;
+window.carregarConfig = carregarConfig;
+window.renderTudo = renderTudo;
 document.addEventListener('DOMContentLoaded', function () {
   // Se firebase-sync já marcou que assumiu o boot, não chama init.
   if (window.__firebaseSyncActive) return;

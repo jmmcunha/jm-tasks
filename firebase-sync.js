@@ -19,6 +19,16 @@
     'cebraspe_reunioes_v1'
   ];
 
+  // Modo equipe compartilhada: TODAS as usuárias logadas leem/escrevem no mesmo doc.
+  // Caminho: shared/team/data/{key}
+  const TEAM_ID = 'team';
+  function dataDocRef(key) {
+    return db.collection('shared').doc(TEAM_ID).collection('data').doc(key);
+  }
+  function dataColRef() {
+    return db.collection('shared').doc(TEAM_ID).collection('data');
+  }
+
   const FB_VERSION = '10.13.2';
   const SDK_URLS = [
     `https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-app-compat.js`,
@@ -215,11 +225,11 @@
     });
   }
 
-  /* ---------- Sincronização Firestore <-> localStorage ---------- */
+  /* ---------- Sincronização Firestore <-> localStorage (modo equipe) ---------- */
 
-  async function pullSnapshot(uid) {
-    // Lê todos os docs em users/{uid}/data
-    const snap = await db.collection('users').doc(uid).collection('data').get();
+  async function pullSnapshot() {
+    // Lê todos os docs em shared/team/data
+    const snap = await dataColRef().get();
     const out = {};
     snap.forEach(doc => { out[doc.id] = doc.data(); });
     return out;
@@ -231,7 +241,6 @@
       SYNC_KEYS.forEach(key => {
         const cloud = snapshot[key];
         if (cloud && Object.prototype.hasOwnProperty.call(cloud, 'value')) {
-          // Sobrescreve local com nuvem (fonte de verdade = nuvem após login)
           try {
             localStorage.setItem(key, JSON.stringify(cloud.value));
           } catch {}
@@ -242,8 +251,9 @@
     }
   }
 
-  async function mergeFirstTime(uid, snapshot) {
-    // Se a nuvem está vazia para alguma chave e o local tem dados, sobe o local.
+  async function mergeFirstTime(snapshot) {
+    // Se a nuvem da equipe está vazia para alguma chave e o local tem dados,
+    // sobe o local (semente inicial da agenda compartilhada).
     const ops = [];
     SYNC_KEYS.forEach(key => {
       const inCloud = !!snapshot[key];
@@ -253,8 +263,11 @@
         try {
           const value = JSON.parse(localRaw);
           ops.push(
-            db.collection('users').doc(uid).collection('data').doc(key)
-              .set({ value, updatedAt: Date.now() })
+            dataDocRef(key).set({
+              value,
+              updatedAt: Date.now(),
+              updatedBy: (currentUser && currentUser.email) || (currentUser && currentUser.uid) || 'desconhecido'
+            })
           );
         } catch {}
       }
@@ -273,15 +286,68 @@
         value = JSON.parse(raw);
       } catch { return; }
       try {
-        await db.collection('users').doc(currentUser.uid)
-          .collection('data').doc(key)
-          .set({ value, updatedAt: Date.now() });
-        showStatus('☁️ salvo');
+        const ts = Date.now();
+        lastLocalSetByUs[key] = ts;
+        await dataDocRef(key).set({
+          value,
+          updatedAt: ts,
+          updatedBy: (currentUser && currentUser.email) || currentUser.uid
+        });
+        showStatus('☁️ salvo (equipe)');
       } catch (e) {
         console.error('[firebase-sync] falha ao salvar', key, e);
         showStatus('⚠ falha ao salvar');
       }
     }, 800);
+  }
+
+  /* ---------- Tempo real: ouve mudanças de outras usuárias ---------- */
+
+  let realtimeUnsub = null;
+  let lastLocalSetByUs = {}; // key -> timestamp da última vez que ESTA aba salvou
+
+  function startRealtime() {
+    stopRealtime();
+    realtimeUnsub = dataColRef().onSnapshot(snap => {
+      let changedAny = false;
+      snap.docChanges().forEach(change => {
+        const key = change.doc.id;
+        if (SYNC_KEYS.indexOf(key) === -1) return;
+        const data = change.doc.data();
+        if (!data || !Object.prototype.hasOwnProperty.call(data, 'value')) return;
+        // Se a mudança veio da nossa própria escrita recém-feita, ignoramos
+        // (data.updatedBy === nosso email/uid + updatedAt próximo do nosso push)
+        const myId = (currentUser && currentUser.email) || (currentUser && currentUser.uid) || '';
+        if (data.updatedBy === myId && lastLocalSetByUs[key] && Math.abs(data.updatedAt - lastLocalSetByUs[key]) < 4000) {
+          return;
+        }
+        // Mudança vinda de outra usuária → atualiza local e re-renderiza
+        try {
+          hydrating = true;
+          localStorage.setItem(key, JSON.stringify(data.value));
+        } finally {
+          hydrating = false;
+        }
+        changedAny = true;
+      });
+      if (changedAny) {
+        // Pede ao app.js para recarregar e re-renderizar
+        try {
+          if (typeof window.carregarTarefas === 'function') window.carregarTarefas();
+          if (typeof window.carregarRevisoes === 'function') window.carregarRevisoes();
+          if (typeof window.carregarReunioes === 'function') window.carregarReunioes();
+          if (typeof window.carregarConfig === 'function') window.carregarConfig();
+          if (typeof window.renderTudo === 'function') window.renderTudo();
+          showStatus('☁️ atualizado por outra pessoa');
+        } catch (e) { console.warn('[firebase-sync] erro ao re-renderizar', e); }
+      }
+    }, err => {
+      console.error('[firebase-sync] realtime err', err);
+    });
+  }
+
+  function stopRealtime() {
+    if (realtimeUnsub) { try { realtimeUnsub(); } catch {} realtimeUnsub = null; }
   }
 
   function hookWrites() {
@@ -307,17 +373,18 @@
 
   async function bootApp(user) {
     currentUser = user;
-    showStatus('☁️ baixando dados…');
+    showStatus('☁️ baixando dados da equipe…');
     let snapshot = {};
     try {
-      snapshot = await pullSnapshot(user.uid);
+      snapshot = await pullSnapshot();
     } catch (e) {
       console.error('[firebase-sync] erro ao baixar snapshot', e);
-      alert('Falha ao baixar dados da nuvem: ' + (e && e.message ? e.message : e));
+      alert('Falha ao baixar dados da equipe: ' + (e && e.message ? e.message : e));
     }
     hydrateLocal(snapshot);
-    // Migração inicial: se a nuvem estava vazia mas existem dados locais
-    try { await mergeFirstTime(user.uid, snapshot); } catch (e) { console.warn(e); }
+    // Semente inicial: se a nuvem da equipe estava vazia mas existem dados locais,
+    // os dados locais sobem como base compartilhada.
+    try { await mergeFirstTime(snapshot); } catch (e) { console.warn(e); }
 
     hideOverlay();
     showUserBar(user.email || '(usuário)');
@@ -331,6 +398,9 @@
     } else {
       console.error('[firebase-sync] initApp() não existe — app.js carregou?');
     }
+
+    // Liga sincronização em tempo real (depois de initApp para pegar referências)
+    setTimeout(() => startRealtime(), 500);
   }
 
   /* ---------- Bootstrap ---------- */
