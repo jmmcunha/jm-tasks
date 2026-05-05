@@ -496,7 +496,7 @@ select {
 }
 
 /* dialog para bilhete único */
-.modal--lg { max-width: 720px; width: calc(100% - 32px); }
+/* .modal--lg estilo base movido para depois de .modal {} para vencer cascata */
 .modal__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .bilhete-modes { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--r-md); overflow: hidden; margin-bottom: 12px; align-self: flex-start; }
 .bilhete-modes .seg__btn + .seg__btn { border-left: 1px solid var(--border); }
@@ -738,7 +738,8 @@ select {
   padding: 18px 0; font-size: 0.8rem; color: var(--text-3);
   text-align: center; margin-top: 12px;
 }
-.modal { border: none; border-radius: var(--r-lg); padding: 0; box-shadow: var(--shadow-lg); max-width: 420px; max-height: calc(100vh - 40px); overflow: hidden; }
+.modal { border: none; border-radius: var(--r-lg); padding: 0; box-shadow: var(--shadow-lg); width: min(420px, calc(100vw - 32px)); max-width: 420px; max-height: calc(100vh - 40px); }
+.modal.modal--lg, dialog.modal--lg { width: min(720px, calc(100vw - 32px)); max-width: 720px; }
 .modal::backdrop { background: rgba(20,33,61,.4); }
 .modal__inner { padding: 22px; display: grid; gap: 12px; max-height: calc(100vh - 40px); overflow-y: auto; box-sizing: border-box; }
 .modal__inner h3 { font-size: 1.05rem; }
