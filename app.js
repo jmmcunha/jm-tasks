@@ -1919,8 +1919,8 @@ function despachoEstrutura(t, opts) {
       : `Como entrega prevista, registra-se: ${resultadoLimpo}.`;
   }
 
-  // Próximos passos (E)
-  const passos = (categoria === 'concluida' || categoria === 'rotina') ? [] : proximosPassos(t);
+  // Próximos passos (E) — desativados a pedido do usuário (Leva 6.3): nunca incluir.
+  const passos = [];
 
   // Vocativo (A)
   const trat = tratamentoPara(t.responsavel);
@@ -3304,24 +3304,8 @@ function atualizarCorpoEmail() {
       : ` Como entrega prevista, registra-se: ${resultadoLimpo}.`;
   }
 
-  // Próximos passos — regra restritiva:
-  //  - Sem próximos passos para: conclusão, rotina, lembrete manual (andamento), reagendamento manual.
-  //  - Tenta primeiro o detector contextual (palavra-chave do título).
-  //  - Se não houver match: só mostra genéricos para 'atrasada' ou 'bloqueada'
-  //    (aí os passos são realmente úteis: diagnóstico, novo prazo, impedimentos).
-  //  - Para 'andamento', 'alta' e 'rotina' sem keyword: NADA. (Nada de "Definir prazo
-  //    de execução em comum acordo" / "Alinhar entregas previstas".)
+  // Próximos passos — desativados a pedido do usuário (Leva 6.3): nunca incluir.
   let passos = [];
-  const ehLembreteAndamento = (tplManual === 'lembrete') && (categoria === 'andamento');
-  const ehReagendamento = (tplManual === 'reagendamento');
-  if (categoria !== 'concluida' && categoria !== 'rotina' && !ehLembreteAndamento && !ehReagendamento) {
-    const ctx = _passosContextuaisPorTitulo(tituloLimpo);
-    if (ctx.length) {
-      passos = ctx;
-    } else if (categoria === 'atrasada' || categoria === 'bloqueada') {
-      passos = proximosPassos(t);
-    }
-  }
 
   // Assunto: dois modos
   //  - 'curto'    : "<Rótulo> — <título truncado a ~50 chars>"
@@ -3486,18 +3470,8 @@ function _montarEmailParaTarefa(t, opts) {
       : ` Como entrega prevista, registra-se: ${resultadoLimpo}.`;
   }
 
-  // Próximos passos — mesma regra restritiva
+  // Próximos passos — desativados a pedido do usuário (Leva 6.3): nunca incluir.
   let passos = [];
-  const ehLembreteAndamento = (tplManual === 'lembrete') && (categoria === 'andamento');
-  const ehReagendamento = (tplManual === 'reagendamento');
-  if (categoria !== 'concluida' && categoria !== 'rotina' && !ehLembreteAndamento && !ehReagendamento) {
-    const ctx = _passosContextuaisPorTitulo(tituloLimpo);
-    if (ctx.length) {
-      passos = ctx;
-    } else if (categoria === 'atrasada' || categoria === 'bloqueada') {
-      passos = proximosPassos(t);
-    }
-  }
 
   // Assunto
   const tituloAssunto = assuntoMode === 'curto' ? _truncSmart(tituloLimpo, 50) : tituloLimpo;
@@ -3593,21 +3567,8 @@ function _montarEmailConsolidado(tarefasDoDest, opts) {
         ? ` Entrega registrada: ${resultadoLimpo}.`
         : ` Entrega prevista: ${resultadoLimpo}.`;
     }
-    // Próximos passos contextuais por título, com a mesma regra restritiva
-    let passos = [];
-    if (categoria !== 'concluida' && categoria !== 'rotina') {
-      const ctx = _passosContextuaisPorTitulo(tituloLimpo);
-      if (ctx.length) {
-        passos = ctx;
-      } else if (categoria === 'atrasada' || categoria === 'bloqueada') {
-        passos = proximosPassos(t);
-      }
-    }
+    // Próximos passos — desativados a pedido do usuário (Leva 6.3): nunca incluir.
     let bloco = `${i+1}. ${tituloLimpo}${oeTrecho} — ${rotuloAss}.${statusFrase}${resultadoFrase}`;
-    if (passos.length && corpoMode !== 'compacto') {
-      bloco += `\n   Próximos passos:`;
-      passos.forEach(p => { bloco += `\n     • ${p}`; });
-    }
     blocos.push(bloco);
     itensInternos.push({ id: t.id, titulo: tituloLimpo, categoria, rotulo: rotuloAss, numero: es.numero });
   });
