@@ -401,6 +401,7 @@ function initApp() {
   bindExports();
   bindExemplosPA2026();
   bindDespachos();
+  bindEmail();
   bindAgenda();
   bindRevisao();
   bindConfig();
@@ -2637,14 +2638,23 @@ function enviarParaPlanner(id) {
 
 let _emailTarefaId = null;
 
+// Tom do e-mail (institucional|pessoal). Persiste durante a sessão do modal.
+let _emailTom = 'pessoal';
+
 function abrirEmailModal(id) {
   const t = tarefas.find(x => x.id === id);
   if (!t) return;
   _emailTarefaId = id;
-  $('#email-template').value = inferirTemplate(t);
+  $('#email-template').value = 'auto';
   $('#email-tratamento').value = 'voce';
   $('#email-nome').value = '';
   $('#email-nome-wrap').hidden = true;
+  // tom default: pessoal (e-mails internos costumam ser mais cordiais que despachos)
+  _emailTom = 'pessoal';
+  // sincroniza visual dos botões de tom, se existirem
+  $$('#dlg-email [data-etom]').forEach(b => {
+    b.classList.toggle('seg__btn--ativo', b.dataset.etom === _emailTom);
+  });
   $('#email-tratamento').onchange = () => {
     const v = $('#email-tratamento').value;
     $('#email-nome-wrap').hidden = v !== 'nome';
@@ -2664,6 +2674,19 @@ function inferirTemplate(t) {
     if (dias !== null && dias >= 0 && dias <= 5) return 'lembrete';
   }
   return 'solicitacao';
+}
+
+// Mapeia template manual -> categoria do despacho (compartilha variações)
+function _emailTplToCategoria(tpl, t) {
+  if (tpl === 'conclusao') return 'concluida';
+  if (tpl === 'cobranca') return 'atrasada';
+  if (tpl === 'lembrete') return 'andamento';
+  if (tpl === 'reagendamento') return 'andamento';
+  if (tpl === 'solicitacao') {
+    return (t && t.prioridade === 'alta') ? 'alta' : 'rotina';
+  }
+  // 'auto' — deixa despachoEstrutura decidir
+  return null;
 }
 
 function montarTratamento(tarefa) {
@@ -2688,67 +2711,182 @@ function montarTratamento(tarefa) {
   return alvoNome ? `${prefixo} ${alvoNome}` : prefixo;
 }
 
+// Rótulos de assunto por categoria/template
+const _EMAIL_LABELS = {
+  concluida: 'Conclusão',
+  atrasada: 'Cobrança',
+  bloqueada: 'Desbloqueio',
+  alta: 'Solicitação prioritária',
+  andamento: 'Acompanhamento',
+  rotina: 'Solicitação'
+};
+// override quando o usuário força um template manual
+const _EMAIL_LABELS_MANUAL = {
+  solicitacao: 'Solicitação',
+  lembrete: 'Lembrete',
+  cobranca: 'Cobrança',
+  conclusao: 'Conclusão',
+  reagendamento: 'Reagendamento'
+};
+
 function atualizarCorpoEmail() {
   const t = tarefas.find(x => x.id === _emailTarefaId);
   if (!t) return;
-  const tipo = $('#email-template').value;
+  const tplManual = $('#email-template').value; // 'auto' ou um dos 5 manuais
   const cab = montarTratamento(t);
-  const titulo = t.titulo;
+  const tituloLimpo = _trimPunct(t.titulo);
+  const resultadoLimpo = t.resultado ? _trimPunct(t.resultado) : null;
   const prazoExt = t.prazo ? fmtDataExtenso(t.prazo) : null;
-  const resultado = t.resultado || null;
   const oe = t.oeId ? OBJETIVOS.find(o => o.id === t.oeId) : null;
   const oeTrecho = oe ? ` (vinculada ao Objetivo Estratégico ${oe.id} — ${oe.curto})` : '';
 
-  let assunto = '';
-  let corpo = '';
+  // Pega numeração e categoria via despachoEstrutura.
+  // (E-mail não "consome" novo número — aproveita o já atribuído à tarefa, se houver,
+  //  ou gera um. Mesma lógica de despacho, garante consistência número↔assunto.)
+  const es = despachoEstrutura(t, { tom: 'institucional', destino: 'envio' });
 
-  if (tipo === 'solicitacao') {
-    assunto = `Solicitação — ${titulo}`;
-    corpo = `${cab},\n\nSolicito providências quanto à demanda ${titulo}${oeTrecho}.\n`;
-    if (resultado) corpo += `\nResultado esperado: ${resultado}.\n`;
-    if (prazoExt) {
-      corpo += `\nA entrega encontra-se prevista para ${prazoExt}. Caso o prazo se mostre inadequado, fico à disposição para revisá-lo de comum acordo.\n`;
-    } else {
-      corpo += `\nO prazo de entrega poderá ser definido conjuntamente, conforme a melhor conveniência das partes.\n`;
-    }
-    corpo += `\nPermaneço à disposição para esclarecimentos.\n\nAtenciosamente,\n\n`;
+  // Categoria efetiva: override manual se o usuário escolheu, senão a do despacho
+  const catManual = _emailTplToCategoria(tplManual, t);
+  const categoria = catManual || es.categoria;
+  const rotuloAss = (tplManual !== 'auto' ? _EMAIL_LABELS_MANUAL[tplManual] : _EMAIL_LABELS[categoria]) || 'Comunicação';
 
-  } else if (tipo === 'lembrete') {
-    assunto = `Lembrete — ${titulo}`;
-    corpo = `${cab},\n\nRegistro lembrete quanto à demanda ${titulo}${oeTrecho}`;
-    if (prazoExt) corpo += `, com entrega prevista para ${prazoExt}`;
-    corpo += `.\n`;
-    if (resultado) corpo += `\nResultado esperado: ${resultado}.\n`;
-    corpo += `\nCaso já haja avanço a reportar, agradeço breve sinalização. Caso seja necessária revisão de prazo, permaneço à disposição para tratar.\n\nAtenciosamente,\n\n`;
+  // Variação estável compartilhada com o despacho
+  const seed = `${t.id}-${es.numero}-email`;
 
-  } else if (tipo === 'cobranca') {
-    assunto = `Cobrança — ${titulo}`;
-    corpo = `${cab},\n\nRegistro que o prazo da demanda ${titulo}${oeTrecho}`;
-    if (prazoExt) corpo += `, previsto para ${prazoExt},`;
-    corpo += ` encontra-se vencido.\n`;
-    if (resultado) corpo += `\nResultado esperado: ${resultado}.\n`;
-    corpo += `\nSolicito posicionamento sobre o estágio atual e, se cabível, nova projeção de prazo. Permaneço à disposição para apoiar no que for necessário.\n\nAtenciosamente,\n\n`;
+  // Frases de abertura específicas para e-mail (mais coloquiais que despacho)
+  const VAR_EMAIL = {
+    concluida: [
+      `comunico a conclusão da demanda ${tituloLimpo}${oeTrecho}`,
+      `informo o encerramento da demanda ${tituloLimpo}${oeTrecho}`,
+      `registro a conclusão da demanda ${tituloLimpo}${oeTrecho}`
+    ],
+    atrasada: [
+      `registro que a demanda ${tituloLimpo}${oeTrecho} encontra-se com prazo vencido`,
+      `retomo a demanda ${tituloLimpo}${oeTrecho}, cujo prazo já se expirou`,
+      `reitero a demanda ${tituloLimpo}${oeTrecho}, observando que o prazo previsto foi ultrapassado`
+    ],
+    bloqueada: [
+      `reporto entraves na demanda ${tituloLimpo}${oeTrecho} e solicito apoio para o desbloqueio`,
+      `comunico a existência de impedimentos na demanda ${tituloLimpo}${oeTrecho}`,
+      `submeto a sua atenção a demanda ${tituloLimpo}${oeTrecho}, atualmente em situação de bloqueio`
+    ],
+    alta: [
+      `encaminho, com tratamento prioritário, a demanda ${tituloLimpo}${oeTrecho}`,
+      `solicito atenção prioritária à demanda ${tituloLimpo}${oeTrecho}`,
+      `submeto, em caráter prioritário, a demanda ${tituloLimpo}${oeTrecho}`
+    ],
+    andamento: [
+      `atualizo o andamento da demanda ${tituloLimpo}${oeTrecho}`,
+      `acompanho com você a demanda ${tituloLimpo}${oeTrecho}`,
+      `registro o estágio atual da demanda ${tituloLimpo}${oeTrecho}`
+    ],
+    rotina: [
+      `encaminho a demanda ${tituloLimpo}${oeTrecho}`,
+      `submeto à sua apreciação a demanda ${tituloLimpo}${oeTrecho}`,
+      `apresento, para conhecimento e providências, a demanda ${tituloLimpo}${oeTrecho}`
+    ]
+  };
 
-  } else if (tipo === 'conclusao') {
-    assunto = `Conclusão — ${titulo}`;
-    corpo = `${cab},\n\nComunico a conclusão da demanda ${titulo}${oeTrecho}.`;
-    if (resultado) corpo += ` Como entrega, registra-se: ${resultado}.`;
-    corpo += `\n\nAgradeço a colaboração e permaneço à disposição para os próximos encaminhamentos.\n\nAtenciosamente,\n\n`;
+  // Fechos por categoria (variação estável)
+  const FECHOS_EMAIL = {
+    concluida: [
+      'Agradeço a colaboração e permaneço à disposição para os próximos encaminhamentos.',
+      'Agradeço o empenho e sigo à disposição para tratativas subsequentes.',
+      'Permaneço à disposição para os desdobramentos decorrentes.'
+    ],
+    atrasada: [
+      'Solicito posicionamento sobre o estágio atual e, se cabível, nova projeção de prazo.',
+      'Peço, por gentileza, retorno sobre o estágio atual e proposta de novo prazo.',
+      'Aguardo manifestação quanto ao estágio atual e a possíveis ajustes de prazo.'
+    ],
+    bloqueada: [
+      'Permaneço à disposição para apoiar na remoção dos impedimentos.',
+      'Sigo à disposição para articular as providências necessárias.',
+      'Coloco-me à disposição para tratativas que viabilizem o prosseguimento.'
+    ],
+    alta: [
+      'Permaneço à disposição para esclarecimentos e ajustes que se fizerem necessários.',
+      'Permaneço à disposição para o que se fizer necessário.',
+      'Aguardo manifestação e sigo à disposição para ajustes.'
+    ],
+    andamento: [
+      'Caso já haja avanço a reportar, agradeço breve sinalização.',
+      'Peço uma breve sinalização sobre o estágio atual e eventuais entraves.',
+      'Aguardo atualização quanto ao estágio e a obstáculos identificados.'
+    ],
+    rotina: [
+      'Permaneço à disposição para esclarecimentos.',
+      'Sigo à disposição para esclarecimentos.',
+      'Aguardo retorno e permaneço à disposição.'
+    ]
+  };
 
-  } else { // reagendamento
-    assunto = `Reagendamento — ${titulo}`;
-    corpo = `${cab},\n\nComunico a revisão do prazo da demanda ${titulo}${oeTrecho}`;
-    if (prazoExt) corpo += `, com nova data prevista para ${prazoExt}`;
-    corpo += `.\n`;
-    if (resultado) corpo += `\nResultado esperado: ${resultado}.\n`;
-    corpo += `\nMantenho o acompanhamento da demanda e permaneço à disposição para os alinhamentos que se fizerem necessários.\n\nAtenciosamente,\n\n`;
+  // Vocativo: respeita o seletor existente, mas pode ser refinado pelo tom.
+  // Em "institucional" forçamos "Prezado Senhor," / "Prezada Senhora,".
+  // Em "pessoal" mantém o cab montado (Prezado <Nome>).
+  let voc;
+  if (_emailTom === 'institucional') {
+    const g = inferirGenero(t.responsavel);
+    voc = g === 'f' ? 'Prezada Senhora' : 'Prezado Senhor';
+  } else {
+    voc = cab;
   }
+
+  const abertura = _pickStable(VAR_EMAIL[categoria], seed + ':a');
+  const fechoCat = _pickStable(FECHOS_EMAIL[categoria], seed + ':f');
+
+  // Frase de prazo (contexto)
+  let contexto = '';
+  if (categoria === 'atrasada' && prazoExt) contexto = ` O prazo previsto era ${prazoExt}.`;
+  else if (categoria === 'bloqueada' && prazoExt) contexto = ` O prazo previsto é ${prazoExt}.`;
+  else if (categoria === 'alta') contexto = prazoExt ? ` Solicito conclusão até ${prazoExt}.` : ' Solicito definição de prazo de execução tão logo possível.';
+  else if (categoria === 'andamento' && prazoExt) contexto = ` O prazo previsto é ${prazoExt}.`;
+  else if (categoria === 'rotina' && prazoExt) contexto = ` Sugere-se como prazo ${prazoExt}, passível de revisão de comum acordo.`;
+
+  // Frase de resultado
+  let resultadoFrase = '';
+  if (resultadoLimpo) {
+    resultadoFrase = (categoria === 'concluida')
+      ? ` Como entrega, registra-se: ${resultadoLimpo}.`
+      : ` Como entrega prevista, registra-se: ${resultadoLimpo}.`;
+  }
+
+  // Próximos passos automáticos (somente onde fazem sentido)
+  const passos = (categoria === 'concluida' || categoria === 'rotina')
+    ? []
+    : proximosPassos(t);
+
+  // Assunto: "Despacho nº 0042/2026 — Cobrança — <título>"
+  const assunto = `Despacho nº ${es.numero} — ${rotuloAss} — ${tituloLimpo}`;
+
+  // Corpo
+  let corpo = `${voc},\n\n`;
+  corpo += `${abertura}.${contexto}${resultadoFrase}\n`;
+  if (passos.length) {
+    corpo += `\nPróximos passos:\n`;
+    passos.forEach(p => { corpo += `  • ${p}\n`; });
+  }
+  corpo += `\n${fechoCat}\n\nAtenciosamente,\n\n`;
+  if (config.meuNome) corpo += `${config.meuNome}`;
+  if (config.meuCargo) corpo += `\n${config.meuCargo}`;
+  corpo += `\n`;
 
   $('#email-assunto').value = assunto;
   $('#email-corpo').value = corpo;
 }
 
-function bindEmail() {}
+function bindEmail() {
+  // Toggle de tom (Pessoal/Institucional) no modal de e-mail
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('#dlg-email [data-etom]');
+    if (!btn) return;
+    _emailTom = btn.dataset.etom === 'institucional' ? 'institucional' : 'pessoal';
+    $$('#dlg-email [data-etom]').forEach(b => {
+      b.classList.toggle('seg__btn--ativo', b.dataset.etom === _emailTom);
+    });
+    atualizarCorpoEmail();
+  });
+}
 
 document.addEventListener('click', e => {
   if (e.target.id === 'btn-email-copy') {

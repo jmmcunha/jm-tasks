@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260505c" />
+  <link rel="stylesheet" href="styles.css?v=20260505d" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a3d7a'/%3E%3Cpath d='M9 11h14M9 16h14M9 21h9' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='25.5' cy='21' r='2' fill='%23f08000'/%3E%3C/svg%3E" />
 
   <!-- Bibliotecas: jsPDF, html2canvas, SheetJS, Chart.js -->
@@ -538,9 +538,14 @@
         <h3>Gerador de e-mail</h3>
         <button class="btn btn--ghost btn--sm" id="email-close" type="button">Fechar</button>
       </header>
+      <div class="bilhete-modes" role="tablist" aria-label="Tom">
+        <button class="seg__btn seg__btn--ativo" data-etom="pessoal" type="button">Pessoal</button>
+        <button class="seg__btn" data-etom="institucional" type="button">Institucional</button>
+      </div>
       <div class="email-controls">
         <label class="field"><span>Template</span>
           <select id="email-template">
+            <option value="auto">Automático (pela tarefa)</option>
             <option value="solicitacao">1. Solicitação inicial</option>
             <option value="lembrete">2. Lembrete cordial</option>
             <option value="cobranca">3. Cobrança formal</option>
@@ -710,10 +715,10 @@
   </dialog>
 
   <!-- Firebase: config + sync compartilhado (equipe) -->
-  <script src="firebase-config.js?v=20260505c"></script>
-  <script src="firebase-sync.js?v=20260505c"></script>
-  <script src="app.js?v=20260505c"></script>
+  <script src="firebase-config.js?v=20260505d"></script>
+  <script src="firebase-sync.js?v=20260505d"></script>
+  <script src="app.js?v=20260505d"></script>
   <!-- Captura rápida em linguagem natural + voz -->
-  <script src="quick-capture.js?v=20260505c"></script>
+  <script src="quick-capture.js?v=20260505d"></script>
 </body>
 </html>
