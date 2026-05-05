@@ -3108,8 +3108,9 @@ function _passosContextuaisPorTitulo(titulo) {
   const matches = [];
   // ordem importa: padrões mais específicos antes
   const regras = [
-    { re: /\breuni(?:ã|a)o\b|\balinhamento\b|\bencontro\b/, passos: ['Confirmar disponibilidade dos convidados.', 'Compartilhar pauta com antecedência.'] },
-    { re: /\b(?:agendar|marcar)\b/, passos: ['Confirmar disponibilidade dos envolvidos.', 'Compartilhar convite com pauta básica.'] },
+    // Removido (Leva 6.1): "reunião/alinhamento/agendar" geravam passos genéricos
+    // ("Confirmar disponibilidade dos convidados" / "Compartilhar pauta") que o
+    // usuário pediu para suprimir. Sem regra → cai no fluxo sem próximos passos.
     { re: /\brelat[óo]rio\b|\bdocumento\b|\bnota t[ée]cnica\b|\bparecer\b/, passos: ['Levantar documentação prévia e referências.', 'Definir responsável pela redação e revisão.'] },
     { re: /\bpainel\b|\bdashboard\b|\bindicador(?:es)?\b/, passos: ['Validar fontes de dados e períodos.', 'Conferir métricas com a área responsável.'] },
     { re: /\bedital\b|\blicitação\b|\bcontratação\b|\btermo de referência\b|\btr\b/, passos: ['Reunir requisitos técnicos atualizados.', 'Confirmar dotação orçamentária.'] },
