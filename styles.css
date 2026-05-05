@@ -399,6 +399,35 @@ select {
 .bilhete-digital strong { color: var(--azul); }
 .bilhete-digital .meta-line { font-size: 0.78rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; font-style: normal; }
 
+/* === toggles do modal de despacho === */
+.bilhete-opts {
+  display: flex; gap: 14px; flex-wrap: wrap;
+  margin: 8px 0 12px;
+  padding: 8px 0; border-bottom: 1px solid #e5e5e5;
+}
+.bilhete-opts__grupo { display: flex; align-items: center; gap: 6px; }
+.bilhete-opts__rotulo { font-size: 0.78rem; color: #666; font-weight: 500; }
+
+/* === despacho digital (cabecalho + refs) === */
+.bilhete-digital__cab {
+  font-size: 0.95rem; color: #111;
+  margin-bottom: 8px; padding-bottom: 6px;
+  border-bottom: 1px solid #e5e5e5;
+}
+.bilhete-digital__refs {
+  display: grid; grid-template-columns: max-content 1fr;
+  column-gap: 10px; row-gap: 2px;
+  margin: 0 0 10px; padding: 0;
+  font-size: 0.86rem;
+}
+.bilhete-digital__refs dt { font-weight: 600; color: #555; margin: 0; }
+.bilhete-digital__refs dd { margin: 0; color: #111; }
+.bilhete-digital__voc { margin-top: 8px; }
+.bilhete-digital__pp-tit { margin-top: 8px; margin-bottom: 4px; }
+.bilhete-digital__pp { margin: 0 0 8px 18px; padding: 0; }
+.bilhete-digital__pp li { margin: 2px 0; }
+.bilhete-digital__sig { margin-top: 14px; }
+
 /* === despacho papel (padrão ofício austero) === */
 .bilhete-papel-wrap { display: grid; place-items: center; padding: 16px 8px; }
 .bilhete-papel {
@@ -419,26 +448,51 @@ select {
   font-size: 0.78rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #555555;
-  margin-bottom: 24px;
+  color: #333333;
+  margin-bottom: 14px;
   padding-bottom: 8px;
-  border-bottom: 1px solid #e5e5e5;
+  border-bottom: 1px solid #888;
 }
 .bilhete-papel__rotulo { font-weight: 700; }
-.bilhete-papel__data { font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 0.85rem; }
+.bilhete-papel__data { font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 0.9rem; color: #111; }
+.bilhete-papel__refs {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  margin-bottom: 22px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e5e5e5;
+  color: #111;
+}
+.bilhete-papel__ref { margin: 1px 0; }
+.bilhete-papel__ref-rot { font-weight: 700; margin-right: 4px; }
 .bilhete-papel__corpo {
   font-size: 1rem;
-  line-height: 1.6;
+  line-height: 1.65;
   color: #111111;
 }
-.bilhete-papel__corpo p { margin: 0 0 14px; }
-.bilhete-papel__vocativo { margin-bottom: 18px; }
+.bilhete-papel__corpo p { margin: 0 0 12px; }
+.bilhete-papel__vocativo { margin-bottom: 16px; }
 .bilhete-papel__paragrafo { text-align: justify; text-indent: 2.5em; }
-.bilhete-papel__fecho { margin-top: 22px; }
+.bilhete-papel__pp-tit { margin-top: 10px; margin-bottom: 6px; text-indent: 0; }
+.bilhete-papel__pp { margin: 0 0 14px 2.5em; padding: 0 0 0 18px; }
+.bilhete-papel__pp li { margin: 3px 0; text-align: justify; }
+.bilhete-papel__fecho { margin-top: 20px; text-indent: 2.5em; }
+.bilhete-papel__assinatura {
+  margin-top: 56px;
+  padding-top: 6px;
+  border-top: 1px solid #111;
+  text-align: center;
+  width: 70%;
+  margin-left: auto; margin-right: auto;
+}
+.bilhete-papel__assinante { font-weight: 700; font-size: 0.98rem; }
+.bilhete-papel__cargo { font-size: 0.92rem; color: #333; }
 .bilhete-papel__corpo strong { color: #111111; font-weight: 700; }
 @media (max-width: 600px) {
   .bilhete-papel { padding: 24px 22px 28px; max-width: 100%; }
-  .bilhete-papel__paragrafo { text-indent: 1.5em; }
+  .bilhete-papel__paragrafo, .bilhete-papel__fecho { text-indent: 1.5em; }
+  .bilhete-papel__pp { margin-left: 1.5em; }
 }
 
 /* dialog para bilhete único */
