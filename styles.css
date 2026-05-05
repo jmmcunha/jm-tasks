@@ -1150,6 +1150,7 @@ select {
 .el-cat--alta { background: #fde68a; color: #713f12; }
 .el-cat--andamento { background: #dbeafe; color: #1e3a8a; }
 .el-cat--rotina { background: #e5e7eb; color: #374151; }
+.el-cat--consolidado { background: #ede9fe; color: #4c1d95; }
 .el-item__corpo { font-family: 'Times New Roman', Times, serif; font-style: normal; font-size: 0.88rem; line-height: 1.45; color: #222; background: #fbfbf7; border: 1px solid #ececdc; border-radius: 4px; padding: 8px 10px; margin: 0 0 8px; white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow-y: auto; }
 .el-item__acoes { display: flex; gap: 6px; flex-wrap: wrap; }
 .el-vazio { padding: 24px; text-align: center; color: var(--text-3); font-size: 0.9rem; }

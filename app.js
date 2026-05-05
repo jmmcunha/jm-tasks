@@ -3535,57 +3535,205 @@ function _montarEmailParaTarefa(t, opts) {
   };
 }
 
+// Monta UM único e-mail consolidando várias tarefas para o mesmo destinatário.
+// Cabeçalho de vocativo, abertura sucinta + seções numeradas por tarefa, fecho único.
+function _montarEmailConsolidado(tarefasDoDest, opts) {
+  opts = opts || {};
+  const tom = opts.tom || 'institucional';
+  const assuntoMode = opts.assuntoMode || 'curto';
+  const corpoMode = opts.corpoMode || 'normal';
+  if (!tarefasDoDest || !tarefasDoDest.length) return null;
+  const destinatario = tarefasDoDest[0].responsavel || '—';
+  // Vocativo coerente com o modo individual
+  const respPrim = (destinatario || '').split(/\s+/)[0];
+  const g = inferirGenero(respPrim);
+  let voc;
+  if (tom === 'institucional') {
+    voc = g === 'f' ? 'Prezada Senhora' : 'Prezado Senhor';
+  } else {
+    const prefixo = g === 'f' ? 'Prezada' : (g === 'm' ? 'Prezado' : 'Prezado(a)');
+    voc = (destinatario && destinatario !== '—') ? `${prefixo} ${respPrim}` : prefixo;
+  }
+  const n = tarefasDoDest.length;
+  // Abertura institucional/pessoal padrão, sem listar títulos no início para evitar redundância.
+  let abertura;
+  if (n === 1) {
+    abertura = `submeto à sua apreciação a demanda relacionada a seguir`;
+  } else if (n === 2) {
+    abertura = `submeto à sua apreciação duas demandas, conforme detalhado a seguir`;
+  } else {
+    const numExt = ['três','quatro','cinco','seis','sete','oito','nove','dez','onze','doze'][n-3] || `${n}`;
+    abertura = `submeto à sua apreciação ${numExt} demandas, conforme detalhado a seguir`;
+  }
+  // Monta blocos por tarefa (numeração 1, 2, 3...)
+  const blocos = [];
+  const itensInternos = [];
+  tarefasDoDest.forEach((t, i) => {
+    const tituloLimpo = _trimPunct(t.titulo || '');
+    const resultadoLimpo = t.resultado ? _trimPunct(t.resultado) : null;
+    const prazoExt = t.prazo ? fmtDataExtenso(t.prazo) : null;
+    const oe = t.oeId ? OBJETIVOS.find(o => o.id === t.oeId) : null;
+    const oeTrecho = oe ? ` (Objetivo Estratégico ${oe.id} — ${oe.curto})` : '';
+    const es = despachoEstrutura(t, { tom: 'institucional', destino: 'envio' });
+    const categoria = es.categoria;
+    const rotuloAss = _EMAIL_LABELS[categoria] || 'Comunicação';
+    // linha de status amigável
+    let statusFrase = '';
+    if (categoria === 'concluida') statusFrase = ' Demanda concluída.';
+    else if (categoria === 'atrasada' && prazoExt) statusFrase = ` Prazo previsto: ${prazoExt} (vencido).`;
+    else if (categoria === 'bloqueada' && prazoExt) statusFrase = ` Prazo previsto: ${prazoExt}. Existem entraves a tratar.`;
+    else if (categoria === 'bloqueada') statusFrase = ' Existem entraves a tratar.';
+    else if (categoria === 'alta' && prazoExt) statusFrase = ` Trato prioritário. Solicito conclusão até ${prazoExt}.`;
+    else if (categoria === 'alta') statusFrase = ' Trato prioritário.';
+    else if (categoria === 'andamento' && prazoExt) statusFrase = ` Prazo previsto: ${prazoExt}.`;
+    else if (categoria === 'rotina' && prazoExt) statusFrase = ` Sugere-se prazo até ${prazoExt}, passível de revisão de comum acordo.`;
+    let resultadoFrase = '';
+    if (resultadoLimpo) {
+      resultadoFrase = (categoria === 'concluida')
+        ? ` Entrega registrada: ${resultadoLimpo}.`
+        : ` Entrega prevista: ${resultadoLimpo}.`;
+    }
+    // Próximos passos contextuais por título, com a mesma regra restritiva
+    let passos = [];
+    if (categoria !== 'concluida' && categoria !== 'rotina') {
+      const ctx = _passosContextuaisPorTitulo(tituloLimpo);
+      if (ctx.length) {
+        passos = ctx;
+      } else if (categoria === 'atrasada' || categoria === 'bloqueada') {
+        passos = proximosPassos(t);
+      }
+    }
+    let bloco = `${i+1}. ${tituloLimpo}${oeTrecho} — ${rotuloAss}.${statusFrase}${resultadoFrase}`;
+    if (passos.length && corpoMode !== 'compacto') {
+      bloco += `\n   Próximos passos:`;
+      passos.forEach(p => { bloco += `\n     • ${p}`; });
+    }
+    blocos.push(bloco);
+    itensInternos.push({ id: t.id, titulo: tituloLimpo, categoria, rotulo: rotuloAss, numero: es.numero });
+  });
+  // Fecho único, neutro
+  const fecho = 'Permaneço à disposição para esclarecimentos e ajustes que se fizerem necessários.';
+  // Assunto consolidado
+  const numerosDespacho = itensInternos.map(x => x.numero).filter(Boolean);
+  let assunto;
+  if (assuntoMode === 'curto') {
+    assunto = n === 1
+      ? `Comunicação — ${_truncSmart(itensInternos[0].titulo, 50)}`
+      : `Comunicação consolidada — ${n} demandas`;
+  } else {
+    if (n === 1) {
+      assunto = `Despacho nº ${itensInternos[0].numero} — ${itensInternos[0].rotulo} — ${itensInternos[0].titulo}`;
+    } else {
+      const lista = numerosDespacho.length ? ` (Despachos ${numerosDespacho.join(', ')})` : '';
+      assunto = `Comunicação consolidada — ${n} demandas${lista}`;
+    }
+  }
+  // Corpo final
+  let corpo = `${voc},\n\n`;
+  corpo += `${abertura}.\n\n`;
+  corpo += blocos.join('\n\n');
+  corpo += `\n\n${fecho}\n\nAtenciosamente,\n\n`;
+  if (config.meuNome) corpo += `${config.meuNome}`;
+  if (config.meuCargo) corpo += `\n${config.meuCargo}`;
+  corpo += `\n`;
+  return {
+    assunto,
+    corpo,
+    destinatario,
+    categoria: 'consolidado',
+    rotulo: 'Consolidado',
+    numero: numerosDespacho.join(', '),
+    titulo: `${n} demandas`,
+    consolidado: true,
+    qtdTarefas: n,
+    tarefasIds: tarefasDoDest.map(t => t.id)
+  };
+}
+
 // Estado do modal de e-mail em lote
 let _emailLoteTom = 'institucional';
 let _emailLoteAssunto = 'curto';
 let _emailLoteCorpo = 'normal';
+let _emailLoteAgrup = 'destinatario'; // 'destinatario' (consolidado) | 'tarefa' (um por tarefa)
 
-function _emailsLoteSelecionados() {
-  const ids = Array.from(selecaoTarefasIds);
-  const lista = ids.map(id => tarefas.find(t => t.id === id)).filter(Boolean);
-  return lista.map(t => ({
-    tarefa: t,
-    email: _montarEmailParaTarefa(t, {
-      tom: _emailLoteTom,
-      assuntoMode: _emailLoteAssunto,
-      corpoMode: _emailLoteCorpo,
-      tplManual: 'auto'
-    })
-  }));
-}
-
-function _emailLoteAgrupar(itens) {
-  // Agrupa por destinatário (responsavel)
+// Agrupa tarefas por destinatário antes de gerar e-mails
+function _agruparTarefasPorDest(lista) {
   const grupos = new Map();
-  for (const it of itens) {
-    const k = (it.tarefa.responsavel || '—').trim() || '—';
+  for (const t of lista) {
+    const k = (t.responsavel || '—').trim() || '—';
     if (!grupos.has(k)) grupos.set(k, []);
-    grupos.get(k).push(it);
+    grupos.get(k).push(t);
   }
   return grupos;
 }
 
+// Retorna lista de "itens de e-mail" prontos. Cada item:
+//   { destinatario, email: {assunto, corpo, categoria, rotulo, ...}, tarefasIds: [...] , key }
+// No modo 'destinatario': 1 item por destinatário (consolidado).
+// No modo 'tarefa': 1 item por tarefa.
+function _emailsLoteSelecionados() {
+  const ids = Array.from(selecaoTarefasIds);
+  const lista = ids.map(id => tarefas.find(t => t.id === id)).filter(Boolean);
+  const opts = { tom: _emailLoteTom, assuntoMode: _emailLoteAssunto, corpoMode: _emailLoteCorpo };
+  if (_emailLoteAgrup === 'destinatario') {
+    const grupos = _agruparTarefasPorDest(lista);
+    const itens = [];
+    let i = 0;
+    for (const [dest, ts] of grupos) {
+      const email = _montarEmailConsolidado(ts, opts);
+      if (!email) continue;
+      itens.push({ key: `g${i++}`, destinatario: dest, email, tarefasIds: ts.map(t => t.id) });
+    }
+    return itens;
+  } else {
+    return lista.map((t, i) => {
+      const email = _montarEmailParaTarefa(t, Object.assign({ tplManual: 'auto' }, opts));
+      return { key: `t${i}-${t.id}`, destinatario: t.responsavel || '—', email, tarefasIds: [t.id] };
+    });
+  }
+}
+
 function renderEmailLote() {
   const itens = _emailsLoteSelecionados();
-  const grupos = _emailLoteAgrupar(itens);
-  const total = itens.length;
-  const nDest = grupos.size;
-  $('#email-lote-resumo').innerHTML = `<strong>${total}</strong> e-mail(s) para <strong>${nDest}</strong> destinatário(s).`;
+  const totalTarefas = itens.reduce((s, it) => s + it.tarefasIds.length, 0);
+  const totalEmails = itens.length;
+  const destSet = new Set(itens.map(it => it.destinatario));
+  const nDest = destSet.size;
+  let resumo;
+  if (_emailLoteAgrup === 'destinatario') {
+    resumo = `<strong>${totalEmails}</strong> e-mail(s) consolidando <strong>${totalTarefas}</strong> tarefa(s) para <strong>${nDest}</strong> destinatário(s).`;
+  } else {
+    resumo = `<strong>${totalEmails}</strong> e-mail(s) para <strong>${nDest}</strong> destinatário(s).`;
+  }
+  $('#email-lote-resumo').innerHTML = resumo;
 
   // Sincroniza visual dos toggles
   $$('#dlg-email-lote [data-eltom]').forEach(b => b.classList.toggle('seg__btn--ativo', b.dataset.eltom === _emailLoteTom));
   $$('#dlg-email-lote [data-elassunto]').forEach(b => b.classList.toggle('seg__btn--ativo', b.dataset.elassunto === _emailLoteAssunto));
   $$('#dlg-email-lote [data-elcorpo]').forEach(b => b.classList.toggle('seg__btn--ativo', b.dataset.elcorpo === _emailLoteCorpo));
+  $$('#dlg-email-lote [data-elagrup]').forEach(b => b.classList.toggle('seg__btn--ativo', b.dataset.elagrup === _emailLoteAgrup));
+
+  // Agrupa visualmente por destinatário (mesmo no modo 'tarefa', é mais legível)
+  const blocosPorDest = new Map();
+  for (const it of itens) {
+    const k = it.destinatario;
+    if (!blocosPorDest.has(k)) blocosPorDest.set(k, []);
+    blocosPorDest.get(k).push(it);
+  }
 
   let html = '';
   let idx = 0;
-  for (const [dest, lista] of grupos) {
-    html += `<div class="el-grupo"><div class="el-grupo__head"><span class="el-grupo__dest">${escHtml(dest)}</span><span class="el-grupo__qtd">${lista.length} e-mail(s)</span></div>`;
+  for (const [dest, lista] of blocosPorDest) {
+    const qtdInfo = (_emailLoteAgrup === 'destinatario')
+      ? `${lista[0].tarefasIds.length} tarefa(s) em 1 e-mail`
+      : `${lista.length} e-mail(s)`;
+    html += `<div class="el-grupo"><div class="el-grupo__head"><span class="el-grupo__dest">${escHtml(dest)}</span><span class="el-grupo__qtd">${escHtml(qtdInfo)}</span></div>`;
     for (const it of lista) {
       idx++;
       const m = it.email;
+      const podeEditar = (_emailLoteAgrup === 'tarefa');
       html += `
-        <article class="el-item" data-tid="${escHtml(it.tarefa.id)}">
+        <article class="el-item" data-key="${escHtml(it.key)}">
           <header class="el-item__head">
             <span class="el-item__num">${idx}.</span>
             <span class="el-item__assunto">${escHtml(m.assunto)}</span>
@@ -3593,18 +3741,18 @@ function renderEmailLote() {
           </header>
           <pre class="el-item__corpo">${escHtml(m.corpo)}</pre>
           <div class="el-item__acoes">
-            <button type="button" class="btn btn--ghost btn--sm" data-elact="copy" data-tid="${escHtml(it.tarefa.id)}">Copiar</button>
-            <button type="button" class="btn btn--ghost btn--sm" data-elact="mailto" data-tid="${escHtml(it.tarefa.id)}">Abrir no cliente</button>
-            <button type="button" class="btn btn--ghost btn--sm" data-elact="editar" data-tid="${escHtml(it.tarefa.id)}">Editar individualmente</button>
+            <button type="button" class="btn btn--ghost btn--sm" data-elact="copy" data-key="${escHtml(it.key)}">Copiar</button>
+            <button type="button" class="btn btn--ghost btn--sm" data-elact="mailto" data-key="${escHtml(it.key)}">Abrir no cliente</button>
+            ${podeEditar ? `<button type="button" class="btn btn--ghost btn--sm" data-elact="editar" data-tid="${escHtml(it.tarefasIds[0])}">Editar individualmente</button>` : ''}
           </div>
         </article>`;
     }
     html += `</div>`;
   }
   $('#email-lote-conteudo').innerHTML = html || '<p class="el-vazio">Selecione tarefas no quadro para gerar os e-mails.</p>';
-  // Guarda payload para exportação
+  // Guarda payload para exportação e ações
   $('#dlg-email-lote').dataset.itens = JSON.stringify(itens.map(it => ({
-    id: it.tarefa.id,
+    key: it.key,
     destinatario: it.email.destinatario,
     assunto: it.email.assunto,
     corpo: it.email.corpo
@@ -3618,6 +3766,7 @@ function abrirEmailLote() {
   _emailLoteTom = 'institucional';
   _emailLoteAssunto = 'curto';
   _emailLoteCorpo = 'normal';
+  _emailLoteAgrup = 'destinatario';
   renderEmailLote();
   $('#dlg-email-lote').showModal();
 }
@@ -3679,22 +3828,28 @@ function bindEmailLote() {
     if (assBtn) { _emailLoteAssunto = assBtn.dataset.elassunto; renderEmailLote(); return; }
     const corpoBtn = e.target.closest('#dlg-email-lote [data-elcorpo]');
     if (corpoBtn) { _emailLoteCorpo = corpoBtn.dataset.elcorpo; renderEmailLote(); return; }
+    const agrupBtn = e.target.closest('#dlg-email-lote [data-elagrup]');
+    if (agrupBtn) { _emailLoteAgrup = agrupBtn.dataset.elagrup; renderEmailLote(); return; }
     // ações por item
     const actBtn = e.target.closest('#dlg-email-lote [data-elact]');
     if (actBtn) {
-      const tid = actBtn.dataset.tid;
-      const itens = JSON.parse($('#dlg-email-lote').dataset.itens || '[]');
-      const it = itens.find(x => x.id === tid);
-      if (!it) return;
       const act = actBtn.dataset.elact;
+      if (act === 'editar') {
+        const tid = actBtn.dataset.tid;
+        if (!tid) return;
+        const dlg = $('#dlg-email-lote'); if (dlg && dlg.open) dlg.close();
+        abrirEmailModal(tid);
+        return;
+      }
+      const key = actBtn.dataset.key;
+      const itens = JSON.parse($('#dlg-email-lote').dataset.itens || '[]');
+      const it = itens.find(x => x.key === key);
+      if (!it) return;
       if (act === 'copy') {
         navigator.clipboard.writeText(`Assunto: ${it.assunto}\n\n${it.corpo}`).then(() => mostrarFlash('E-mail copiado.'));
       } else if (act === 'mailto') {
         const url = `mailto:?subject=${encodeURIComponent(it.assunto)}&body=${encodeURIComponent(it.corpo)}`;
         window.location.href = url;
-      } else if (act === 'editar') {
-        const dlg = $('#dlg-email-lote'); if (dlg && dlg.open) dlg.close();
-        abrirEmailModal(tid);
       }
       return;
     }
