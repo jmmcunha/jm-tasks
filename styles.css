@@ -512,6 +512,55 @@ select {
   .bilhete-par__pre { max-height: 280px; }
 }
 
+/* ============ DRUCKER-2 BANNER ============ */
+.druk { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin: 8px 0 12px; background: linear-gradient(180deg, #fff8ec 0%, #fffaf0 100%); border: 1px solid #f0d8a8; border-left: 3px solid #c8851d; border-radius: var(--r-md); }
+.druk__corpo { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.druk__rotulo { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; color: #8a5a14; }
+.druk__hint { font-size: 0.85rem; color: var(--text-2); line-height: 1.35; }
+.druk__chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.druk__chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; font-size: 0.85rem; font-weight: 500; border-radius: 999px; cursor: pointer; border: 1px solid transparent; transition: filter 120ms; }
+.druk__chip:hover { filter: brightness(0.96); }
+.druk__chip strong { font-size: 1rem; font-weight: 700; }
+.druk__chip--alerta { background: #c0392b; color: #fff; border-color: #a8311f; }
+.druk__chip--alerta-leve { background: #fff; color: #8a5a14; border-color: #e2c690; }
+.druk__close { width: 28px; height: 28px; border-radius: 50%; border: 0; background: transparent; color: var(--text-3); font-size: 1.3rem; line-height: 1; cursor: pointer; flex: none; }
+.druk__close:hover { background: rgba(0,0,0,0.05); color: var(--text); }
+.druk__sub { font-size: 0.85rem; color: var(--text-2); margin: 4px 0 0; line-height: 1.4; }
+
+/* Lista no modal Drucker */
+.druk-lista { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; max-height: 60vh; overflow: auto; }
+.druk-item { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: #fff; }
+.druk-item__corpo { min-width: 0; }
+.druk-item__titulo { font-weight: 600; color: #111; margin-bottom: 4px; word-break: break-word; }
+.druk-item__rod { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 0.82rem; color: var(--text-3); }
+.druk-item__oe { background: #eef2ff; color: #4338ca; padding: 1px 8px; border-radius: 999px; font-weight: 600; font-size: 0.75rem; }
+.druk-item__resp { font-weight: 500; color: var(--text-2); }
+.druk-item__meta--alerta { color: #c0392b; font-weight: 600; }
+.druk-item__acoes { display: flex; gap: 6px; flex: none; }
+@media (max-width: 700px) {
+  .druk-item { grid-template-columns: 1fr; }
+  .druk-item__acoes { justify-content: flex-end; }
+}
+
+/* ============ RETROSPECTIVA ============ */
+.retro-metricas { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 14px 0 18px; }
+.retro-metrica { background: #f7f7f8; border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 8px; text-align: center; }
+.retro-metrica__num { font-size: 1.5rem; font-weight: 700; color: #111; line-height: 1.1; }
+.retro-metrica__rot { font-size: 0.72rem; color: var(--text-3); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+.retro-secao { margin-top: 16px; }
+.retro-secao h4 { margin: 0 0 8px; font-size: 0.95rem; color: #111; font-weight: 700; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+.retro__lista { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.retro__lista li { padding: 6px 8px; background: #fafafa; border-radius: 6px; font-size: 0.9rem; line-height: 1.4; }
+.retro__lista strong { color: #111; }
+.retro__resp, .retro__data { color: var(--text-3); }
+.retro__vazio { font-size: 0.88rem; color: var(--text-3); margin: 4px 0; padding: 6px 8px; background: #fafafa; border-radius: 6px; }
+.retro-tag { display: inline-block; background: #eef2ff; color: #4338ca; font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; font-weight: 600; margin: 0 4px; vertical-align: middle; }
+.retro-secao--pergunta h4 { color: #8a5a14; border-bottom-color: #f0d8a8; }
+.retro-pergunta { font-family: 'Times New Roman', Times, serif; font-size: 1.05rem; line-height: 1.5; color: #444; padding: 12px 14px; background: #fff8ec; border-left: 3px solid #c8851d; border-radius: 4px; margin: 6px 0 0; font-style: italic; }
+@media (max-width: 700px) {
+  .retro-metricas { grid-template-columns: repeat(3, 1fr); }
+}
+
 /* despacho em lote */
 .lote-resumo { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #f5f5f5; border: 1px solid var(--border); border-radius: var(--r-md); font-size: 0.88rem; color: var(--text-2); margin-bottom: 12px; }
 .lote-resumo strong { color: var(--text); }

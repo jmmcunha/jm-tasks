@@ -254,6 +254,15 @@ function isAtrasada(t) {
   return t.prazo && t.status !== 'concluida' && t.prazo < hojeISO();
 }
 
+function escHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function diasEntre(isoA, isoB) {
   const a = isoToDate(isoA), b = isoToDate(isoB);
   if (!a || !b) return null;
@@ -402,6 +411,7 @@ function initApp() {
   bindExemplosPA2026();
   bindDespachos();
   bindEmail();
+  bindDrucker();
   bindAgenda();
   bindRevisao();
   bindConfig();
@@ -804,9 +814,354 @@ function aplicarFiltros() {
   return lista;
 }
 
+/* ===================================================================
+   DRUCKER-2: Despacho preventivo automatico
+   - Lembrete: 3 dias antes do prazo (em-andamento, sem despacho recente)
+   - Cobranca: prazo vencido ha pelo menos 1 dia
+   =================================================================== */
+function tarefasPreventivas() {
+  const hoje = hojeISO();
+  const lembretes = [];
+  const cobrancas = [];
+  for (const t of tarefas) {
+    if (!t.prazo || t.status === 'concluida' || t.status === 'cancelada') continue;
+    const dias = diasEntre(hoje, t.prazo); // positivo: ainda falta; negativo: passou
+    if (dias === null) continue;
+    if (dias < 0 && Math.abs(dias) >= 1) {
+      cobrancas.push({ t, dias });
+    } else if (dias >= 0 && dias <= 3) {
+      lembretes.push({ t, dias });
+    }
+  }
+  // ordena: cobrancas primeiro pelo mais atrasado; lembretes pelo mais proximo
+  cobrancas.sort((a,b) => a.dias - b.dias);
+  lembretes.sort((a,b) => a.dias - b.dias);
+  return { lembretes, cobrancas };
+}
+
+function renderBannerDrucker() {
+  const banner = $('#banner-drucker');
+  if (!banner) return;
+  const { lembretes, cobrancas } = tarefasPreventivas();
+  if (!lembretes.length && !cobrancas.length) {
+    banner.hidden = true;
+    banner.innerHTML = '';
+    return;
+  }
+  const partes = [];
+  if (cobrancas.length) {
+    partes.push(`<button class="druk__chip druk__chip--alerta" data-druk="cobranca" type="button" title="Ver tarefas com prazo vencido"><strong>${cobrancas.length}</strong> ${cobrancas.length===1?'aguarda cobrança':'aguardam cobrança'}</button>`);
+  }
+  if (lembretes.length) {
+    partes.push(`<button class="druk__chip druk__chip--alerta-leve" data-druk="lembrete" type="button" title="Ver tarefas com prazo nos próximos 3 dias"><strong>${lembretes.length}</strong> ${lembretes.length===1?'cabe lembrete':'cabem lembretes'}</button>`);
+  }
+  banner.innerHTML = `
+    <div class="druk__corpo">
+      <span class="druk__rotulo">Despacho preventivo</span>
+      <span class="druk__hint">Drucker dizia que antecipar a fricção é mais barato que resolvê-la.</span>
+      <div class="druk__chips">${partes.join('')}</div>
+    </div>
+    <button class="druk__close" id="druk-close" type="button" aria-label="Ocultar painel" title="Ocultar nesta sessão">×</button>
+  `;
+  banner.hidden = false;
+}
+
+// abre lista de tarefas elegiveis num popover/modal simples
+function abrirDruckerLista(tipo /* 'lembrete' | 'cobranca' */) {
+  const { lembretes, cobrancas } = tarefasPreventivas();
+  const itens = (tipo === 'cobranca') ? cobrancas : lembretes;
+  if (!itens.length) return;
+  const dlg = $('#dlg-druk');
+  if (!dlg) return;
+  $('#druk-titulo').textContent = (tipo === 'cobranca')
+    ? 'Tarefas que pedem cobrança'
+    : 'Tarefas que pedem lembrete';
+  $('#druk-subtitulo').textContent = (tipo === 'cobranca')
+    ? 'Prazo já venceu. Um clique abre o despacho de cobrança.'
+    : 'Prazo nos próximos 3 dias. Um clique abre o lembrete cordial.';
+  const lista = $('#druk-lista');
+  lista.innerHTML = '';
+  for (const { t, dias } of itens) {
+    const li = document.createElement('div');
+    li.className = 'druk-item';
+    const meta = (tipo === 'cobranca')
+      ? `<span class="druk-item__meta druk-item__meta--alerta">Vencida há ${Math.abs(dias)} ${Math.abs(dias)===1?'dia':'dias'}</span>`
+      : `<span class="druk-item__meta">${dias===0?'Vence hoje':(dias===1?'Vence amanhã':'Vence em '+dias+' dias')}</span>`;
+    const oe = t.oeId ? OBJETIVOS.find(o=>o.id===t.oeId) : null;
+    const oeTag = oe ? `<span class="druk-item__oe">OE ${oe.id}</span>` : '';
+    li.innerHTML = `
+      <div class="druk-item__corpo">
+        <div class="druk-item__titulo">${escHtml(t.titulo)}</div>
+        <div class="druk-item__rod">${oeTag}<span class="druk-item__resp">${escHtml(t.responsavel || '—')}</span>${meta}</div>
+      </div>
+      <div class="druk-item__acoes">
+        <button class="btn btn--sm" data-druk-act="despacho" data-tid="${t.id}" type="button">Despachar</button>
+        <button class="btn btn--sm btn--ghost" data-druk-act="email" data-tid="${t.id}" type="button">E-mail</button>
+      </div>
+    `;
+    lista.appendChild(li);
+  }
+  dlg.dataset.druktipo = tipo;
+  dlg.showModal();
+}
+
+/* ===================================================================
+   DRUCKER-3: Retrospectiva semanal
+   - Periodo padrao: ultimos 7 dias (sexta a sexta se hoje for sexta)
+   - Conta concluidas no periodo, vencidas no periodo, paradas (sem mexer ha 7+ dias)
+   - Metricas: tempo medio de ciclo das concluidas no periodo, % no prazo
+   - Pergunta semanal rotativa (5 perguntas ao estilo Drucker)
+   =================================================================== */
+const _DRUCKER_PERGUNTAS = [
+  'O que aprendi nesta semana sobre meu trabalho ou minha equipe?',
+  'O que devo parar de fazer porque deixou de gerar resultado?',
+  'Estou fazendo as coisas certas ou apenas fazendo bem coisas erradas?',
+  'Onde concentrei minha atenção esta semana — e onde ela escapou?',
+  'Que decisão eu adiei e que precisa de definição agora?'
+];
+
+function _addDias(iso, n) {
+  const d = isoToDate(iso); if (!d) return iso;
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0,10);
+}
+
+function _semanaCorrente() {
+  // periodo: ultimos 7 dias inclusive de hoje
+  const fim = hojeISO();
+  const inicio = _addDias(fim, -6);
+  return { inicio, fim };
+}
+
+function _entreISO(iso, ini, fim) {
+  return iso && iso >= ini && iso <= fim;
+}
+
+function gerarRetrospectiva(periodo) {
+  const { inicio, fim } = periodo || _semanaCorrente();
+  const concluidasPer = [];
+  const vencidasPer = [];
+  const paradas = [];
+  const novas = [];
+  for (const t of tarefas) {
+    if (_entreISO(t.criadoEm, inicio, fim)) novas.push(t);
+    if (t.status === 'concluida' && _entreISO(t.concluidaEm, inicio, fim)) {
+      concluidasPer.push(t);
+    }
+    if (t.status !== 'concluida' && t.status !== 'cancelada' && _entreISO(t.prazo, inicio, fim) && t.prazo < hojeISO()) {
+      // prazo era nesta semana e venceu
+      vencidasPer.push(t);
+    }
+    if (t.status !== 'concluida' && t.status !== 'cancelada') {
+      const ult = t.atualizadoEm || t.criadoEm || null;
+      const dias = ult ? diasEntre(ult, hojeISO()) : null;
+      if (dias !== null && dias >= 7) paradas.push({ t, dias });
+    }
+  }
+  paradas.sort((a,b) => b.dias - a.dias);
+
+  // metricas
+  let tempoMedio = null;
+  if (concluidasPer.length) {
+    const dias = [];
+    for (const t of concluidasPer) {
+      if (t.criadoEm && t.concluidaEm) {
+        const d = diasEntre(t.criadoEm, t.concluidaEm);
+        if (d !== null) dias.push(d);
+      }
+    }
+    if (dias.length) tempoMedio = Math.round(dias.reduce((a,b)=>a+b,0) / dias.length);
+  }
+  let pctNoPrazo = null;
+  if (concluidasPer.length) {
+    let np = 0, com = 0;
+    for (const t of concluidasPer) {
+      if (!t.prazo || !t.concluidaEm) continue;
+      com++;
+      if (t.concluidaEm <= t.prazo) np++;
+    }
+    if (com) pctNoPrazo = Math.round((np / com) * 100);
+  }
+
+  // pergunta rotativa (estavel pela semana)
+  const semanaIso = inicio.replace(/-/g,'');
+  const idx = parseInt(semanaIso, 10) % _DRUCKER_PERGUNTAS.length;
+  const pergunta = _DRUCKER_PERGUNTAS[idx];
+
+  return {
+    periodo: { inicio, fim },
+    concluidasPer,
+    vencidasPer,
+    paradas,
+    novas,
+    metricas: { tempoMedio, pctNoPrazo, totalConcluidas: concluidasPer.length, totalVencidas: vencidasPer.length, totalParadas: paradas.length, totalNovas: novas.length },
+    pergunta
+  };
+}
+
+function _retroFormatLista(arr, fn) {
+  if (!arr.length) return '<p class="retro__vazio">— nada a registrar nesta categoria.</p>';
+  return '<ul class="retro__lista">' + arr.map(fn).join('') + '</ul>';
+}
+
+function renderRetrospectiva() {
+  const r = gerarRetrospectiva();
+  const { inicio, fim } = r.periodo;
+  $('#retro-periodo').textContent = `${fmtDataExtenso(inicio)} a ${fmtDataExtenso(fim)}`;
+  // metricas
+  const m = r.metricas;
+  const metricasHtml = `
+    <div class="retro-metricas">
+      <div class="retro-metrica"><div class="retro-metrica__num">${m.totalConcluidas}</div><div class="retro-metrica__rot">concluídas</div></div>
+      <div class="retro-metrica"><div class="retro-metrica__num">${m.totalVencidas}</div><div class="retro-metrica__rot">venceram</div></div>
+      <div class="retro-metrica"><div class="retro-metrica__num">${m.totalParadas}</div><div class="retro-metrica__rot">paradas ≥7d</div></div>
+      <div class="retro-metrica"><div class="retro-metrica__num">${m.totalNovas}</div><div class="retro-metrica__rot">novas</div></div>
+      <div class="retro-metrica"><div class="retro-metrica__num">${m.tempoMedio == null ? '—' : m.tempoMedio + 'd'}</div><div class="retro-metrica__rot">tempo médio</div></div>
+      <div class="retro-metrica"><div class="retro-metrica__num">${m.pctNoPrazo == null ? '—' : m.pctNoPrazo + '%'}</div><div class="retro-metrica__rot">no prazo</div></div>
+    </div>
+  `;
+  $('#retro-metricas').innerHTML = metricasHtml;
+  $('#retro-concluidas').innerHTML = _retroFormatLista(r.concluidasPer, t => {
+    const oe = t.oeId ? OBJETIVOS.find(o=>o.id===t.oeId) : null;
+    const oeTag = oe ? ` <span class="retro-tag">OE ${oe.id}</span>` : '';
+    return `<li><strong>${escHtml(t.titulo)}</strong>${oeTag}<span class="retro__resp"> · ${escHtml(t.responsavel || '—')}</span></li>`;
+  });
+  $('#retro-vencidas').innerHTML = _retroFormatLista(r.vencidasPer, t => {
+    return `<li><strong>${escHtml(t.titulo)}</strong><span class="retro__resp"> · ${escHtml(t.responsavel || '—')}</span><span class="retro__data"> · prazo ${fmtDataExtenso(t.prazo)}</span></li>`;
+  });
+  $('#retro-paradas').innerHTML = _retroFormatLista(r.paradas, ({t,dias}) => {
+    return `<li><strong>${escHtml(t.titulo)}</strong><span class="retro__resp"> · ${escHtml(t.responsavel || '—')}</span><span class="retro__data"> · sem mexer há ${dias} dias</span></li>`;
+  });
+  $('#retro-pergunta').textContent = r.pergunta;
+  // guarda objeto para exportação
+  $('#dlg-retro').dataset.retroJson = JSON.stringify({ periodo: r.periodo, metricas: r.metricas, pergunta: r.pergunta });
+}
+
+function abrirRetrospectiva() {
+  const dlg = $('#dlg-retro');
+  if (!dlg) return;
+  renderRetrospectiva();
+  dlg.showModal();
+}
+
+/* Exporta retrospectiva como texto plano (para copiar) */
+function _retroTextoPlano() {
+  const r = gerarRetrospectiva();
+  const { inicio, fim } = r.periodo;
+  const m = r.metricas;
+  const linhas = [];
+  linhas.push(`Retrospectiva semanal — ${fmtDataExtenso(inicio)} a ${fmtDataExtenso(fim)}`);
+  linhas.push('');
+  linhas.push('Resumo:');
+  linhas.push(`  • ${m.totalConcluidas} concluída(s) | ${m.totalVencidas} venceu/venceram | ${m.totalParadas} parada(s) ≥7d | ${m.totalNovas} nova(s)`);
+  linhas.push(`  • tempo médio de ciclo: ${m.tempoMedio == null ? '—' : m.tempoMedio + ' dias'}`);
+  linhas.push(`  • % de conclusões no prazo: ${m.pctNoPrazo == null ? '—' : m.pctNoPrazo + '%'}`);
+  linhas.push('');
+  function bloco(titulo, arr, fn) {
+    linhas.push(titulo + ':');
+    if (!arr.length) { linhas.push('  — nada a registrar.'); }
+    else { for (const x of arr) linhas.push('  • ' + fn(x)); }
+    linhas.push('');
+  }
+  bloco('Concluídas no período', r.concluidasPer, t => `${t.titulo} (${t.responsavel || '—'})`);
+  bloco('Prazos vencidos no período', r.vencidasPer, t => `${t.titulo} (${t.responsavel || '—'}) — prazo ${fmtDataExtenso(t.prazo)}`);
+  bloco('Paradas há 7 dias ou mais', r.paradas, ({t,dias}) => `${t.titulo} (${t.responsavel || '—'}) — ${dias} dias sem atualização`);
+  linhas.push('Pergunta da semana (Drucker):');
+  linhas.push('  ' + r.pergunta);
+  return linhas.join('\n');
+}
+
+async function exportarRetroDocx() {
+  await carregarLibDocx();
+  const D = window.docx;
+  if (!D) { alert('Não foi possível carregar a biblioteca Word.'); return; }
+  const r = gerarRetrospectiva();
+  const { inicio, fim } = r.periodo;
+  const m = r.metricas;
+  const P = D.Paragraph, T = D.TextRun, AL = D.AlignmentType, HL = D.HeadingLevel;
+  const elementos = [];
+  elementos.push(new P({ heading: HL.HEADING_1, children: [new T({ text: 'Retrospectiva semanal' })] }));
+  elementos.push(new P({ children: [new T({ text: `${fmtDataExtenso(inicio)} a ${fmtDataExtenso(fim)}`, italics: false })] }));
+  elementos.push(new P({ children: [new T({ text: '' })] }));
+  elementos.push(new P({ heading: HL.HEADING_2, children: [new T({ text: 'Resumo' })] }));
+  elementos.push(new P({ children: [new T({ text: `${m.totalConcluidas} concluída(s) | ${m.totalVencidas} venceu/venceram | ${m.totalParadas} parada(s) ≥7d | ${m.totalNovas} nova(s)` })] }));
+  elementos.push(new P({ children: [new T({ text: `Tempo médio de ciclo: ${m.tempoMedio == null ? '—' : m.tempoMedio + ' dias'}` })] }));
+  elementos.push(new P({ children: [new T({ text: `Conclusões no prazo: ${m.pctNoPrazo == null ? '—' : m.pctNoPrazo + '%'}` })] }));
+  function secao(titulo, arr, fn) {
+    elementos.push(new P({ children: [new T({ text: '' })] }));
+    elementos.push(new P({ heading: HL.HEADING_2, children: [new T({ text: titulo })] }));
+    if (!arr.length) {
+      elementos.push(new P({ children: [new T({ text: '— nada a registrar.' })] }));
+    } else {
+      for (const x of arr) elementos.push(new P({ bullet: { level: 0 }, children: [new T({ text: fn(x) })] }));
+    }
+  }
+  secao('Concluídas no período', r.concluidasPer, t => `${t.titulo} (${t.responsavel || '—'})`);
+  secao('Prazos vencidos no período', r.vencidasPer, t => `${t.titulo} (${t.responsavel || '—'}) — prazo ${fmtDataExtenso(t.prazo)}`);
+  secao('Paradas há 7 dias ou mais', r.paradas, ({t,dias}) => `${t.titulo} (${t.responsavel || '—'}) — ${dias} dias sem atualização`);
+  elementos.push(new P({ children: [new T({ text: '' })] }));
+  elementos.push(new P({ heading: HL.HEADING_2, children: [new T({ text: 'Pergunta da semana' })] }));
+  elementos.push(new P({ children: [new T({ text: r.pergunta, italics: true })] }));
+  const doc = new D.Document({
+    styles: { default: { document: { run: { font: 'Times New Roman', size: 24 } } } },
+    sections: [{ properties: { page: { margin: { top: 1700, right: 1133, bottom: 1133, left: 1700 } } }, children: elementos }]
+  });
+  const blob = await D.Packer.toBlob(doc);
+  baixar(blob, `retrospectiva_${inicio}_${fim}.docx`);
+}
+
+function exportarRetroPDF() {
+  if (typeof window.jspdf === 'undefined') { alert('PDF não disponível.'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const r = gerarRetrospectiva();
+  const { inicio, fim } = r.periodo;
+  const m = r.metricas;
+  const margemL = 30, margemR = 20, larg = 210 - margemL - margemR;
+  let y = 30;
+  doc.setFont('times', 'bold'); doc.setFontSize(16);
+  doc.text('Retrospectiva semanal', margemL, y); y += 8;
+  doc.setFont('times', 'normal'); doc.setFontSize(11);
+  doc.text(`${fmtDataExtenso(inicio)} a ${fmtDataExtenso(fim)}`, margemL, y); y += 10;
+  doc.setFont('times', 'bold'); doc.setFontSize(12); doc.text('Resumo', margemL, y); y += 6;
+  doc.setFont('times', 'normal'); doc.setFontSize(11);
+  const linhasResumo = [
+    `${m.totalConcluidas} concluida(s) | ${m.totalVencidas} venceu/venceram | ${m.totalParadas} parada(s) >=7d | ${m.totalNovas} nova(s)`,
+    `Tempo medio de ciclo: ${m.tempoMedio == null ? '—' : m.tempoMedio + ' dias'}`,
+    `Conclusoes no prazo: ${m.pctNoPrazo == null ? '—' : m.pctNoPrazo + '%'}`
+  ];
+  for (const l of linhasResumo) { doc.text(l, margemL, y); y += 5; }
+  y += 4;
+  function secao(titulo, arr, fn) {
+    if (y > 260) { doc.addPage(); y = 30; }
+    doc.setFont('times', 'bold'); doc.setFontSize(12); doc.text(titulo, margemL, y); y += 6;
+    doc.setFont('times', 'normal'); doc.setFontSize(11);
+    if (!arr.length) { doc.text('— nada a registrar.', margemL, y); y += 6; return; }
+    for (const x of arr) {
+      const linha = '• ' + fn(x);
+      const partidas = doc.splitTextToSize(linha, larg);
+      for (const seg of partidas) {
+        if (y > 280) { doc.addPage(); y = 30; }
+        doc.text(seg, margemL, y); y += 5;
+      }
+    }
+    y += 3;
+  }
+  secao('Concluidas no periodo', r.concluidasPer, t => `${t.titulo} (${t.responsavel || '—'})`);
+  secao('Prazos vencidos no periodo', r.vencidasPer, t => `${t.titulo} (${t.responsavel || '—'}) — prazo ${fmtDataExtenso(t.prazo)}`);
+  secao('Paradas ha 7 dias ou mais', r.paradas, ({t,dias}) => `${t.titulo} (${t.responsavel || '—'}) — ${dias} dias sem atualizacao`);
+  if (y > 250) { doc.addPage(); y = 30; }
+  doc.setFont('times', 'bold'); doc.setFontSize(12); doc.text('Pergunta da semana', margemL, y); y += 6;
+  doc.setFont('times', 'normal'); doc.setFontSize(11);
+  const pp = doc.splitTextToSize(r.pergunta, larg);
+  for (const seg of pp) { doc.text(seg, margemL, y); y += 5; }
+  doc.save(`retrospectiva_${inicio}_${fim}.pdf`);
+}
+
 function renderTudo() {
   renderKPIs();
   renderSparkline();
+  renderBannerDrucker();
   const lista = aplicarFiltros();
   renderGrupos(lista);
   if (abaAtiva === 'agenda') renderAgenda();
@@ -2641,11 +2996,12 @@ let _emailTarefaId = null;
 // Tom do e-mail (institucional|pessoal). Persiste durante a sessão do modal.
 let _emailTom = 'pessoal';
 
-function abrirEmailModal(id) {
+function abrirEmailModal(id, opts) {
   const t = tarefas.find(x => x.id === id);
   if (!t) return;
   _emailTarefaId = id;
-  $('#email-template').value = 'auto';
+  const tplInicial = (opts && opts.template) ? opts.template : 'auto';
+  $('#email-template').value = tplInicial;
   $('#email-tratamento').value = 'voce';
   $('#email-nome').value = '';
   $('#email-nome-wrap').hidden = true;
@@ -2885,6 +3241,67 @@ function bindEmail() {
       b.classList.toggle('seg__btn--ativo', b.dataset.etom === _emailTom);
     });
     atualizarCorpoEmail();
+  });
+}
+
+function bindDrucker() {
+  // Banner: chips abrem listagem; botão close oculta na sessão
+  document.addEventListener('click', e => {
+    const chip = e.target.closest('#banner-drucker [data-druk]');
+    if (chip) {
+      abrirDruckerLista(chip.dataset.druk);
+      return;
+    }
+    if (e.target.id === 'druk-close') {
+      const banner = $('#banner-drucker');
+      if (banner) { banner.hidden = true; banner.innerHTML = ''; }
+      return;
+    }
+    if (e.target.id === 'btn-retro') {
+      abrirRetrospectiva();
+      return;
+    }
+  });
+
+  // Modal Drucker: ações de despachar/email a partir da lista
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('#dlg-druk [data-druk-act]');
+    if (!btn) return;
+    const tid = btn.dataset.tid;
+    const act = btn.dataset.druckAct || btn.dataset.drukAct;
+    const dlg = $('#dlg-druk');
+    if (dlg && dlg.open) dlg.close();
+    // Pre-seleciona template conforme tipo do banner Drucker
+    const tipoBanner = (dlg && dlg.dataset && dlg.dataset.druktipo) || '';
+    const tplPre = tipoBanner === 'cobranca' ? 'cobranca' : (tipoBanner === 'lembrete' ? 'lembrete' : 'auto');
+    if (act === 'email') {
+      abrirEmailModal(tid, { template: tplPre });
+    } else {
+      abrirBilheteModal(tid);
+    }
+  });
+  // Fechar modal Drucker
+  document.addEventListener('click', e => {
+    if (e.target.id === 'druk-list-close') {
+      const dlg = $('#dlg-druk');
+      if (dlg && dlg.open) dlg.close();
+    }
+  });
+
+  // Modal Retrospectiva: botões de exportação
+  document.addEventListener('click', e => {
+    if (e.target.id === 'retro-close') {
+      const dlg = $('#dlg-retro'); if (dlg && dlg.open) dlg.close();
+    } else if (e.target.id === 'btn-retro-copy') {
+      navigator.clipboard.writeText(_retroTextoPlano()).then(() => mostrarFlash('Retrospectiva copiada.'));
+    } else if (e.target.id === 'btn-retro-pdf') {
+      exportarRetroPDF();
+    } else if (e.target.id === 'btn-retro-docx') {
+      exportarRetroDocx();
+    } else if (e.target.id === 'btn-retro-print') {
+      const w = window.open('', '_blank');
+      if (w) { w.document.write('<pre style="font-family:Times,serif;font-size:14px;white-space:pre-wrap;padding:24px">' + escHtml(_retroTextoPlano()) + '</pre>'); w.document.close(); w.print(); }
+    }
   });
 }
 

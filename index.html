@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260505d" />
+  <link rel="stylesheet" href="styles.css?v=20260505e" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a3d7a'/%3E%3Cpath d='M9 11h14M9 16h14M9 21h9' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='25.5' cy='21' r='2' fill='%23f08000'/%3E%3C/svg%3E" />
 
   <!-- Bibliotecas: jsPDF, html2canvas, SheetJS, Chart.js -->
@@ -207,6 +207,7 @@
             <button class="seg__btn" data-group="responsavel">Por Responsável</button>
           </div>
           <div class="spacer"></div>
+          <button class="btn btn--ghost btn--sm" id="btn-retro" title="Retrospectiva semanal" type="button">Retrospectiva</button>
           <div class="export-group">
             <button class="btn btn--export" id="btn-pdf" title="Exportar PDF">PDF</button>
             <button class="btn btn--export" id="btn-xlsx" title="Exportar Excel">Excel</button>
@@ -217,6 +218,7 @@
           </div>
         </div>
 
+        <div id="banner-drucker" class="druk" hidden></div>
         <div id="grupos" class="grupos"></div>
         <div id="vazio" class="empty" hidden>
           <p>Nenhuma tarefa por aqui. Cadastre a primeira acima.</p>
@@ -476,6 +478,56 @@
     </form>
   </dialog>
 
+  <!-- Modal Drucker: lista de tarefas elegíveis para preventivo -->
+  <dialog id="dlg-druk" class="modal modal--lg">
+    <div class="modal__inner">
+      <header class="modal__head">
+        <div>
+          <h3 id="druk-titulo">Tarefas que pedem atenção</h3>
+          <p id="druk-subtitulo" class="druk__sub"></p>
+        </div>
+        <button class="btn btn--ghost btn--sm" id="druk-list-close" type="button">Fechar</button>
+      </header>
+      <div id="druk-lista" class="druk-lista"></div>
+    </div>
+  </dialog>
+
+  <!-- Modal Retrospectiva semanal -->
+  <dialog id="dlg-retro" class="modal modal--lg">
+    <div class="modal__inner">
+      <header class="modal__head">
+        <div>
+          <h3>Retrospectiva semanal</h3>
+          <p id="retro-periodo" class="druk__sub"></p>
+        </div>
+        <button class="btn btn--ghost btn--sm" id="retro-close" type="button">Fechar</button>
+      </header>
+      <div id="retro-metricas"></div>
+      <section class="retro-secao">
+        <h4>Concluídas no período</h4>
+        <div id="retro-concluidas"></div>
+      </section>
+      <section class="retro-secao">
+        <h4>Prazos vencidos no período</h4>
+        <div id="retro-vencidas"></div>
+      </section>
+      <section class="retro-secao">
+        <h4>Paradas há 7 dias ou mais</h4>
+        <div id="retro-paradas"></div>
+      </section>
+      <section class="retro-secao retro-secao--pergunta">
+        <h4>Pergunta da semana</h4>
+        <p id="retro-pergunta" class="retro-pergunta"></p>
+      </section>
+      <div class="modal__actions">
+        <button class="btn" id="btn-retro-copy" type="button">Copiar</button>
+        <button class="btn" id="btn-retro-print" type="button">Imprimir</button>
+        <button class="btn" id="btn-retro-pdf" type="button">Baixar PDF</button>
+        <button class="btn" id="btn-retro-docx" type="button">Baixar Word</button>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Modal de despacho em lote -->
   <dialog id="dlg-despacho-lote" class="modal modal--lg">
     <div class="modal__inner">
@@ -715,10 +767,10 @@
   </dialog>
 
   <!-- Firebase: config + sync compartilhado (equipe) -->
-  <script src="firebase-config.js?v=20260505d"></script>
-  <script src="firebase-sync.js?v=20260505d"></script>
-  <script src="app.js?v=20260505d"></script>
+  <script src="firebase-config.js?v=20260505e"></script>
+  <script src="firebase-sync.js?v=20260505e"></script>
+  <script src="app.js?v=20260505e"></script>
   <!-- Captura rápida em linguagem natural + voz -->
-  <script src="quick-capture.js?v=20260505d"></script>
+  <script src="quick-capture.js?v=20260505e"></script>
 </body>
 </html>
