@@ -1578,6 +1578,62 @@ function despachoEstrutura(t, opts) {
   };
 }
 
+// (G) Esqueleto de resposta para o destinatário.
+function respostaEsqueletoFlat(es, t) {
+  const dataExt = es.dataExt;
+  const numero = es.numero;
+  const remetente = es.assinatura.nome || 'esta Diretoria';
+  const linhas = [];
+  linhas.push(`Resposta ao Despacho nº ${numero} — [data da resposta]`);
+  linhas.push('');
+  linhas.push(`Assunto: ${es.refs.find(r => r.rotulo === 'Assunto')?.valor || es.refs[0].valor}`);
+  // Inverter Para/De
+  const para = es.refs.find(r => r.rotulo === 'De');
+  const de = es.refs.find(r => r.rotulo === 'Para');
+  if (para) linhas.push(`Para: ${para.valor}`);
+  if (de) linhas.push(`De: ${de.valor}`);
+  const ref = es.refs.find(r => r.rotulo === 'Referência');
+  if (ref) linhas.push(`Referência: ${ref.valor}`);
+  linhas.push('');
+  linhas.push('Prezado(a) Senhor(a),');
+  linhas.push('');
+  linhas.push(`Em atenção ao Despacho nº ${numero}, de ${dataExt}, manifesto-me nos termos a seguir.`);
+  linhas.push('');
+  // Esqueleto sensível à categoria
+  if (es.categoria === 'bloqueada') {
+    linhas.push('Sobre os impedimentos: [descrever entraves identificados].');
+    linhas.push('Sobre as providências: [indicar providências adotadas ou requeridas].');
+    linhas.push('Sobre o prazo: [confirmar viabilidade ou propor novo prazo].');
+  } else if (es.categoria === 'atrasada') {
+    linhas.push('Sobre o estágio atual: [descrever andamento e motivos do atraso].');
+    linhas.push('Sobre o novo prazo: [propor data realista].');
+    linhas.push('Sobre apoios necessários: [indicar suportes requeridos].');
+  } else if (es.categoria === 'andamento') {
+    linhas.push('Sobre o estágio atual: [resumir avanços].');
+    linhas.push('Sobre entraves: [indicar obstáculos, se houver].');
+    linhas.push('Sobre a previsão de conclusão: [confirmar ou ajustar].');
+  } else if (es.categoria === 'alta') {
+    linhas.push('Sobre a prioridade: [confirmar tratamento prioritário].');
+    linhas.push('Sobre o cronograma: [confirmar ou propor prazo].');
+    linhas.push('Sobre apoios necessários: [indicar suportes requeridos].');
+  } else if (es.categoria === 'concluida') {
+    linhas.push('Sobre a entrega: [registrar acolhimento ou observações].');
+    linhas.push('Sobre desdobramentos: [indicar próximas etapas, se cabível].');
+  } else {
+    linhas.push('Sobre o acolhimento da demanda: [manifestar concordância ou ressalvas].');
+    linhas.push('Sobre o prazo: [confirmar ou propor ajuste].');
+    linhas.push('Sobre apoios necessários: [indicar, se for o caso].');
+  }
+  linhas.push('');
+  linhas.push(`Permaneço à disposição de ${remetente} para os esclarecimentos que se fizerem necessários.`);
+  linhas.push('');
+  linhas.push('Atenciosamente,');
+  linhas.push('');
+  linhas.push('[Nome do responsável]');
+  linhas.push('[Cargo]');
+  return linhas.join('\n');
+}
+
 // Saida texto puro (cole em e-mail, WhatsApp etc.)
 function despachoTextoFlat(es) {
   const linhas = [];
@@ -1696,6 +1752,32 @@ function renderBilheteModal(t) {
   $('#bilhete-digital').hidden = _bilheteModo !== 'digital';
   $('#bilhete-papel').innerHTML = despachoPapelHTML(es);
   $('#bilhete-papel').hidden = _bilheteModo !== 'papel';
+  const parEl = $('#bilhete-par');
+  if (parEl) {
+    const respostaTxt = respostaEsqueletoFlat(es, t);
+    parEl.dataset.envio = textoFlat;
+    parEl.dataset.resposta = respostaTxt;
+    parEl.innerHTML = `
+      <div class="bilhete-par__col">
+        <div class="bilhete-par__rotulo">A — Despacho de envio</div>
+        <pre class="bilhete-par__pre">${escapeHTML(textoFlat)}</pre>
+        <button class="btn btn--ghost btn--sm" data-par-copy="envio" type="button">Copiar A</button>
+      </div>
+      <div class="bilhete-par__col">
+        <div class="bilhete-par__rotulo">B — Esqueleto de resposta (para o destinatário)</div>
+        <pre class="bilhete-par__pre">${escapeHTML(respostaTxt)}</pre>
+        <button class="btn btn--ghost btn--sm" data-par-copy="resposta" type="button">Copiar B</button>
+      </div>`;
+    parEl.hidden = _bilheteModo !== 'par';
+    parEl.querySelectorAll('[data-par-copy]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const which = btn.dataset.parCopy;
+        const txt = which === 'envio' ? parEl.dataset.envio : parEl.dataset.resposta;
+        await navigator.clipboard.writeText(txt || '');
+        mostrarFlash(which === 'envio' ? 'Copiado: A (envio).' : 'Copiado: B (resposta).');
+      });
+    });
+  }
 }
 
 function bindDespachos() {
@@ -1751,6 +1833,454 @@ function bindDespachos() {
     setTimeout(() => window.print(), 50);
   });
   $('#btn-bilhete-pdf').addEventListener('click', exportarBilheteIndividualPDF);
+  const btnDocx = $('#btn-bilhete-docx');
+  if (btnDocx) btnDocx.addEventListener('click', exportarBilheteDocx);
+
+  // Despachar em lote
+  const btnLote = $('#btn-despachar-lote');
+  if (btnLote) btnLote.addEventListener('click', abrirDespachoLote);
+  const btnLoteClose = $('#lote-close');
+  if (btnLoteClose) btnLoteClose.addEventListener('click', () => $('#dlg-despacho-lote').close());
+  const btnLoteCopy = $('#btn-lote-copy');
+  if (btnLoteCopy) btnLoteCopy.addEventListener('click', async () => {
+    const txt = $('#lote-papel').dataset.texto || '';
+    await navigator.clipboard.writeText(txt);
+    mostrarFlash('Pauta copiada.');
+  });
+  const btnLotePrint = $('#btn-lote-print');
+  if (btnLotePrint) btnLotePrint.addEventListener('click', () => setTimeout(() => window.print(), 50));
+  const btnLotePdf = $('#btn-lote-pdf');
+  if (btnLotePdf) btnLotePdf.addEventListener('click', exportarLotePDF);
+  const btnLoteDocx = $('#btn-lote-docx');
+  if (btnLoteDocx) btnLoteDocx.addEventListener('click', exportarLoteDocx);
+}
+
+/* ---------- Lazy load da lib `docx` para geração de Word ---------- */
+let _docxLibPromise = null;
+function carregarLibDocx() {
+  if (window.docx) return Promise.resolve(window.docx);
+  if (_docxLibPromise) return _docxLibPromise;
+  _docxLibPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/docx@8.5.0/build/index.umd.js';
+    s.onload = () => resolve(window.docx);
+    s.onerror = () => reject(new Error('Não foi possível carregar a biblioteca docx.'));
+    document.head.appendChild(s);
+  });
+  return _docxLibPromise;
+}
+
+/* ---------- Helpers para gerar Word ABNT ---------- */
+function _docxParagrafosDe(es) {
+  // Retorna array de docx.Paragraph
+  return carregarLibDocx().then(docx => {
+    const { Paragraph, TextRun, AlignmentType, HeadingLevel, BorderStyle } = docx;
+    const ps = [];
+    // Cabeçalho
+    ps.push(new Paragraph({
+      children: [
+        new TextRun({ text: `DESPACHO Nº ${es.numero}`, bold: true, size: 26 }),
+        new TextRun({ text: '\t' + es.dataExt, size: 22 })
+      ],
+      tabStops: [{ type: 'right', position: 9000 }],
+      spacing: { after: 100 },
+      border: { bottom: { color: '888888', size: 6, style: BorderStyle.SINGLE } }
+    }));
+    // Referências
+    for (const r of es.refs) {
+      ps.push(new Paragraph({
+        children: [
+          new TextRun({ text: `${r.rotulo}: `, bold: true, size: 22 }),
+          new TextRun({ text: String(r.valor), size: 22 })
+        ],
+        spacing: { after: 80 }
+      }));
+    }
+    // Vocativo
+    if (es.vocativo) {
+      ps.push(new Paragraph({
+        children: [new TextRun({ text: es.vocativo, size: 22 })],
+        spacing: { before: 200, after: 200 }
+      }));
+    }
+    // Parágrafos justificados com indentação
+    for (const p of es.paragrafos) {
+      ps.push(new Paragraph({
+        children: [new TextRun({ text: p, size: 22 })],
+        alignment: AlignmentType.JUSTIFIED,
+        indent: { firstLine: 720 },
+        spacing: { after: 200, line: 360 }
+      }));
+    }
+    // Próximos passos
+    if (es.proximosPassos && es.proximosPassos.length) {
+      ps.push(new Paragraph({
+        children: [new TextRun({ text: 'Próximos passos:', bold: true, size: 22 })],
+        spacing: { before: 200, after: 100 }
+      }));
+      es.proximosPassos.forEach((pp, i) => {
+        ps.push(new Paragraph({
+          children: [new TextRun({ text: `${i + 1}. ${pp}`, size: 22 })],
+          indent: { left: 720 },
+          spacing: { after: 80 }
+        }));
+      });
+    }
+    // Fecho
+    ps.push(new Paragraph({
+      children: [new TextRun({ text: es.fecho, size: 22 })],
+      alignment: AlignmentType.JUSTIFIED,
+      indent: { firstLine: 720 },
+      spacing: { before: 200, after: 200 }
+    }));
+    // Assinatura
+    if (es.destino === 'envio') {
+      ps.push(new Paragraph({
+        children: [new TextRun({ text: 'Atenciosamente,', size: 22 })],
+        spacing: { before: 200, after: 600 }
+      }));
+      ps.push(new Paragraph({
+        children: [new TextRun({ text: '_________________________________', size: 22 })],
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 60 }
+      }));
+      if (es.assinatura.nome) ps.push(new Paragraph({
+        children: [new TextRun({ text: es.assinatura.nome, bold: true, size: 22 })],
+        alignment: AlignmentType.CENTER
+      }));
+      if (es.assinatura.cargo) ps.push(new Paragraph({
+        children: [new TextRun({ text: es.assinatura.cargo, size: 22 })],
+        alignment: AlignmentType.CENTER
+      }));
+    }
+    return ps;
+  });
+}
+
+async function exportarBilheteDocx() {
+  const t = tarefas.find(x => x.id === _bilheteAtualId);
+  if (!t) return;
+  try {
+    mostrarFlash('Gerando Word…');
+    const docx = await carregarLibDocx();
+    const { Document, Packer } = docx;
+    const es = despachoEstrutura(t, _despachoOpts);
+    const paragrafos = await _docxParagrafosDe(es);
+    const doc = new Document({
+      styles: {
+        default: {
+          document: { run: { font: 'Times New Roman', size: 22 } }
+        }
+      },
+      sections: [{
+        properties: {
+          page: {
+            margin: { top: 1700, right: 1133, bottom: 1133, left: 1700 } // 3-2-2-3 cm em twips
+          }
+        },
+        children: paragrafos
+      }]
+    });
+    const blob = await Packer.toBlob(doc);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `despacho_${es.numero.replace('/', '-')}_${t.id}.docx`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    mostrarFlash('Word baixado.');
+  } catch (err) {
+    console.error(err);
+    mostrarMsg('Falha ao gerar Word.', true);
+  }
+}
+
+/* ---------- Despacho em lote (J) ---------- */
+
+function abrirDespachoLote() {
+  const ids = Array.from(selecaoTarefasIds);
+  if (!ids.length) { mostrarMsg('Selecione ao menos uma tarefa.', true); return; }
+  const lista = ids.map(id => tarefas.find(t => t.id === id)).filter(Boolean);
+  if (!lista.length) return;
+
+  // Calcula um destinatário primário: responsável mais frequente da seleção
+  const cont = {};
+  for (const t of lista) {
+    const r = (t.responsavel || '').trim();
+    if (!r) continue;
+    cont[r] = (cont[r] || 0) + 1;
+  }
+  const destinatariosOrdenados = Object.entries(cont).sort((a, b) => b[1] - a[1]).map(e => e[0]);
+  const principal = destinatariosOrdenados[0] || null;
+  const todosMesmo = destinatariosOrdenados.length === 1;
+
+  const dataExt = fmtDataExtenso(hojeISO());
+  const numeroPauta = `PAUTA-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(lista.length).padStart(2,'0')}`;
+
+  // Renderizar HTML da pauta
+  const refs = [];
+  refs.push({ rotulo: 'Assunto', valor: `Pauta de despachos — ${lista.length} item(ns)` });
+  if (principal && todosMesmo) refs.push({ rotulo: 'Para', valor: principal });
+  else if (destinatariosOrdenados.length > 1) refs.push({ rotulo: 'Para', valor: destinatariosOrdenados.join(', ') });
+  refs.push({ rotulo: 'De', valor: `${config.meuNome || ''}${config.meuCargo ? ' — ' + config.meuCargo : ''}`.trim() || '—' });
+
+  const refsHtml = refs.map(r => `<div class="bilhete-papel__ref"><span class="bilhete-papel__ref-rot">${escapeHTML(r.rotulo)}:</span> <span class="bilhete-papel__ref-val">${escapeHTML(r.valor)}</span></div>`).join('');
+
+  // Para cada tarefa, gera entrada resumida
+  const itensHtml = lista.map((t, i) => {
+    const es = despachoEstrutura(t, { tom: 'institucional', destino: 'envio' });
+    const oe = t.oeId ? OBJETIVOS.find(o => o.id === t.oeId) : null;
+    const meta = [];
+    if (oe) meta.push(`OE ${oe.id}`);
+    if (t.prazo) meta.push(`prazo ${fmtDataExtenso(t.prazo)}`);
+    if (t.prioridade === 'alta') meta.push('prioritária');
+    if (isAtrasada(t)) meta.push('em atraso');
+    if (t.status === 'bloqueada') meta.push('bloqueada');
+    if (t.responsavel && !todosMesmo) meta.push(`a ${t.responsavel}`);
+    return `
+      <div class="lote-item">
+        <div class="lote-item__num">${i + 1}.</div>
+        <div class="lote-item__corpo">
+          <div class="lote-item__titulo"><strong>Despacho nº ${escapeHTML(es.numero)}</strong> — ${escapeHTML(_trimPunct(t.titulo))}</div>
+          ${meta.length ? `<div class="lote-item__meta">${escapeHTML(meta.join(' · '))}</div>` : ''}
+          <p class="lote-item__paragrafo">${escapeHTML(es.paragrafos[0])}</p>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Texto puro (para copiar)
+  const linhasTxt = [];
+  linhasTxt.push(`PAUTA DE DESPACHOS — ${dataExt}`);
+  linhasTxt.push('');
+  for (const r of refs) linhasTxt.push(`${r.rotulo}: ${r.valor}`);
+  linhasTxt.push('');
+  if (principal && todosMesmo) {
+    const g = inferirGenero(principal);
+    linhasTxt.push(g === 'f' ? 'Prezada Senhora,' : 'Prezado Senhor,');
+  } else {
+    linhasTxt.push('Prezado(a) Senhor(a),');
+  }
+  linhasTxt.push('');
+  linhasTxt.push(`Submeto a Vossa apreciação a pauta com ${lista.length} item(ns) abaixo relacionados.`);
+  linhasTxt.push('');
+  lista.forEach((t, i) => {
+    const es = despachoEstrutura(t, { tom: 'institucional', destino: 'envio' });
+    const oe = t.oeId ? OBJETIVOS.find(o => o.id === t.oeId) : null;
+    const meta = [];
+    if (oe) meta.push(`OE ${oe.id}`);
+    if (t.prazo) meta.push(`prazo ${fmtDataExtenso(t.prazo)}`);
+    if (t.prioridade === 'alta') meta.push('prioritária');
+    if (isAtrasada(t)) meta.push('em atraso');
+    if (t.status === 'bloqueada') meta.push('bloqueada');
+    if (t.responsavel && !todosMesmo) meta.push(`a ${t.responsavel}`);
+    linhasTxt.push(`${i + 1}. Despacho nº ${es.numero} — ${_trimPunct(t.titulo)}`);
+    if (meta.length) linhasTxt.push(`   (${meta.join(' · ')})`);
+    linhasTxt.push(`   ${es.paragrafos[0]}`);
+    linhasTxt.push('');
+  });
+  linhasTxt.push('Permaneço à disposição para esclarecimentos.');
+  linhasTxt.push('');
+  linhasTxt.push('Atenciosamente,');
+  linhasTxt.push('');
+  if (config.meuNome) linhasTxt.push(config.meuNome);
+  if (config.meuCargo) linhasTxt.push(config.meuCargo);
+
+  const vocativoHtml = (principal && todosMesmo)
+    ? `<p class="bilhete-papel__vocativo">${escapeHTML(inferirGenero(principal) === 'f' ? 'Prezada Senhora,' : 'Prezado Senhor,')}</p>`
+    : `<p class="bilhete-papel__vocativo">Prezado(a) Senhor(a),</p>`;
+
+  const html = `
+    <div class="bilhete-papel__cabecalho">
+      <span class="bilhete-papel__rotulo">PAUTA DE DESPACHOS</span>
+      <span class="bilhete-papel__data">${escapeHTML(dataExt)}</span>
+    </div>
+    <div class="bilhete-papel__refs">${refsHtml}</div>
+    <div class="bilhete-papel__corpo">
+      ${vocativoHtml}
+      <p class="bilhete-papel__paragrafo">Submeto a Vossa apreciação a pauta com ${lista.length} item(ns) abaixo relacionados.</p>
+      <div class="lote-itens">${itensHtml}</div>
+      <p class="bilhete-papel__paragrafo">Permaneço à disposição para esclarecimentos.</p>
+      <p class="bilhete-papel__fecho">Atenciosamente,</p>
+      <div class="bilhete-papel__assinatura">
+        ${config.meuNome ? `<div class="bilhete-papel__assinante">${escapeHTML(config.meuNome)}</div>` : ''}
+        ${config.meuCargo ? `<div class="bilhete-papel__cargo">${escapeHTML(config.meuCargo)}</div>` : ''}
+      </div>
+    </div>`;
+
+  const papelEl = $('#lote-papel');
+  papelEl.innerHTML = html;
+  papelEl.dataset.texto = linhasTxt.join('\n');
+  papelEl.dataset.numeroPauta = numeroPauta;
+  papelEl.dataset.dataExt = dataExt;
+  papelEl.dataset.principal = principal || '';
+  papelEl.dataset.todosMesmo = todosMesmo ? '1' : '0';
+  papelEl.dataset.qtd = String(lista.length);
+  papelEl.dataset.ids = ids.join(',');
+
+  $('#lote-resumo').innerHTML = `${lista.length} tarefa(s) selecionada(s)${principal && todosMesmo ? ` para ${escapeHTML(principal)}` : ''}.`;
+
+  $('#dlg-despacho-lote').showModal();
+}
+
+async function exportarLotePDF() {
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const cm = 28.3464567;
+    const marginTop = 3 * cm;
+    const marginBottom = 2 * cm;
+    const marginLeft = 3 * cm;
+    const marginRight = 2 * cm;
+    const fontSize = 12; const lineHeight = 16;
+    const maxWidth = pageW - marginLeft - marginRight;
+
+    const papelEl = $('#lote-papel');
+    const texto = papelEl.dataset.texto || '';
+    const linhas = texto.split('\n');
+    let y = marginTop;
+    doc.setFont('times', 'normal'); doc.setFontSize(fontSize);
+    for (const ln of linhas) {
+      const wrapped = doc.splitTextToSize(ln || ' ', maxWidth);
+      for (const w of wrapped) {
+        if (y > pageH - marginBottom) { doc.addPage(); y = marginTop; }
+        // Negrito para título da pauta e cabeçalho de itens
+        if (/^PAUTA DE DESPACHOS/i.test(w) || /^\d+\. Despacho nº/i.test(w)) {
+          doc.setFont('times', 'bold');
+          doc.text(w, marginLeft, y);
+          doc.setFont('times', 'normal');
+        } else {
+          doc.text(w, marginLeft, y);
+        }
+        y += lineHeight;
+      }
+    }
+    doc.save(`pauta_${papelEl.dataset.numeroPauta || 'despachos'}.pdf`);
+    mostrarFlash('Pauta exportada em PDF.');
+  } catch (err) {
+    console.error(err);
+    mostrarMsg('Falha ao gerar PDF.', true);
+  }
+}
+
+async function exportarLoteDocx() {
+  try {
+    mostrarFlash('Gerando Word…');
+    const docxLib = await carregarLibDocx();
+    const { Document, Packer, Paragraph, TextRun, AlignmentType, BorderStyle } = docxLib;
+    const papelEl = $('#lote-papel');
+    const dataExt = papelEl.dataset.dataExt || fmtDataExtenso(hojeISO());
+    const principal = papelEl.dataset.principal;
+    const todosMesmo = papelEl.dataset.todosMesmo === '1';
+    const ids = (papelEl.dataset.ids || '').split(',').filter(Boolean);
+    const lista = ids.map(id => tarefas.find(t => t.id === id)).filter(Boolean);
+
+    const ps = [];
+    ps.push(new Paragraph({
+      children: [
+        new TextRun({ text: 'PAUTA DE DESPACHOS', bold: true, size: 26 }),
+        new TextRun({ text: '\t' + dataExt, size: 22 })
+      ],
+      tabStops: [{ type: 'right', position: 9000 }],
+      spacing: { after: 200 },
+      border: { bottom: { color: '888888', size: 6, style: BorderStyle.SINGLE } }
+    }));
+    ps.push(new Paragraph({
+      children: [
+        new TextRun({ text: 'Assunto: ', bold: true, size: 22 }),
+        new TextRun({ text: `Pauta de despachos — ${lista.length} item(ns)`, size: 22 })
+      ], spacing: { after: 80 }
+    }));
+    if (principal && todosMesmo) {
+      ps.push(new Paragraph({
+        children: [
+          new TextRun({ text: 'Para: ', bold: true, size: 22 }),
+          new TextRun({ text: principal, size: 22 })
+        ], spacing: { after: 80 }
+      }));
+    }
+    ps.push(new Paragraph({
+      children: [
+        new TextRun({ text: 'De: ', bold: true, size: 22 }),
+        new TextRun({ text: `${config.meuNome || ''}${config.meuCargo ? ' — ' + config.meuCargo : ''}`.trim(), size: 22 })
+      ], spacing: { after: 200 }
+    }));
+    const voc = (principal && todosMesmo) ? (inferirGenero(principal) === 'f' ? 'Prezada Senhora,' : 'Prezado Senhor,') : 'Prezado(a) Senhor(a),';
+    ps.push(new Paragraph({
+      children: [new TextRun({ text: voc, size: 22 })], spacing: { after: 200 }
+    }));
+    ps.push(new Paragraph({
+      children: [new TextRun({ text: `Submeto a Vossa apreciação a pauta com ${lista.length} item(ns) abaixo relacionados.`, size: 22 })],
+      alignment: AlignmentType.JUSTIFIED, indent: { firstLine: 720 }, spacing: { after: 200 }
+    }));
+    lista.forEach((t, i) => {
+      const es = despachoEstrutura(t, { tom: 'institucional', destino: 'envio' });
+      const oe = t.oeId ? OBJETIVOS.find(o => o.id === t.oeId) : null;
+      const meta = [];
+      if (oe) meta.push(`OE ${oe.id}`);
+      if (t.prazo) meta.push(`prazo ${fmtDataExtenso(t.prazo)}`);
+      if (t.prioridade === 'alta') meta.push('prioritária');
+      if (isAtrasada(t)) meta.push('em atraso');
+      if (t.status === 'bloqueada') meta.push('bloqueada');
+      if (t.responsavel && !todosMesmo) meta.push(`a ${t.responsavel}`);
+      ps.push(new Paragraph({
+        children: [
+          new TextRun({ text: `${i + 1}. Despacho nº ${es.numero} — `, bold: true, size: 22 }),
+          new TextRun({ text: _trimPunct(t.titulo), bold: true, size: 22 })
+        ], spacing: { before: 160, after: 60 }
+      }));
+      if (meta.length) ps.push(new Paragraph({
+        children: [new TextRun({ text: `(${meta.join(' · ')})`, italics: false, size: 20, color: '555555' })],
+        indent: { left: 360 }, spacing: { after: 60 }
+      }));
+      ps.push(new Paragraph({
+        children: [new TextRun({ text: es.paragrafos[0], size: 22 })],
+        alignment: AlignmentType.JUSTIFIED,
+        indent: { left: 360, firstLine: 360 },
+        spacing: { after: 100 }
+      }));
+    });
+    ps.push(new Paragraph({
+      children: [new TextRun({ text: 'Permaneço à disposição para esclarecimentos.', size: 22 })],
+      alignment: AlignmentType.JUSTIFIED, indent: { firstLine: 720 }, spacing: { before: 200, after: 200 }
+    }));
+    ps.push(new Paragraph({
+      children: [new TextRun({ text: 'Atenciosamente,', size: 22 })],
+      spacing: { before: 100, after: 600 }
+    }));
+    ps.push(new Paragraph({
+      children: [new TextRun({ text: '_________________________________', size: 22 })],
+      alignment: AlignmentType.CENTER, spacing: { after: 60 }
+    }));
+    if (config.meuNome) ps.push(new Paragraph({
+      children: [new TextRun({ text: config.meuNome, bold: true, size: 22 })],
+      alignment: AlignmentType.CENTER
+    }));
+    if (config.meuCargo) ps.push(new Paragraph({
+      children: [new TextRun({ text: config.meuCargo, size: 22 })],
+      alignment: AlignmentType.CENTER
+    }));
+
+    const doc = new Document({
+      styles: { default: { document: { run: { font: 'Times New Roman', size: 22 } } } },
+      sections: [{
+        properties: { page: { margin: { top: 1700, right: 1133, bottom: 1133, left: 1700 } } },
+        children: ps
+      }]
+    });
+    const blob = await Packer.toBlob(doc);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pauta_${papelEl.dataset.numeroPauta || 'despachos'}.docx`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    mostrarFlash('Word baixado.');
+  } catch (err) {
+    console.error(err);
+    mostrarMsg('Falha ao gerar Word do lote.', true);
+  }
 }
 
 function mostrarFlash(txt) {

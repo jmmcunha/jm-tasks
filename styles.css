@@ -501,6 +501,29 @@ select {
 .bilhete-modes { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--r-md); overflow: hidden; margin-bottom: 12px; align-self: flex-start; }
 .bilhete-modes .seg__btn + .seg__btn { border-left: 1px solid var(--border); }
 
+/* par envio + resposta */
+.bilhete-par { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 8px 0; }
+.bilhete-par__col { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 14px; background: #fff; min-width: 0; }
+.bilhete-par__rotulo { font-size: 0.72rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; margin-bottom: 8px; }
+.bilhete-par__pre { font-family: 'Times New Roman', Times, serif; font-size: 0.95rem; line-height: 1.5; color: #111; white-space: pre-wrap; word-wrap: break-word; max-height: 380px; overflow: auto; margin: 0 0 10px; padding: 8px 10px; background: #fafafa; border: 1px solid var(--border); border-radius: 6px; }
+.bilhete-par__col .seg__btn { align-self: flex-start; font-size: 0.82rem; }
+@media (max-width: 700px) {
+  .bilhete-par { grid-template-columns: 1fr; }
+  .bilhete-par__pre { max-height: 280px; }
+}
+
+/* despacho em lote */
+.lote-resumo { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #f5f5f5; border: 1px solid var(--border); border-radius: var(--r-md); font-size: 0.88rem; color: var(--text-2); margin-bottom: 12px; }
+.lote-resumo strong { color: var(--text); }
+.lote-itens { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+.lote-item { display: grid; grid-template-columns: 36px 1fr; gap: 8px; align-items: start; padding-bottom: 12px; border-bottom: 1px dashed var(--border); }
+.lote-item:last-child { border-bottom: 0; padding-bottom: 0; }
+.lote-item__num { font-weight: 700; font-size: 0.95rem; color: #111; text-align: right; padding-top: 2px; }
+.lote-item__corpo { min-width: 0; }
+.lote-item__titulo { font-weight: 700; font-size: 0.95rem; color: #111; margin-bottom: 2px; }
+.lote-item__meta { font-size: 0.82rem; color: var(--text-3); margin-bottom: 6px; }
+.lote-item__paragrafo { text-align: justify; text-indent: 2em; margin: 0 0 6px; font-size: 0.95rem; line-height: 1.5; }
+
 /* ============ AGENDA ============ */
 .agenda-header { padding: 18px 22px; }
 .agenda-summary { margin-top: 6px; font-size: 0.95rem; color: var(--text-2); }
