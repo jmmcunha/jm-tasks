@@ -1410,25 +1410,22 @@ function despachoPapelHTML(t) {
   if (contexto) partes.push(escapeHTML(contexto));
   if (resultadoFrase) partes.push(escapeHTML(resultadoFrase));
 
-  const linhas = [
-    saudacao,
-    '',
-    partes.join(' '),
-    '',
-    escapeHTML(fecho),
-    '',
-    'Atenciosamente,',
-    ''
-  ];
-  const corpoHtml = linhas.join('\n');
+  const paragrafo = partes.join(' ');
   const data = fmtDataExtenso(hojeISO());
+
   return `
     <div class="bilhete-papel-wrap">
-      <div class="bilhete-papel" style="--rot: ${(Math.random()*3-1.5).toFixed(2)}deg">
+      <div class="bilhete-papel">
         <div class="bilhete-papel__cabecalho">
-          <span>Despacho</span><span>${escapeHTML(data)}</span>
+          <span class="bilhete-papel__rotulo">DESPACHO</span>
+          <span class="bilhete-papel__data">${escapeHTML(data)}</span>
         </div>
-        <div class="bilhete-papel__corpo">${corpoHtml}</div>
+        <div class="bilhete-papel__corpo">
+          <p class="bilhete-papel__vocativo">${saudacao}</p>
+          <p class="bilhete-papel__paragrafo">${paragrafo}</p>
+          <p class="bilhete-papel__paragrafo">${escapeHTML(fecho)}</p>
+          <p class="bilhete-papel__fecho">Atenciosamente,</p>
+        </div>
       </div>
     </div>`;
 }
