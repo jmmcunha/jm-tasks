@@ -543,23 +543,33 @@ select {
 }
 
 /* ============ RETROSPECTIVA ============ */
-.retro-metricas { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 14px 0 18px; }
-.retro-metrica { background: #f7f7f8; border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 8px; text-align: center; }
-.retro-metrica__num { font-size: 1.5rem; font-weight: 700; color: #111; line-height: 1.1; }
-.retro-metrica__rot { font-size: 0.72rem; color: var(--text-3); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+.retro-toolbar { display: flex; align-items: center; gap: 10px; margin: 8px 0 14px; flex-wrap: wrap; }
+.retro-toolbar__rot { font-size: 0.78rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+.retro-corpo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin-top: 12px; }
+.retro-corpo__main { min-width: 0; }
+.retro-corpo__previa { display: none; }
+@media (min-width: 1100px) {
+  .retro-corpo { grid-template-columns: minmax(0, 1fr) 320px; }
+  .retro-corpo__previa { display: block; }
+}
+.previa-rot { font-size: 0.72rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; margin-bottom: 6px; }
+.previa-texto { font-family: 'Times New Roman', Times, serif; font-size: 0.92rem; line-height: 1.5; color: #222; background: #fcfaf3; border: 1px solid #e8dfc7; border-radius: 6px; padding: 14px 16px; white-space: pre-wrap; word-break: break-word; max-height: 520px; overflow-y: auto; margin: 0; }
+.retro-metricas { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 6px 0 14px; }
+@media (min-width: 720px) { .retro-metricas { grid-template-columns: repeat(6, 1fr); } }
+.retro-metrica { background: #f7f7f8; border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 8px; text-align: center; min-width: 0; }
+.retro-metrica__num { font-size: 1.4rem; font-weight: 700; color: #111; line-height: 1.1; }
+.retro-metrica__rot { font-size: 0.7rem; color: var(--text-3); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.03em; line-height: 1.2; }
 .retro-secao { margin-top: 16px; }
 .retro-secao h4 { margin: 0 0 8px; font-size: 0.95rem; color: #111; font-weight: 700; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
 .retro__lista { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
 .retro__lista li { padding: 6px 8px; background: #fafafa; border-radius: 6px; font-size: 0.9rem; line-height: 1.4; }
 .retro__lista strong { color: #111; }
 .retro__resp, .retro__data { color: var(--text-3); }
-.retro__vazio { font-size: 0.88rem; color: var(--text-3); margin: 4px 0; padding: 6px 8px; background: #fafafa; border-radius: 6px; }
+.retro__vazio { font-size: 0.88rem; color: var(--text-3); margin: 4px 0; padding: 8px 10px; background: #fafafa; border-radius: 6px; line-height: 1.4; }
 .retro-tag { display: inline-block; background: #eef2ff; color: #4338ca; font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; font-weight: 600; margin: 0 4px; vertical-align: middle; }
+.retro-secao--pergunta { margin: 0 0 12px; }
 .retro-secao--pergunta h4 { color: #8a5a14; border-bottom-color: #f0d8a8; }
-.retro-pergunta { font-family: 'Times New Roman', Times, serif; font-size: 1.05rem; line-height: 1.5; color: #444; padding: 12px 14px; background: #fff8ec; border-left: 3px solid #c8851d; border-radius: 4px; margin: 6px 0 0; font-style: italic; }
-@media (max-width: 700px) {
-  .retro-metricas { grid-template-columns: repeat(3, 1fr); }
-}
+.retro-pergunta { font-family: 'Times New Roman', Times, serif; font-size: 1.05rem; line-height: 1.5; color: #333; padding: 12px 14px; background: #fff8ec; border-left: 3px solid #c8851d; border-radius: 4px; margin: 6px 0 0; }
 
 /* despacho em lote */
 .lote-resumo { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #f5f5f5; border: 1px solid var(--border); border-radius: var(--r-md); font-size: 0.88rem; color: var(--text-2); margin-bottom: 12px; }
@@ -735,6 +745,24 @@ select {
 
 .email-controls { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 @media (max-width: 600px) { .email-controls { grid-template-columns: 1fr; } }
+
+/* toggles do modal de e-mail (tom / assunto / corpo) */
+.email-toggles { display: flex; flex-wrap: wrap; gap: 14px 22px; margin: 4px 0 12px; align-items: flex-end; }
+.email-toggle-grupo { display: flex; flex-direction: column; gap: 4px; }
+.email-toggle-rot { font-size: 0.7rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+.email-toggle-grupo .bilhete-modes { margin: 0; }
+
+/* assunto agora é textarea: nao deixa cortar */
+#email-assunto { font-family: inherit; font-size: 0.95rem; line-height: 1.35; resize: vertical; min-height: 2.6em; white-space: pre-wrap; word-break: break-word; }
+
+/* layout corpo + prévia tipográfica lateral */
+.email-corpo-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin-top: 4px; }
+.email-corpo-grid__main { min-width: 0; }
+.email-corpo-grid__previa { display: none; }
+@media (min-width: 1100px) {
+  .email-corpo-grid { grid-template-columns: minmax(0, 1fr) 320px; align-items: start; }
+  .email-corpo-grid__previa { display: block; position: sticky; top: 0; }
+}
 
 /* ============ RESPONSIVO ============ */
 @media (max-width: 960px) {

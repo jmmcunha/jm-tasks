@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260505e" />
+  <link rel="stylesheet" href="styles.css?v=20260505f" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a3d7a'/%3E%3Cpath d='M9 11h14M9 16h14M9 21h9' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='25.5' cy='21' r='2' fill='%23f08000'/%3E%3C/svg%3E" />
 
   <!-- Bibliotecas: jsPDF, html2canvas, SheetJS, Chart.js -->
@@ -502,23 +502,40 @@
         </div>
         <button class="btn btn--ghost btn--sm" id="retro-close" type="button">Fechar</button>
       </header>
-      <div id="retro-metricas"></div>
-      <section class="retro-secao">
-        <h4>Concluídas no período</h4>
-        <div id="retro-concluidas"></div>
-      </section>
-      <section class="retro-secao">
-        <h4>Prazos vencidos no período</h4>
-        <div id="retro-vencidas"></div>
-      </section>
-      <section class="retro-secao">
-        <h4>Paradas há 7 dias ou mais</h4>
-        <div id="retro-paradas"></div>
-      </section>
+      <div class="retro-toolbar">
+        <span class="retro-toolbar__rot">Período:</span>
+        <div class="bilhete-modes" role="tablist" aria-label="Período da retrospectiva">
+          <button class="seg__btn seg__btn--ativo" data-retdias="7" type="button">7 dias</button>
+          <button class="seg__btn" data-retdias="14" type="button">14 dias</button>
+          <button class="seg__btn" data-retdias="30" type="button">30 dias</button>
+          <button class="seg__btn" data-retdias="90" type="button">90 dias</button>
+        </div>
+      </div>
       <section class="retro-secao retro-secao--pergunta">
         <h4>Pergunta da semana</h4>
         <p id="retro-pergunta" class="retro-pergunta"></p>
       </section>
+      <div class="retro-corpo">
+        <div class="retro-corpo__main">
+          <div id="retro-metricas"></div>
+          <section class="retro-secao">
+            <h4>Concluídas no período</h4>
+            <div id="retro-concluidas"></div>
+          </section>
+          <section class="retro-secao">
+            <h4>Prazos vencidos no período</h4>
+            <div id="retro-vencidas"></div>
+          </section>
+          <section class="retro-secao">
+            <h4>Paradas há 7 dias ou mais</h4>
+            <div id="retro-paradas"></div>
+          </section>
+        </div>
+        <aside class="retro-corpo__previa" aria-label="Prévia para impressão">
+          <div class="previa-rot">Prévia para impressão</div>
+          <pre id="retro-previa" class="previa-texto"></pre>
+        </aside>
+      </div>
       <div class="modal__actions">
         <button class="btn" id="btn-retro-copy" type="button">Copiar</button>
         <button class="btn" id="btn-retro-print" type="button">Imprimir</button>
@@ -590,9 +607,28 @@
         <h3>Gerador de e-mail</h3>
         <button class="btn btn--ghost btn--sm" id="email-close" type="button">Fechar</button>
       </header>
-      <div class="bilhete-modes" role="tablist" aria-label="Tom">
-        <button class="seg__btn seg__btn--ativo" data-etom="pessoal" type="button">Pessoal</button>
-        <button class="seg__btn" data-etom="institucional" type="button">Institucional</button>
+      <div class="email-toggles">
+        <div class="email-toggle-grupo">
+          <span class="email-toggle-rot">Tom</span>
+          <div class="bilhete-modes" role="tablist" aria-label="Tom">
+            <button class="seg__btn seg__btn--ativo" data-etom="pessoal" type="button">Pessoal</button>
+            <button class="seg__btn" data-etom="institucional" type="button">Institucional</button>
+          </div>
+        </div>
+        <div class="email-toggle-grupo">
+          <span class="email-toggle-rot">Assunto</span>
+          <div class="bilhete-modes" role="tablist" aria-label="Modo do assunto">
+            <button class="seg__btn seg__btn--ativo" data-eassunto="curto" type="button">Curto</button>
+            <button class="seg__btn" data-eassunto="completo" type="button">Completo</button>
+          </div>
+        </div>
+        <div class="email-toggle-grupo email-toggle--corpo" hidden>
+          <span class="email-toggle-rot">Corpo</span>
+          <div class="bilhete-modes" role="tablist" aria-label="Modo do corpo">
+            <button class="seg__btn seg__btn--ativo" data-ecorpo="normal" type="button">Normal</button>
+            <button class="seg__btn" data-ecorpo="compacto" type="button">Compacto</button>
+          </div>
+        </div>
       </div>
       <div class="email-controls">
         <label class="field"><span>Template</span>
@@ -617,8 +653,16 @@
           <input type="text" id="email-nome" placeholder="Ex.: Ana Paula" />
         </label>
       </div>
-      <label class="field field--full"><span>Assunto</span><input type="text" id="email-assunto" /></label>
-      <label class="field field--full"><span>Corpo</span><textarea id="email-corpo" rows="14"></textarea></label>
+      <div class="email-corpo-grid">
+        <div class="email-corpo-grid__main">
+          <label class="field field--full"><span>Assunto</span><textarea id="email-assunto" rows="2"></textarea></label>
+          <label class="field field--full"><span>Corpo</span><textarea id="email-corpo" rows="14"></textarea></label>
+        </div>
+        <aside class="email-corpo-grid__previa" aria-label="Prévia para impressão">
+          <div class="previa-rot">Prévia para impressão</div>
+          <pre id="email-previa" class="previa-texto"></pre>
+        </aside>
+      </div>
       <div class="modal__actions">
         <button class="btn btn--primary btn--sm" id="btn-email-copy" type="button">Copiar (assunto + corpo)</button>
         <button class="btn btn--ghost btn--sm" id="btn-email-copy-body" type="button">Copiar (somente corpo)</button>
@@ -767,10 +811,10 @@
   </dialog>
 
   <!-- Firebase: config + sync compartilhado (equipe) -->
-  <script src="firebase-config.js?v=20260505e"></script>
-  <script src="firebase-sync.js?v=20260505e"></script>
-  <script src="app.js?v=20260505e"></script>
+  <script src="firebase-config.js?v=20260505f"></script>
+  <script src="firebase-sync.js?v=20260505f"></script>
+  <script src="app.js?v=20260505f"></script>
   <!-- Captura rápida em linguagem natural + voz -->
-  <script src="quick-capture.js?v=20260505e"></script>
+  <script src="quick-capture.js?v=20260505f"></script>
 </body>
 </html>
