@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260505f" />
+  <link rel="stylesheet" href="styles.css?v=20260505g" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a3d7a'/%3E%3Cpath d='M9 11h14M9 16h14M9 21h9' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='25.5' cy='21' r='2' fill='%23f08000'/%3E%3C/svg%3E" />
 
   <!-- Bibliotecas: jsPDF, html2canvas, SheetJS, Chart.js -->
@@ -231,6 +231,7 @@
         <button class="btn btn--ghost btn--sm" id="btn-limpar-selecao">Limpar</button>
         <button class="btn btn--primary btn--sm" id="btn-criar-reuniao">Criar reunião com selecionadas</button>
         <button class="btn btn--primary btn--sm" id="btn-despachar-lote">Despachar lote</button>
+        <button class="btn btn--primary btn--sm" id="btn-emailar-lote">E-mail em lote</button>
       </div>
 
     </section>
@@ -563,6 +564,47 @@
     </div>
   </dialog>
 
+  <!-- Modal de e-mail em lote -->
+  <dialog id="dlg-email-lote" class="modal modal--lg">
+    <div class="modal__inner">
+      <header class="modal__head">
+        <h3>E-mail em lote</h3>
+        <button class="btn btn--ghost btn--sm" id="el-close" type="button">Fechar</button>
+      </header>
+      <div class="email-toggles">
+        <div class="email-toggle-grupo">
+          <span class="email-toggle-rot">Tom</span>
+          <div class="bilhete-modes" role="tablist" aria-label="Tom">
+            <button class="seg__btn" data-eltom="pessoal" type="button">Pessoal</button>
+            <button class="seg__btn seg__btn--ativo" data-eltom="institucional" type="button">Institucional</button>
+          </div>
+        </div>
+        <div class="email-toggle-grupo">
+          <span class="email-toggle-rot">Assunto</span>
+          <div class="bilhete-modes" role="tablist" aria-label="Assunto">
+            <button class="seg__btn seg__btn--ativo" data-elassunto="curto" type="button">Curto</button>
+            <button class="seg__btn" data-elassunto="completo" type="button">Completo</button>
+          </div>
+        </div>
+        <div class="email-toggle-grupo">
+          <span class="email-toggle-rot">Corpo</span>
+          <div class="bilhete-modes" role="tablist" aria-label="Corpo">
+            <button class="seg__btn seg__btn--ativo" data-elcorpo="normal" type="button">Normal</button>
+            <button class="seg__btn" data-elcorpo="compacto" type="button">Compacto</button>
+          </div>
+        </div>
+      </div>
+      <div class="lote-resumo" id="email-lote-resumo"></div>
+      <div id="email-lote-conteudo" class="email-lote-conteudo"></div>
+      <div class="modal__actions">
+        <button class="btn btn--primary btn--sm" id="btn-el-copy-tudo" type="button">Copiar tudo</button>
+        <button class="btn btn--ghost btn--sm" id="btn-el-docx" type="button">Baixar Word</button>
+        <button class="btn btn--ghost btn--sm" id="btn-el-print" type="button">Imprimir</button>
+        <button class="btn btn--ghost btn--sm" id="btn-el-abrir-todos" type="button">Abrir cada um no cliente</button>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Modal de bilhete único -->
   <dialog id="dlg-bilhete" class="modal modal--lg">
     <div class="modal__inner">
@@ -811,10 +853,10 @@
   </dialog>
 
   <!-- Firebase: config + sync compartilhado (equipe) -->
-  <script src="firebase-config.js?v=20260505f"></script>
-  <script src="firebase-sync.js?v=20260505f"></script>
-  <script src="app.js?v=20260505f"></script>
+  <script src="firebase-config.js?v=20260505g"></script>
+  <script src="firebase-sync.js?v=20260505g"></script>
+  <script src="app.js?v=20260505g"></script>
   <!-- Captura rápida em linguagem natural + voz -->
-  <script src="quick-capture.js?v=20260505f"></script>
+  <script src="quick-capture.js?v=20260505g"></script>
 </body>
 </html>

@@ -411,6 +411,7 @@ function initApp() {
   bindExemplosPA2026();
   bindDespachos();
   bindEmail();
+  bindEmailLote();
   bindDrucker();
   bindAgenda();
   bindRevisao();
@@ -3302,17 +3303,23 @@ function atualizarCorpoEmail() {
       : ` Como entrega prevista, registra-se: ${resultadoLimpo}.`;
   }
 
-  // Próximos passos
-  // Regras:
-  //  - Conclusão e rotina: sem próximos passos
-  //  - Lembrete (manual) com categoria 'andamento': sem próximos passos (é só lembrar)
-  //  - Demais casos: tenta passos contextuais por palavra-chave;
-  //    se não houver match, cai nos genéricos via proximosPassos()
+  // Próximos passos — regra restritiva:
+  //  - Sem próximos passos para: conclusão, rotina, lembrete manual (andamento), reagendamento manual.
+  //  - Tenta primeiro o detector contextual (palavra-chave do título).
+  //  - Se não houver match: só mostra genéricos para 'atrasada' ou 'bloqueada'
+  //    (aí os passos são realmente úteis: diagnóstico, novo prazo, impedimentos).
+  //  - Para 'andamento', 'alta' e 'rotina' sem keyword: NADA. (Nada de "Definir prazo
+  //    de execução em comum acordo" / "Alinhar entregas previstas".)
   let passos = [];
   const ehLembreteAndamento = (tplManual === 'lembrete') && (categoria === 'andamento');
-  if (categoria !== 'concluida' && categoria !== 'rotina' && !ehLembreteAndamento) {
+  const ehReagendamento = (tplManual === 'reagendamento');
+  if (categoria !== 'concluida' && categoria !== 'rotina' && !ehLembreteAndamento && !ehReagendamento) {
     const ctx = _passosContextuaisPorTitulo(tituloLimpo);
-    passos = ctx.length ? ctx : proximosPassos(t);
+    if (ctx.length) {
+      passos = ctx;
+    } else if (categoria === 'atrasada' || categoria === 'bloqueada') {
+      passos = proximosPassos(t);
+    }
   }
 
   // Assunto: dois modos
@@ -3361,6 +3368,361 @@ function atualizarCorpoEmail() {
   // Prévia tipográfica
   const previa = $('#email-previa');
   if (previa) previa.textContent = `Assunto: ${assunto}\n\n${corpo}`;
+}
+
+// Versão pura para o lote: gera {assunto, corpo, destinatario} sem mexer no DOM.
+// Reaproveita as variações e a lógica de negócio. opts: { tom, assuntoMode, corpoMode, tplManual }
+function _montarEmailParaTarefa(t, opts) {
+  opts = opts || {};
+  const tom = opts.tom || 'institucional';
+  const assuntoMode = opts.assuntoMode || 'curto';
+  const corpoMode = opts.corpoMode || 'normal';
+  const tplManual = opts.tplManual || 'auto';
+
+  const tituloLimpo = _trimPunct(t.titulo || '');
+  const resultadoLimpo = t.resultado ? _trimPunct(t.resultado) : null;
+  const prazoExt = t.prazo ? fmtDataExtenso(t.prazo) : null;
+  const oe = t.oeId ? OBJETIVOS.find(o => o.id === t.oeId) : null;
+  const oeTrecho = oe ? ` (vinculada ao Objetivo Estratégico ${oe.id} — ${oe.curto})` : '';
+
+  const es = despachoEstrutura(t, { tom: 'institucional', destino: 'envio' });
+  const catManual = _emailTplToCategoria(tplManual, t);
+  const categoria = catManual || es.categoria;
+  const rotuloAss = (tplManual !== 'auto' ? _EMAIL_LABELS_MANUAL[tplManual] : _EMAIL_LABELS[categoria]) || 'Comunicação';
+  const seed = `${t.id}-${es.numero}-email`;
+
+  // Vocativo
+  const respPrim = (t.responsavel || '').split(/\s+/)[0];
+  const g = inferirGenero(respPrim);
+  let voc;
+  if (tom === 'institucional') {
+    voc = g === 'f' ? 'Prezada Senhora' : 'Prezado Senhor';
+  } else {
+    const prefixo = g === 'f' ? 'Prezada' : (g === 'm' ? 'Prezado' : 'Prezado(a)');
+    voc = respPrim ? `${prefixo} ${respPrim}` : prefixo;
+  }
+
+  // Aberturas / fechos: mesmo catálogo do atualizarCorpoEmail (replicamos para não acoplar)
+  const VAR = {
+    concluida: [
+      `comunico a conclusão da demanda ${tituloLimpo}${oeTrecho}`,
+      `informo o encerramento da demanda ${tituloLimpo}${oeTrecho}`,
+      `registro a conclusão da demanda ${tituloLimpo}${oeTrecho}`
+    ],
+    atrasada: [
+      `registro que a demanda ${tituloLimpo}${oeTrecho} encontra-se com prazo vencido`,
+      `retomo a demanda ${tituloLimpo}${oeTrecho}, cujo prazo já se expirou`,
+      `reitero a demanda ${tituloLimpo}${oeTrecho}, observando que o prazo previsto foi ultrapassado`
+    ],
+    bloqueada: [
+      `reporto entraves na demanda ${tituloLimpo}${oeTrecho} e solicito apoio para o desbloqueio`,
+      `comunico a existência de impedimentos na demanda ${tituloLimpo}${oeTrecho}`,
+      `submeto a sua atenção a demanda ${tituloLimpo}${oeTrecho}, atualmente em situação de bloqueio`
+    ],
+    alta: [
+      `encaminho, com tratamento prioritário, a demanda ${tituloLimpo}${oeTrecho}`,
+      `solicito atenção prioritária à demanda ${tituloLimpo}${oeTrecho}`,
+      `submeto, em caráter prioritário, a demanda ${tituloLimpo}${oeTrecho}`
+    ],
+    andamento: [
+      `atualizo o andamento da demanda ${tituloLimpo}${oeTrecho}`,
+      `acompanho com você a demanda ${tituloLimpo}${oeTrecho}`,
+      `registro o estágio atual da demanda ${tituloLimpo}${oeTrecho}`
+    ],
+    rotina: [
+      `encaminho a demanda ${tituloLimpo}${oeTrecho}`,
+      `submeto à sua apreciação a demanda ${tituloLimpo}${oeTrecho}`,
+      `apresento, para conhecimento e providências, a demanda ${tituloLimpo}${oeTrecho}`
+    ]
+  };
+  const FECHOS = {
+    concluida: [
+      'Agradeço a colaboração e permaneço à disposição para os próximos encaminhamentos.',
+      'Agradeço o empenho e sigo à disposição para tratativas subsequentes.',
+      'Permaneço à disposição para os desdobramentos decorrentes.'
+    ],
+    atrasada: [
+      'Solicito posicionamento sobre o estágio atual e, se cabível, nova projeção de prazo.',
+      'Peço, por gentileza, retorno sobre o estágio atual e proposta de novo prazo.',
+      'Aguardo manifestação quanto ao estágio atual e a possíveis ajustes de prazo.'
+    ],
+    bloqueada: [
+      'Permaneço à disposição para apoiar na remoção dos impedimentos.',
+      'Sigo à disposição para articular as providências necessárias.',
+      'Coloco-me à disposição para tratativas que viabilizem o prosseguimento.'
+    ],
+    alta: [
+      'Permaneço à disposição para esclarecimentos e ajustes que se fizerem necessários.',
+      'Permaneço à disposição para o que se fizer necessário.',
+      'Aguardo manifestação e sigo à disposição para ajustes.'
+    ],
+    andamento: [
+      'Caso já haja avanço a reportar, agradeço breve sinalização.',
+      'Peço uma breve sinalização sobre o estágio atual e eventuais entraves.',
+      'Aguardo atualização quanto ao estágio e a obstáculos identificados.'
+    ],
+    rotina: [
+      'Permaneço à disposição para esclarecimentos.',
+      'Sigo à disposição para esclarecimentos.',
+      'Aguardo retorno e permaneço à disposição.'
+    ]
+  };
+  const abertura = _pickStable(VAR[categoria] || VAR.rotina, seed + ':a');
+  const fechoCat = _pickStable(FECHOS[categoria] || FECHOS.rotina, seed + ':f');
+
+  // Contexto de prazo
+  let contexto = '';
+  if (categoria === 'atrasada' && prazoExt) contexto = ` O prazo previsto era ${prazoExt}.`;
+  else if (categoria === 'bloqueada' && prazoExt) contexto = ` O prazo previsto é ${prazoExt}.`;
+  else if (categoria === 'alta') contexto = prazoExt ? ` Solicito conclusão até ${prazoExt}.` : ' Solicito definição de prazo de execução tão logo possível.';
+  else if (categoria === 'andamento' && prazoExt) contexto = ` O prazo previsto é ${prazoExt}.`;
+  else if (categoria === 'rotina' && prazoExt) contexto = ` Sugere-se como prazo ${prazoExt}, passível de revisão de comum acordo.`;
+
+  let resultadoFrase = '';
+  if (resultadoLimpo) {
+    resultadoFrase = (categoria === 'concluida')
+      ? ` Como entrega, registra-se: ${resultadoLimpo}.`
+      : ` Como entrega prevista, registra-se: ${resultadoLimpo}.`;
+  }
+
+  // Próximos passos — mesma regra restritiva
+  let passos = [];
+  const ehLembreteAndamento = (tplManual === 'lembrete') && (categoria === 'andamento');
+  const ehReagendamento = (tplManual === 'reagendamento');
+  if (categoria !== 'concluida' && categoria !== 'rotina' && !ehLembreteAndamento && !ehReagendamento) {
+    const ctx = _passosContextuaisPorTitulo(tituloLimpo);
+    if (ctx.length) {
+      passos = ctx;
+    } else if (categoria === 'atrasada' || categoria === 'bloqueada') {
+      passos = proximosPassos(t);
+    }
+  }
+
+  // Assunto
+  const tituloAssunto = assuntoMode === 'curto' ? _truncSmart(tituloLimpo, 50) : tituloLimpo;
+  const assunto = assuntoMode === 'curto'
+    ? `${rotuloAss} — ${tituloAssunto}`
+    : `Despacho nº ${es.numero} — ${rotuloAss} — ${tituloAssunto}`;
+
+  const podeCompacto = (categoria === 'andamento' || categoria === 'atrasada');
+  const compacto = podeCompacto && corpoMode === 'compacto';
+
+  let corpo = `${voc},\n\n`;
+  if (compacto) {
+    corpo += `${abertura}.${contexto}${resultadoFrase}\n\n`;
+    corpo += `${fechoCat}\n\nAtenciosamente,\n\n`;
+  } else {
+    corpo += `${abertura}.${contexto}${resultadoFrase}\n`;
+    if (passos.length) {
+      corpo += `\nPróximos passos:\n`;
+      passos.forEach(p => { corpo += `  • ${p}\n`; });
+    }
+    corpo += `\n${fechoCat}\n\nAtenciosamente,\n\n`;
+  }
+  if (config.meuNome) corpo += `${config.meuNome}`;
+  if (config.meuCargo) corpo += `\n${config.meuCargo}`;
+  corpo += `\n`;
+
+  return {
+    assunto,
+    corpo,
+    destinatario: t.responsavel || '—',
+    categoria,
+    rotulo: rotuloAss,
+    numero: es.numero,
+    titulo: tituloLimpo
+  };
+}
+
+// Estado do modal de e-mail em lote
+let _emailLoteTom = 'institucional';
+let _emailLoteAssunto = 'curto';
+let _emailLoteCorpo = 'normal';
+
+function _emailsLoteSelecionados() {
+  const ids = Array.from(selecaoTarefasIds);
+  const lista = ids.map(id => tarefas.find(t => t.id === id)).filter(Boolean);
+  return lista.map(t => ({
+    tarefa: t,
+    email: _montarEmailParaTarefa(t, {
+      tom: _emailLoteTom,
+      assuntoMode: _emailLoteAssunto,
+      corpoMode: _emailLoteCorpo,
+      tplManual: 'auto'
+    })
+  }));
+}
+
+function _emailLoteAgrupar(itens) {
+  // Agrupa por destinatário (responsavel)
+  const grupos = new Map();
+  for (const it of itens) {
+    const k = (it.tarefa.responsavel || '—').trim() || '—';
+    if (!grupos.has(k)) grupos.set(k, []);
+    grupos.get(k).push(it);
+  }
+  return grupos;
+}
+
+function renderEmailLote() {
+  const itens = _emailsLoteSelecionados();
+  const grupos = _emailLoteAgrupar(itens);
+  const total = itens.length;
+  const nDest = grupos.size;
+  $('#email-lote-resumo').innerHTML = `<strong>${total}</strong> e-mail(s) para <strong>${nDest}</strong> destinatário(s).`;
+
+  // Sincroniza visual dos toggles
+  $$('#dlg-email-lote [data-eltom]').forEach(b => b.classList.toggle('seg__btn--ativo', b.dataset.eltom === _emailLoteTom));
+  $$('#dlg-email-lote [data-elassunto]').forEach(b => b.classList.toggle('seg__btn--ativo', b.dataset.elassunto === _emailLoteAssunto));
+  $$('#dlg-email-lote [data-elcorpo]').forEach(b => b.classList.toggle('seg__btn--ativo', b.dataset.elcorpo === _emailLoteCorpo));
+
+  let html = '';
+  let idx = 0;
+  for (const [dest, lista] of grupos) {
+    html += `<div class="el-grupo"><div class="el-grupo__head"><span class="el-grupo__dest">${escHtml(dest)}</span><span class="el-grupo__qtd">${lista.length} e-mail(s)</span></div>`;
+    for (const it of lista) {
+      idx++;
+      const m = it.email;
+      html += `
+        <article class="el-item" data-tid="${escHtml(it.tarefa.id)}">
+          <header class="el-item__head">
+            <span class="el-item__num">${idx}.</span>
+            <span class="el-item__assunto">${escHtml(m.assunto)}</span>
+            <span class="el-item__cat el-cat--${escHtml(m.categoria)}">${escHtml(m.rotulo)}</span>
+          </header>
+          <pre class="el-item__corpo">${escHtml(m.corpo)}</pre>
+          <div class="el-item__acoes">
+            <button type="button" class="btn btn--ghost btn--sm" data-elact="copy" data-tid="${escHtml(it.tarefa.id)}">Copiar</button>
+            <button type="button" class="btn btn--ghost btn--sm" data-elact="mailto" data-tid="${escHtml(it.tarefa.id)}">Abrir no cliente</button>
+            <button type="button" class="btn btn--ghost btn--sm" data-elact="editar" data-tid="${escHtml(it.tarefa.id)}">Editar individualmente</button>
+          </div>
+        </article>`;
+    }
+    html += `</div>`;
+  }
+  $('#email-lote-conteudo').innerHTML = html || '<p class="el-vazio">Selecione tarefas no quadro para gerar os e-mails.</p>';
+  // Guarda payload para exportação
+  $('#dlg-email-lote').dataset.itens = JSON.stringify(itens.map(it => ({
+    id: it.tarefa.id,
+    destinatario: it.email.destinatario,
+    assunto: it.email.assunto,
+    corpo: it.email.corpo
+  })));
+}
+
+function abrirEmailLote() {
+  const ids = Array.from(selecaoTarefasIds);
+  if (!ids.length) { mostrarMsg('Selecione ao menos uma tarefa.', true); return; }
+  // resets sensatos
+  _emailLoteTom = 'institucional';
+  _emailLoteAssunto = 'curto';
+  _emailLoteCorpo = 'normal';
+  renderEmailLote();
+  $('#dlg-email-lote').showModal();
+}
+
+function _emailLoteTextoTudo() {
+  const itens = JSON.parse($('#dlg-email-lote').dataset.itens || '[]');
+  const blocos = itens.map((it, i) => {
+    return `=== E-mail ${i+1} — Para: ${it.destinatario} ===\nAssunto: ${it.assunto}\n\n${it.corpo}`;
+  });
+  return blocos.join('\n\n' + '─'.repeat(60) + '\n\n');
+}
+
+async function exportarEmailLoteDocx() {
+  await carregarLibDocx();
+  const D = window.docx;
+  if (!D) { alert('Não foi possível carregar a biblioteca Word.'); return; }
+  const itens = JSON.parse($('#dlg-email-lote').dataset.itens || '[]');
+  if (!itens.length) return;
+  const P = D.Paragraph, T = D.TextRun, HL = D.HeadingLevel;
+  const elementos = [];
+  elementos.push(new P({ heading: HL.HEADING_1, children: [new T({ text: `Lote de e-mails (${itens.length})` })] }));
+  elementos.push(new P({ children: [new T({ text: fmtDataExtenso(hojeISO()) })] }));
+  elementos.push(new P({ children: [new T({ text: '' })] }));
+  itens.forEach((it, i) => {
+    elementos.push(new P({ heading: HL.HEADING_2, children: [new T({ text: `E-mail ${i+1} — Para ${it.destinatario}` })] }));
+    elementos.push(new P({ children: [new T({ text: `Assunto: ${it.assunto}`, bold: true })] }));
+    elementos.push(new P({ children: [new T({ text: '' })] }));
+    for (const linha of String(it.corpo).split('\n')) {
+      elementos.push(new P({ children: [new T({ text: linha })] }));
+    }
+    elementos.push(new P({ children: [new T({ text: '' })] }));
+  });
+  const doc = new D.Document({
+    styles: { default: { document: { run: { font: 'Times New Roman', size: 24 } } } },
+    sections: [{ properties: { page: { margin: { top: 1700, right: 1133, bottom: 1133, left: 1700 } } }, children: elementos }]
+  });
+  const blob = await D.Packer.toBlob(doc);
+  baixar(blob, `lote_emails_${hojeISO()}.docx`);
+}
+
+function bindEmailLote() {
+  // botão da toolbar
+  document.addEventListener('click', e => {
+    if (e.target.id === 'btn-emailar-lote') {
+      abrirEmailLote();
+      return;
+    }
+  });
+  // ações dentro do modal
+  document.addEventListener('click', e => {
+    if (e.target.id === 'el-close') {
+      const dlg = $('#dlg-email-lote'); if (dlg && dlg.open) dlg.close();
+      return;
+    }
+    // toggles
+    const tomBtn = e.target.closest('#dlg-email-lote [data-eltom]');
+    if (tomBtn) { _emailLoteTom = tomBtn.dataset.eltom; renderEmailLote(); return; }
+    const assBtn = e.target.closest('#dlg-email-lote [data-elassunto]');
+    if (assBtn) { _emailLoteAssunto = assBtn.dataset.elassunto; renderEmailLote(); return; }
+    const corpoBtn = e.target.closest('#dlg-email-lote [data-elcorpo]');
+    if (corpoBtn) { _emailLoteCorpo = corpoBtn.dataset.elcorpo; renderEmailLote(); return; }
+    // ações por item
+    const actBtn = e.target.closest('#dlg-email-lote [data-elact]');
+    if (actBtn) {
+      const tid = actBtn.dataset.tid;
+      const itens = JSON.parse($('#dlg-email-lote').dataset.itens || '[]');
+      const it = itens.find(x => x.id === tid);
+      if (!it) return;
+      const act = actBtn.dataset.elact;
+      if (act === 'copy') {
+        navigator.clipboard.writeText(`Assunto: ${it.assunto}\n\n${it.corpo}`).then(() => mostrarFlash('E-mail copiado.'));
+      } else if (act === 'mailto') {
+        const url = `mailto:?subject=${encodeURIComponent(it.assunto)}&body=${encodeURIComponent(it.corpo)}`;
+        window.location.href = url;
+      } else if (act === 'editar') {
+        const dlg = $('#dlg-email-lote'); if (dlg && dlg.open) dlg.close();
+        abrirEmailModal(tid);
+      }
+      return;
+    }
+    // botões do rodapé
+    if (e.target.id === 'btn-el-copy-tudo') {
+      navigator.clipboard.writeText(_emailLoteTextoTudo()).then(() => mostrarFlash('Lote copiado.'));
+    } else if (e.target.id === 'btn-el-docx') {
+      exportarEmailLoteDocx();
+    } else if (e.target.id === 'btn-el-print') {
+      const w = window.open('', '_blank');
+      if (w) {
+        w.document.write('<pre style="font-family:Times,serif;font-size:13px;white-space:pre-wrap;padding:24px">' + escHtml(_emailLoteTextoTudo()) + '</pre>');
+        w.document.close(); w.print();
+      }
+    } else if (e.target.id === 'btn-el-abrir-todos') {
+      // abre até 5 mailto consecutivos (mais que isso fica abusivo)
+      const itens = JSON.parse($('#dlg-email-lote').dataset.itens || '[]');
+      const limite = Math.min(itens.length, 5);
+      if (itens.length > 5) {
+        if (!confirm(`Você tem ${itens.length} e-mails. Vou abrir os 5 primeiros agora; clique novamente para os próximos.`)) return;
+      }
+      for (let i = 0; i < limite; i++) {
+        const it = itens[i];
+        const url = `mailto:?subject=${encodeURIComponent(it.assunto)}&body=${encodeURIComponent(it.corpo)}`;
+        // delay leve para não sobrescrever
+        setTimeout(() => { window.open(url, '_blank'); }, i * 300);
+      }
+    }
+  });
 }
 
 function bindEmail() {
