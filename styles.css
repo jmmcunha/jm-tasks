@@ -1269,3 +1269,156 @@ select {
   .retro-dist__num { grid-area: num; }
   .retro-dist__bar { grid-area: bar; }
 }
+
+/* ===== Revisão por IA (Leva 10) ===== */
+.ria-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+@media (max-width: 720px) {
+  .ria-grid { grid-template-columns: 1fr; }
+}
+.ria-bloco {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+.ria-bloco h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95em;
+  color: #0a3d7a;
+}
+.ria-passo {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e7eb;
+}
+.ria-passo h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95em;
+  color: #0a3d7a;
+}
+.ria-textarea {
+  width: 100%;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.82em;
+  padding: 0.6rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  resize: vertical;
+  background: #fafbfc;
+}
+.ria-textarea:focus {
+  outline: none;
+  border-color: #0a3d7a;
+  background: #fff;
+}
+
+/* Cards de diff */
+.diff-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-left: 3px solid #0a3d7a;
+  border-radius: 4px;
+  padding: 0.75rem;
+  margin-bottom: 0.6rem;
+}
+.diff-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+.diff-card__head .chk {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1;
+  min-width: 0;
+}
+.diff-card__head strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.diff-motivo {
+  font-size: 0.85em;
+  color: #475569;
+  margin-bottom: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+.diff-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.diff-row {
+  display: grid;
+  grid-template-columns: 110px 1fr auto 1fr;
+  gap: 0.5rem;
+  align-items: start;
+  font-size: 0.88em;
+  padding: 0.3rem 0;
+  border-top: 1px solid #f1f5f9;
+}
+.diff-row:first-child { border-top: none; }
+.diff-row__label {
+  font-weight: 600;
+  color: #64748b;
+  font-size: 0.82em;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.diff-old {
+  background: #fef2f2;
+  color: #991b1b;
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  word-break: break-word;
+  text-decoration: line-through;
+  text-decoration-color: rgba(153, 27, 27, 0.4);
+}
+.diff-old .muted { text-decoration: none; }
+.diff-arrow {
+  color: #94a3b8;
+  font-weight: 700;
+  align-self: center;
+}
+.diff-new {
+  background: #ecfdf5;
+  color: #065f46;
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  word-break: break-word;
+}
+.diff-new .muted { color: #94a3b8; }
+
+@media (max-width: 720px) {
+  .diff-row {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
+  .diff-arrow { display: none; }
+}
+
+/* Chips de quadrante no diff */
+.diff-quad-chip {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75em;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+.diff-quad-chip--Q1 { background: #c0392b; }
+.diff-quad-chip--Q2 { background: #0a3d7a; }
+.diff-quad-chip--Q3 { background: #0e7c66; }
+.diff-quad-chip--Q4 { background: #7f8c8d; }
+.diff-quad-chip--NC { background: #94a3b8; }

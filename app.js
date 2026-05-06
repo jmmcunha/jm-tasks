@@ -529,6 +529,7 @@ function initApp() {
   bindEmail();
   bindEmailLote();
   bindPainelExportar();
+  bindPainelRevisaoIA();
   bindSobreQuadrantes();
   bindDrucker();
   bindAgenda();
@@ -2235,6 +2236,376 @@ function exportarXLSXCustom() {
 
   XLSX.writeFile(wb, `tarefas_cebraspe_${hojeISO()}.xlsx`);
   mostrarFlash('Excel gerado.');
+}
+
+// ============================================================
+// REVISÃO POR IA (Leva 10)
+// Fluxo: exportar tarefas + prompt -> usuário cola em ChatGPT/
+// Claude/Gemini/Perplexity -> cola resposta -> diff visual ->
+// aplica selecionadas (com backup automático).
+// ============================================================
+let _riaRevisao = null; // { tarefas: [...], duplicatas: [...], orfas: [...] }
+let _riaOriginais = null; // map id -> tarefa original (para diff)
+
+function _riaEscopo() {
+  const r = $('input[name="ria-escopo"]:checked');
+  return r ? r.value : 'todas';
+}
+
+function _riaTarefasEscopo() {
+  const escopo = _riaEscopo();
+  if (escopo === 'filtradas') return aplicarFiltros();
+  if (escopo === 'selecionadas') {
+    if (typeof selecaoTarefasIds !== 'undefined' && selecaoTarefasIds instanceof Set) {
+      return tarefas.filter(t => selecaoTarefasIds.has(t.id));
+    }
+    return [];
+  }
+  return tarefas.slice();
+}
+
+function _riaTarefaSlim(t) {
+  // Versão enxuta para enviar à IA: só campos relevantes
+  return {
+    id: t.id,
+    titulo: t.titulo || '',
+    quadrante: quadranteDe(t),
+    oe: t.objetivo || '',
+    responsavel: t.responsavel || '',
+    prazo: t.prazo || '',
+    status: t.status || '',
+    prioridade: t.prioridade || '',
+    resultado: t.resultado || '',
+    dataInicio: t.dataInicio || '',
+  };
+}
+
+function gerarPromptIA() {
+  const lista = _riaTarefasEscopo();
+  const fazQuad = $('#ria-rev-quad')?.checked;
+  const fazPad = $('#ria-rev-pad')?.checked;
+  const fazVazios = $('#ria-rev-vazios')?.checked;
+  const fazOrfas = $('#ria-rev-orfas')?.checked;
+
+  const oesRef = (Array.isArray(OBJETIVOS) ? OBJETIVOS : []).map(oe =>
+    `OE ${oe.id} — ${oe.curto}: ${oe.texto}`
+  ).join('\n');
+
+  const escopoTxt =
+    fazQuad ? '- Reclassificar quadrante (Q1–Q4 ou NC) quando o conteúdo não bate com a classificação atual.\n' : '';
+  const padTxt =
+    fazPad ? '- Padronizar título (verbo no infinitivo, voz ativa, sem redundância, máx 90 caracteres) e resultado esperado (Manual da Presidência: linguagem oficial, objetiva, impessoal).\n' : '';
+  const vaziosTxt =
+    fazVazios ? '- Sugerir prazo realista (ISO YYYY-MM-DD, considerando hoje = ' + hojeISO() + ') quando vazio. Sugerir OE da lista oficial quando vazio.\n' : '';
+  const orfasTxt =
+    fazOrfas ? '- Apontar duplicatas (pares com mesmo objeto/propósito) e tarefas órfãs (sem responsável ou sem OE).\n' : '';
+
+  const prompt =
+`Você é assistente de análise de tarefas estratégicas do Cebraspe (Plano de Ação 2026).
+Revise as tarefas abaixo conforme as regras e devolva APENAS um JSON válido (sem markdown, sem comentários) seguindo o schema indicado.
+
+## Taxonomia de quadrantes (Camila)
+- Q1 — Crise e Contenção: decidir rápido, reduzir danos. Importante e urgente.
+- Q2 — Estratégia Direcional: pensar o futuro. Importante e não urgente.
+- Q3 — Deliberação Estratégica Operacional: traduzir estratégia em operação. Não importante e urgente.
+- Q4 — Sustentação Operacional: delegar e proteger agenda. Não importante e não urgente.
+- NC — Não classificada.
+
+## Objetivos Estratégicos (lista oficial)
+${oesRef}
+
+## Regras de revisão (aplique todas as marcadas)
+${escopoTxt}${padTxt}${vaziosTxt}${orfasTxt}
+## Diretrizes de redação
+- Português brasileiro formal, voz ativa, sem itálico, sem gírias.
+- Título começa com verbo no infinitivo (“Elaborar...”, “Revisar...”, “Aprovar...”).
+- Resultado esperado descreve o produto final concreto, não a ação.
+
+## Schema da resposta (devolver ESTE JSON, e nada mais)
+{
+  "tarefas": [
+    {
+      "id": "<id da tarefa original>",
+      "titulo": "<novo ou inalterado>",
+      "quadrante": "Q1|Q2|Q3|Q4|NC",
+      "oe": "<id do OE ou ''>",
+      "responsavel": "<nome ou ''>",
+      "prazo": "YYYY-MM-DD ou ''",
+      "resultado": "<texto>",
+      "_motivo": "<por que mudou, em uma frase>"
+    }
+  ],
+  "duplicatas": [
+    ["<id1>", "<id2>", "<motivo curto>"]
+  ],
+  "orfas": [
+    { "id": "<id>", "problema": "sem responsavel|sem oe|sem prazo|..." }
+  ]
+}
+
+IMPORTANTE: inclua na lista "tarefas" APENAS as tarefas que sofreram alguma alteração. Se nada mudou em uma tarefa, não a inclua. Mantenha o id original. Não invente ids.
+
+## Tarefas atuais (${lista.length})
+${JSON.stringify(lista.map(_riaTarefaSlim), null, 2)}
+`;
+
+  const ta = $('#ria-prompt');
+  if (ta) ta.value = prompt;
+  $('#ria-copiar').disabled = false;
+  $('#ria-resumo-gerar').textContent = `${lista.length} tarefa(s) incluídas. Cerca de ${prompt.length.toLocaleString('pt-BR')} caracteres.`;
+  // Guarda originais (para diff) após gerar
+  _riaOriginais = new Map(lista.map(t => [t.id, t]));
+}
+
+async function copiarPromptIA() {
+  const ta = $('#ria-prompt');
+  if (!ta || !ta.value) return;
+  try {
+    await navigator.clipboard.writeText(ta.value);
+    mostrarFlash('Prompt copiado.');
+  } catch (_) {
+    ta.select();
+    document.execCommand('copy');
+    mostrarFlash('Prompt copiado.');
+  }
+}
+
+function _riaExtrairJSON(texto) {
+  // Aceita JSON puro ou em bloco de código. Pega do primeiro "{" ao último "}".
+  const t = (texto || '').trim();
+  if (!t) return null;
+  const i = t.indexOf('{');
+  const j = t.lastIndexOf('}');
+  if (i < 0 || j < i) return null;
+  const candidato = t.slice(i, j + 1);
+  try { return JSON.parse(candidato); } catch (e) { return null; }
+}
+
+function analisarRespostaIA() {
+  const errEl = $('#ria-erro');
+  errEl.textContent = '';
+  const ta = $('#ria-resposta');
+  const obj = _riaExtrairJSON(ta?.value || '');
+  if (!obj) {
+    errEl.textContent = 'JSON inválido. Confira se a IA retornou um objeto começando com { e terminando com }.';
+    return;
+  }
+  const out = {
+    tarefas: Array.isArray(obj.tarefas) ? obj.tarefas : [],
+    duplicatas: Array.isArray(obj.duplicatas) ? obj.duplicatas : [],
+    orfas: Array.isArray(obj.orfas) ? obj.orfas : [],
+  };
+  if (!_riaOriginais) {
+    // Caso o usuário cole resposta sem ter gerado prompt na sessão atual
+    _riaOriginais = new Map(tarefas.map(t => [t.id, t]));
+  }
+  // Filtra tarefas inválidas (sem id ou id desconhecido)
+  out.tarefas = out.tarefas.filter(r => r && typeof r.id === 'string' && _riaOriginais.has(r.id));
+  _riaRevisao = out;
+  renderDiffIA();
+}
+
+function _riaCampoDiff(antes, depois) {
+  const a = (antes == null ? '' : String(antes)).trim();
+  const b = (depois == null ? '' : String(depois)).trim();
+  return a !== b;
+}
+
+function _riaCamposComparados(orig, rev) {
+  // Retorna lista de { campo, label, antes, depois } com diferenças
+  const linhas = [];
+  const compara = [
+    { k: 'titulo',      label: 'Título' },
+    { k: 'quadrante',   label: 'Quadrante', antesFn: t => quadranteDe(t) },
+    { k: 'oe',          label: 'OE',        antesFn: t => t.objetivo || '' },
+    { k: 'responsavel', label: 'Responsável' },
+    { k: 'prazo',       label: 'Prazo' },
+    { k: 'resultado',   label: 'Resultado' },
+  ];
+  for (const c of compara) {
+    const antes = c.antesFn ? c.antesFn(orig) : (orig[c.k] || '');
+    if (rev[c.k] === undefined) continue;
+    const depois = rev[c.k] || '';
+    if (_riaCampoDiff(antes, depois)) {
+      linhas.push({ campo: c.k, label: c.label, antes, depois });
+    }
+  }
+  return linhas;
+}
+
+function renderDiffIA() {
+  const bloco = $('#ria-diff-bloco');
+  const lista = $('#ria-diff-lista');
+  const dupBloco = $('#ria-duplicatas-bloco');
+  const dupLista = $('#ria-duplicatas-lista');
+  const orfBloco = $('#ria-orfas-bloco');
+  const orfLista = $('#ria-orfas-lista');
+  if (!_riaRevisao) return;
+
+  bloco.hidden = false;
+
+  const cards = [];
+  let comMudancas = 0;
+  for (const rev of _riaRevisao.tarefas) {
+    const orig = _riaOriginais.get(rev.id);
+    if (!orig) continue;
+    const diffs = _riaCamposComparados(orig, rev);
+    if (!diffs.length) continue;
+    comMudancas++;
+    const motivo = rev._motivo ? `<div class="diff-motivo">${escHtml(rev._motivo)}</div>` : '';
+    const linhasHTML = diffs.map(d => `
+      <div class="diff-row">
+        <div class="diff-row__label">${escHtml(d.label)}</div>
+        <div class="diff-old">${escHtml(d.antes) || '<span class="muted">(vazio)</span>'}</div>
+        <div class="diff-arrow">→</div>
+        <div class="diff-new">${escHtml(d.depois) || '<span class="muted">(vazio)</span>'}</div>
+      </div>
+    `).join('');
+    cards.push(`
+      <div class="diff-card" data-id="${escHtml(rev.id)}">
+        <div class="diff-card__head">
+          <label class="chk">
+            <input type="checkbox" class="diff-aceitar" data-id="${escHtml(rev.id)}" checked />
+            <strong>${escHtml(orig.titulo || '(sem título)')}</strong>
+          </label>
+          <span class="diff-quad-chip diff-quad-chip--${escHtml(quadranteDe(orig))}">${escHtml(quadranteDe(orig))}</span>
+        </div>
+        ${motivo}
+        <div class="diff-rows">${linhasHTML}</div>
+      </div>
+    `);
+  }
+  lista.innerHTML = cards.length
+    ? cards.join('')
+    : '<p class="muted">A IA não sugeriu mudanças.</p>';
+
+  // Duplicatas
+  if (_riaRevisao.duplicatas.length) {
+    dupBloco.hidden = false;
+    dupLista.innerHTML = _riaRevisao.duplicatas.map(d => {
+      const [id1, id2, motivo] = Array.isArray(d) ? d : [d.id1, d.id2, d.motivo];
+      const t1 = _riaOriginais.get(id1) || tarefas.find(x => x.id === id1);
+      const t2 = _riaOriginais.get(id2) || tarefas.find(x => x.id === id2);
+      if (!t1 || !t2) return '';
+      return `<div class="diff-card">
+        <div><strong>${escHtml(t1.titulo)}</strong> ↔ <strong>${escHtml(t2.titulo)}</strong></div>
+        <div class="diff-motivo">${escHtml(motivo || '')}</div>
+      </div>`;
+    }).join('');
+  } else {
+    dupBloco.hidden = true;
+  }
+
+  // Órfãs
+  if (_riaRevisao.orfas.length) {
+    orfBloco.hidden = false;
+    orfLista.innerHTML = _riaRevisao.orfas.map(o => {
+      const t = _riaOriginais.get(o.id) || tarefas.find(x => x.id === o.id);
+      if (!t) return '';
+      return `<div class="diff-card">
+        <div><strong>${escHtml(t.titulo)}</strong></div>
+        <div class="diff-motivo">Problema: ${escHtml(o.problema || '')}</div>
+        <button class="btn btn--ghost btn--sm" data-ria-editar="${escHtml(t.id)}" type="button">Editar</button>
+      </div>`;
+    }).join('');
+  } else {
+    orfBloco.hidden = true;
+  }
+
+  $('#ria-diff-resumo').innerHTML =
+    `<strong>${comMudancas}</strong> tarefa(s) com alterações · <strong>${_riaRevisao.duplicatas.length}</strong> duplicata(s) · <strong>${_riaRevisao.orfas.length}</strong> órfã(s).`;
+}
+
+async function aplicarRevisaoIA() {
+  if (!_riaRevisao) return;
+  const aceitos = new Set(
+    Array.from(document.querySelectorAll('.diff-aceitar'))
+      .filter(cb => cb.checked)
+      .map(cb => cb.dataset.id)
+  );
+  if (aceitos.size === 0) {
+    mostrarMsg('Nenhuma tarefa marcada para aplicar.', true);
+    return;
+  }
+  const ok = await confirmar('Aplicar revisão da IA?',
+    `Serão atualizadas ${aceitos.size} tarefa(s). Um backup automático será salvo no navegador.`);
+  if (!ok) return;
+
+  // Backup
+  _write(KEY_TAREFAS_V3 + '_backup_ia', { tarefas, salvoEm: new Date().toISOString() });
+
+  let aplicadas = 0;
+  for (const rev of _riaRevisao.tarefas) {
+    if (!aceitos.has(rev.id)) continue;
+    const idx = tarefas.findIndex(t => t.id === rev.id);
+    if (idx < 0) continue;
+    const t = tarefas[idx];
+    if (rev.titulo !== undefined && rev.titulo !== null && String(rev.titulo).trim()) {
+      t.titulo = String(rev.titulo).trim();
+    }
+    if (rev.quadrante) {
+      const iu = quadranteParaImpUrg(rev.quadrante);
+      t.importante = iu.importante;
+      t.urgente = iu.urgente;
+    }
+    if (rev.oe !== undefined) t.objetivo = String(rev.oe || '').trim();
+    if (rev.responsavel !== undefined) t.responsavel = String(rev.responsavel || '').trim();
+    if (rev.prazo !== undefined) t.prazo = String(rev.prazo || '').trim();
+    if (rev.resultado !== undefined) t.resultado = String(rev.resultado || '').trim();
+    t.atualizadaEm = new Date().toISOString();
+    aplicadas++;
+  }
+  salvarTarefas();
+  renderTudo();
+  mostrarMsg(`Revisão aplicada a ${aplicadas} tarefa(s). Backup salvo.`);
+  fecharPainelRevisaoIA();
+}
+
+function abrirPainelRevisaoIA() {
+  // Fecha outros painéis
+  fecharPainelExportar?.();
+  fecharEmailLote?.();
+  const p = $('#panel-revisao-ia');
+  if (!p) return;
+  // Reset estado
+  _riaRevisao = null;
+  _riaOriginais = null;
+  $('#ria-prompt').value = '';
+  $('#ria-resposta').value = '';
+  $('#ria-erro').textContent = '';
+  $('#ria-resumo-gerar').textContent = '';
+  $('#ria-copiar').disabled = true;
+  $('#ria-diff-bloco').hidden = true;
+  $('#ria-diff-lista').innerHTML = '';
+  p.hidden = false;
+  p.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function fecharPainelRevisaoIA() {
+  const p = $('#panel-revisao-ia');
+  if (p) p.hidden = true;
+}
+
+function bindPainelRevisaoIA() {
+  $('#btn-revisao-ia')?.addEventListener('click', abrirPainelRevisaoIA);
+  $('#ria-close')?.addEventListener('click', fecharPainelRevisaoIA);
+  $('#ria-gerar')?.addEventListener('click', gerarPromptIA);
+  $('#ria-copiar')?.addEventListener('click', copiarPromptIA);
+  $('#ria-analisar')?.addEventListener('click', analisarRespostaIA);
+  $('#ria-aplicar')?.addEventListener('click', aplicarRevisaoIA);
+  $('#ria-marcar-todas')?.addEventListener('click', () => {
+    document.querySelectorAll('.diff-aceitar').forEach(cb => { cb.checked = true; });
+  });
+  $('#ria-desmarcar-todas')?.addEventListener('click', () => {
+    document.querySelectorAll('.diff-aceitar').forEach(cb => { cb.checked = false; });
+  });
+  // Editar órfã (delegado)
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-ria-editar]');
+    if (!b) return;
+    const id = b.dataset.riaEditar;
+    if (id && typeof abrirEdicao === 'function') abrirEdicao(id);
+  });
 }
 
 function escolherImport(qtd) {

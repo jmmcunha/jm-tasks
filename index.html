@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260506c" />
+  <link rel="stylesheet" href="styles.css?v=20260506d" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a3d7a'/%3E%3Cpath d='M9 11h14M9 16h14M9 21h9' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='25.5' cy='21' r='2' fill='%23f08000'/%3E%3C/svg%3E" />
 
   <!-- Bibliotecas: jsPDF, html2canvas, SheetJS, Chart.js -->
@@ -210,6 +210,7 @@
             <button class="btn btn--export" id="btn-csv" title="Exportar CSV">CSV</button>
             <button class="btn btn--export" id="btn-json" title="Exportar JSON">JSON</button>
             <label class="btn btn--ghost btn--sm" for="file-import" title="Importar JSON">Importar</label>
+            <button class="btn btn--ghost btn--sm" id="btn-revisao-ia" title="Exportar para IA, revisar e reimportar" type="button">Revisão por IA</button>
             <input type="file" id="file-import" accept="application/json" hidden />
           </div>
         </div>
@@ -295,6 +296,70 @@
             <button class="btn btn--primary btn--sm" id="btn-exp-xlsx" type="button">Gerar Excel</button>
             <span class="spacer"></span>
             <button class="btn btn--ghost btn--sm" id="btn-exp-reset" type="button">Restaurar padrões</button>
+          </div>
+        </section>
+
+        <!-- Painel inline: Revisão por IA (Leva 10) -->
+        <section id="panel-revisao-ia" class="export-panel" hidden aria-label="Revisão por IA">
+          <header class="export-panel__head">
+            <h3>Revisão por IA</h3>
+            <button class="btn btn--ghost btn--sm" id="ria-close" type="button">Fechar</button>
+          </header>
+
+          <p class="muted" style="margin:0 0 0.6rem">Exporte as tarefas com um prompt pronto, cole em ChatGPT, Claude, Gemini ou Perplexity, traga a resposta de volta e revise as mudanças antes de aplicar. Um backup automático é salvo antes de qualquer alteração.</p>
+
+          <div class="ria-grid">
+            <div class="ria-bloco">
+              <h4>1. Escopo</h4>
+              <label class="chk"><input type="radio" name="ria-escopo" value="todas" checked /> Todas as tarefas</label>
+              <label class="chk"><input type="radio" name="ria-escopo" value="filtradas" /> Apenas as filtradas</label>
+              <label class="chk"><input type="radio" name="ria-escopo" value="selecionadas" /> Apenas as selecionadas</label>
+            </div>
+            <div class="ria-bloco">
+              <h4>2. O que a IA deve revisar</h4>
+              <label class="chk"><input type="checkbox" id="ria-rev-quad" checked /> Reclassificar quadrante (Q1–Q4)</label>
+              <label class="chk"><input type="checkbox" id="ria-rev-pad" checked /> Padronizar título e resultado</label>
+              <label class="chk"><input type="checkbox" id="ria-rev-vazios" checked /> Sugerir prazo e OE quando vazios</label>
+              <label class="chk"><input type="checkbox" id="ria-rev-orfas" checked /> Detectar duplicatas e tarefas órfãs</label>
+            </div>
+          </div>
+
+          <div class="ria-passo">
+            <h4>3. Copie e cole numa IA</h4>
+            <textarea id="ria-prompt" class="ria-textarea" readonly rows="10" placeholder="O prompt aparecerá aqui após gerar."></textarea>
+            <div class="export-panel__actions">
+              <button class="btn btn--primary btn--sm" id="ria-gerar" type="button">Gerar prompt</button>
+              <button class="btn btn--ghost btn--sm" id="ria-copiar" type="button" disabled>Copiar tudo</button>
+              <span id="ria-resumo-gerar" class="muted" style="font-size:0.85em;"></span>
+            </div>
+          </div>
+
+          <div class="ria-passo">
+            <h4>4. Cole a resposta da IA</h4>
+            <textarea id="ria-resposta" class="ria-textarea" rows="8" placeholder='Cole aqui o JSON retornado pela IA, no formato {"tarefas": [...], "duplicatas": [...], "orfas": [...]}'></textarea>
+            <div class="export-panel__actions">
+              <button class="btn btn--primary btn--sm" id="ria-analisar" type="button">Analisar resposta</button>
+              <span id="ria-erro" class="muted" style="font-size:0.85em;color:#c0392b;"></span>
+            </div>
+          </div>
+
+          <div class="ria-passo" id="ria-diff-bloco" hidden>
+            <h4>5. Revisar mudanças</h4>
+            <div id="ria-diff-resumo" class="export-resumo"></div>
+            <div id="ria-diff-lista"></div>
+            <div id="ria-duplicatas-bloco" hidden>
+              <h5 style="margin-top:1rem">Duplicatas detectadas</h5>
+              <div id="ria-duplicatas-lista"></div>
+            </div>
+            <div id="ria-orfas-bloco" hidden>
+              <h5 style="margin-top:1rem">Tarefas órfãs</h5>
+              <div id="ria-orfas-lista"></div>
+            </div>
+            <div class="export-panel__actions">
+              <button class="btn btn--primary btn--sm" id="ria-aplicar" type="button">Aplicar selecionadas</button>
+              <button class="btn btn--ghost btn--sm" id="ria-marcar-todas" type="button">Marcar todas</button>
+              <button class="btn btn--ghost btn--sm" id="ria-desmarcar-todas" type="button">Desmarcar todas</button>
+            </div>
           </div>
         </section>
 
@@ -961,10 +1026,10 @@
   </dialog>
 
   <!-- Firebase: config + sync compartilhado (equipe) -->
-  <script src="firebase-config.js?v=20260506c"></script>
-  <script src="firebase-sync.js?v=20260506c"></script>
-  <script src="app.js?v=20260506c"></script>
+  <script src="firebase-config.js?v=20260506d"></script>
+  <script src="firebase-sync.js?v=20260506d"></script>
+  <script src="app.js?v=20260506d"></script>
   <!-- Captura rápida em linguagem natural + voz -->
-  <script src="quick-capture.js?v=20260506c"></script>
+  <script src="quick-capture.js?v=20260506d"></script>
 </body>
 </html>
