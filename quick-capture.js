@@ -558,12 +558,14 @@
     setVal('f-prazo', p.prazo || '');
     setVal('f-prioridade', p.prioridade || 'media');
 
-    if (p.importante !== null || p.urgente !== null) {
-      setCk('f-naoclass', false);
-      setCk('f-importante', p.importante === true);
-      setCk('f-urgente', p.urgente === true);
-    }
-    ['f-naoclass','f-importante','f-urgente','f-objetivo'].forEach(id => {
+    // Mapeia importante/urgente para o código de quadrante (Q1–Q4 ou NC)
+    let qCode = 'NC';
+    if (p.importante === true && p.urgente === true) qCode = 'Q1';
+    else if (p.importante === true && p.urgente === false) qCode = 'Q2';
+    else if (p.importante === false && p.urgente === true) qCode = 'Q3';
+    else if (p.importante === false && p.urgente === false) qCode = 'Q4';
+    setVal('f-quadrante', qCode);
+    ['f-quadrante','f-objetivo'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.dispatchEvent(new Event('change', { bubbles: true }));
     });

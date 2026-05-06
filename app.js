@@ -287,6 +287,18 @@ function quadranteDe(t) {
   return 'Q4';
 }
 
+// Converte um código de quadrante (Q1–Q4 ou NC) em par {importante, urgente}.
+// NC -> {null, null}.
+function quadranteParaImpUrg(q) {
+  switch (q) {
+    case 'Q1': return { importante: true,  urgente: true  };
+    case 'Q2': return { importante: true,  urgente: false };
+    case 'Q3': return { importante: false, urgente: true  };
+    case 'Q4': return { importante: false, urgente: false };
+    default:   return { importante: null,  urgente: null  };
+  }
+}
+
 // Sugere quadrante a partir do título + categoria (Leva 7).
 // Retorna { quadrante: 'Q1'|'Q2'|'Q3'|'Q4', importante: bool, urgente: bool, motivo: string }
 // ou null se não conseguir inferir com confiança.
@@ -630,24 +642,10 @@ function popularResponsaveis() {
 
 function bindForm() {
   const form = $('#form');
-  const ckImp = $('#f-importante');
-  const ckUrg = $('#f-urgente');
-  const ckNc = $('#f-naoclass');
-
-  function atualizarToggles() {
-    const nc = ckNc.checked;
-    ckImp.disabled = nc;
-    ckUrg.disabled = nc;
-    if (nc) { ckImp.checked = false; ckUrg.checked = false; }
-    atualizarPreviewQuad();
-  }
+  const selQ = $('#f-quadrante');
 
   function atualizarPreviewQuad() {
-    const t = {
-      importante: ckNc.checked ? null : ckImp.checked,
-      urgente: ckNc.checked ? null : ckUrg.checked
-    };
-    const q = quadranteDe(t);
+    const q = selQ.value || 'NC';
     const chip = $('#quad-preview');
     chip.className = 'quad-chip quad-chip--' + q.toLowerCase();
     const info = QUADRANTES[q];
@@ -656,10 +654,12 @@ function bindForm() {
       : `${q} — ${info.nome} · ${info.postura}`;
   }
 
-  ckImp.addEventListener('change', atualizarPreviewQuad);
-  ckUrg.addEventListener('change', atualizarPreviewQuad);
-  ckNc.addEventListener('change', atualizarToggles);
-  atualizarToggles();
+  selQ.addEventListener('change', atualizarPreviewQuad);
+  atualizarPreviewQuad();
+
+  // Botão "Sobre os quadrantes" no formulário (delega para o modal já existente)
+  const btnSobre = $('#btn-sobre-quadrantes-form');
+  if (btnSobre) btnSobre.addEventListener('click', () => abrirSobreQuadrantes());
 
   form.addEventListener('submit', e => {
     e.preventDefault();
@@ -668,14 +668,14 @@ function bindForm() {
 
     const id = $('#f-id').value || uid();
     const existente = tarefas.find(t => t.id === id);
-    const naoClass = ckNc.checked;
+    const par = quadranteParaImpUrg(selQ.value || 'NC');
 
     const tarefa = {
       id,
       titulo,
       oeId: $('#f-objetivo').value ? Number($('#f-objetivo').value) : null,
-      importante: naoClass ? null : ckImp.checked,
-      urgente: naoClass ? null : ckUrg.checked,
+      importante: par.importante,
+      urgente: par.urgente,
       responsavel: $('#f-responsavel').value.trim(),
       dataInicio: $('#f-data-inicio').value,
       prazo: $('#f-prazo').value,
@@ -694,9 +694,9 @@ function bindForm() {
     $('#f-id').value = '';
     $('#f-prioridade').value = 'media';
     $('#f-status').value = 'a-fazer';
-    ckNc.checked = true;
+    selQ.value = 'NC';
     preencherDataInicioPadrao();
-    atualizarToggles();
+    atualizarPreviewQuad();
     renderOeDetalhe('f-objetivo', 'f-objetivo-detalhe');
     $('#btn-cancelar').hidden = true;
     $('#btn-salvar').textContent = 'Salvar tarefa';
@@ -710,9 +710,9 @@ function bindForm() {
     $('#f-id').value = '';
     $('#f-prioridade').value = 'media';
     $('#f-status').value = 'a-fazer';
-    ckNc.checked = true;
+    selQ.value = 'NC';
     preencherDataInicioPadrao();
-    atualizarToggles();
+    atualizarPreviewQuad();
     renderOeDetalhe('f-objetivo', 'f-objetivo-detalhe');
     $('#btn-cancelar').hidden = true;
     $('#btn-salvar').textContent = 'Salvar tarefa';
@@ -750,31 +750,21 @@ function abrirEdicao(id) {
   $('#ef-prioridade').value = t.prioridade;
   $('#ef-status').value = t.status;
   $('#ef-resultado').value = t.resultado || '';
-  const naoClass = t.importante === null || t.urgente === null;
-  $('#ef-importante').checked = !!t.importante;
-  $('#ef-urgente').checked = !!t.urgente;
-  $('#ef-naoclass').checked = naoClass;
-
-  const ckImp = $('#ef-importante'), ckUrg = $('#ef-urgente'), ckNc = $('#ef-naoclass');
+  const qAtual = quadranteDe(t);
+  // limpa listeners prévios via clone
+  const selQOld = $('#ef-quadrante');
+  const selQNovo = selQOld.cloneNode(true);
+  selQOld.replaceWith(selQNovo);
+  const selQ = $('#ef-quadrante');
+  selQ.value = qAtual;
   function upd() {
-    const nc = ckNc.checked;
-    ckImp.disabled = nc; ckUrg.disabled = nc;
-    if (nc) { ckImp.checked = false; ckUrg.checked = false; }
-    const q = quadranteDe({ importante: nc ? null : ckImp.checked, urgente: nc ? null : ckUrg.checked });
+    const q = selQ.value || 'NC';
     const chip = $('#ef-quad-preview');
     chip.className = 'quad-chip quad-chip--' + q.toLowerCase();
     const info = QUADRANTES[q];
     chip.textContent = q === 'NC' ? `Não classificada · ${info.postura}` : `${q} — ${info.nome} · ${info.postura}`;
   }
-  // limpa listeners prévios via clone
-  ['ef-importante','ef-urgente','ef-naoclass'].forEach(idEl => {
-    const el = $('#' + idEl);
-    const novo = el.cloneNode(true);
-    el.replaceWith(novo);
-  });
-  $('#ef-importante').addEventListener('change', upd);
-  $('#ef-urgente').addEventListener('change', upd);
-  $('#ef-naoclass').addEventListener('change', upd);
+  selQ.addEventListener('change', upd);
   upd();
 
   dlg.dataset.editId = id;
@@ -790,11 +780,11 @@ function bindModaisGlobais() {
     const id = dlg.dataset.editId;
     const t = tarefas.find(x => x.id === id);
     if (!t) { dlg.close(); return; }
-    const nc = $('#ef-naoclass').checked;
+    const par = quadranteParaImpUrg($('#ef-quadrante').value || 'NC');
     t.titulo = $('#ef-titulo').value.trim() || t.titulo;
     t.oeId = $('#ef-objetivo').value ? Number($('#ef-objetivo').value) : null;
-    t.importante = nc ? null : $('#ef-importante').checked;
-    t.urgente = nc ? null : $('#ef-urgente').checked;
+    t.importante = par.importante;
+    t.urgente = par.urgente;
     t.responsavel = $('#ef-responsavel').value.trim();
     t.dataInicio = $('#ef-data-inicio').value;
     t.prazo = $('#ef-prazo').value;
@@ -3850,10 +3840,10 @@ function renderEmailLote() {
   $('#email-lote-resumo').innerHTML = resumo;
 
   // Sincroniza visual dos toggles
-  $$('#dlg-email-lote [data-eltom]').forEach(b => b.classList.toggle('seg__btn--ativo', b.dataset.eltom === _emailLoteTom));
-  $$('#dlg-email-lote [data-elassunto]').forEach(b => b.classList.toggle('seg__btn--ativo', b.dataset.elassunto === _emailLoteAssunto));
-  $$('#dlg-email-lote [data-elcorpo]').forEach(b => b.classList.toggle('seg__btn--ativo', b.dataset.elcorpo === _emailLoteCorpo));
-  $$('#dlg-email-lote [data-elagrup]').forEach(b => b.classList.toggle('seg__btn--ativo', b.dataset.elagrup === _emailLoteAgrup));
+  $$('#panel-email-lote [data-eltom]').forEach(b => b.classList.toggle('seg__btn--ativo', b.dataset.eltom === _emailLoteTom));
+  $$('#panel-email-lote [data-elassunto]').forEach(b => b.classList.toggle('seg__btn--ativo', b.dataset.elassunto === _emailLoteAssunto));
+  $$('#panel-email-lote [data-elcorpo]').forEach(b => b.classList.toggle('seg__btn--ativo', b.dataset.elcorpo === _emailLoteCorpo));
+  $$('#panel-email-lote [data-elagrup]').forEach(b => b.classList.toggle('seg__btn--ativo', b.dataset.elagrup === _emailLoteAgrup));
 
   // Agrupa visualmente por destinatário (mesmo no modo 'tarefa', é mais legível)
   const blocosPorDest = new Map();
@@ -3893,7 +3883,7 @@ function renderEmailLote() {
   }
   $('#email-lote-conteudo').innerHTML = html || '<p class="el-vazio">Selecione tarefas no quadro para gerar os e-mails.</p>';
   // Guarda payload para exportação e ações
-  $('#dlg-email-lote').dataset.itens = JSON.stringify(itens.map(it => ({
+  $('#panel-email-lote').dataset.itens = JSON.stringify(itens.map(it => ({
     key: it.key,
     destinatario: it.email.destinatario,
     assunto: it.email.assunto,
@@ -3910,11 +3900,18 @@ function abrirEmailLote() {
   _emailLoteCorpo = 'normal';
   _emailLoteAgrup = 'destinatario';
   renderEmailLote();
-  $('#dlg-email-lote').showModal();
+  const painel = $('#panel-email-lote');
+  painel.hidden = false;
+  painel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function fecharEmailLote() {
+  const painel = $('#panel-email-lote');
+  if (painel) painel.hidden = true;
 }
 
 function _emailLoteTextoTudo() {
-  const itens = JSON.parse($('#dlg-email-lote').dataset.itens || '[]');
+  const itens = JSON.parse($('#panel-email-lote').dataset.itens || '[]');
   const blocos = itens.map((it, i) => {
     return `=== E-mail ${i+1} — Para: ${it.destinatario} ===\nAssunto: ${it.assunto}\n\n${it.corpo}`;
   });
@@ -3925,7 +3922,7 @@ async function exportarEmailLoteDocx() {
   await carregarLibDocx();
   const D = window.docx;
   if (!D) { alert('Não foi possível carregar a biblioteca Word.'); return; }
-  const itens = JSON.parse($('#dlg-email-lote').dataset.itens || '[]');
+  const itens = JSON.parse($('#panel-email-lote').dataset.itens || '[]');
   if (!itens.length) return;
   const P = D.Paragraph, T = D.TextRun, HL = D.HeadingLevel;
   const elementos = [];
@@ -3957,34 +3954,34 @@ function bindEmailLote() {
       return;
     }
   });
-  // ações dentro do modal
+  // ações dentro do painel inline
   document.addEventListener('click', e => {
     if (e.target.id === 'el-close') {
-      const dlg = $('#dlg-email-lote'); if (dlg && dlg.open) dlg.close();
+      fecharEmailLote();
       return;
     }
     // toggles
-    const tomBtn = e.target.closest('#dlg-email-lote [data-eltom]');
+    const tomBtn = e.target.closest('#panel-email-lote [data-eltom]');
     if (tomBtn) { _emailLoteTom = tomBtn.dataset.eltom; renderEmailLote(); return; }
-    const assBtn = e.target.closest('#dlg-email-lote [data-elassunto]');
+    const assBtn = e.target.closest('#panel-email-lote [data-elassunto]');
     if (assBtn) { _emailLoteAssunto = assBtn.dataset.elassunto; renderEmailLote(); return; }
-    const corpoBtn = e.target.closest('#dlg-email-lote [data-elcorpo]');
+    const corpoBtn = e.target.closest('#panel-email-lote [data-elcorpo]');
     if (corpoBtn) { _emailLoteCorpo = corpoBtn.dataset.elcorpo; renderEmailLote(); return; }
-    const agrupBtn = e.target.closest('#dlg-email-lote [data-elagrup]');
+    const agrupBtn = e.target.closest('#panel-email-lote [data-elagrup]');
     if (agrupBtn) { _emailLoteAgrup = agrupBtn.dataset.elagrup; renderEmailLote(); return; }
     // ações por item
-    const actBtn = e.target.closest('#dlg-email-lote [data-elact]');
+    const actBtn = e.target.closest('#panel-email-lote [data-elact]');
     if (actBtn) {
       const act = actBtn.dataset.elact;
       if (act === 'editar') {
         const tid = actBtn.dataset.tid;
         if (!tid) return;
-        const dlg = $('#dlg-email-lote'); if (dlg && dlg.open) dlg.close();
+        fecharEmailLote();
         abrirEmailModal(tid);
         return;
       }
       const key = actBtn.dataset.key;
-      const itens = JSON.parse($('#dlg-email-lote').dataset.itens || '[]');
+      const itens = JSON.parse($('#panel-email-lote').dataset.itens || '[]');
       const it = itens.find(x => x.key === key);
       if (!it) return;
       if (act === 'copy') {
@@ -4008,7 +4005,7 @@ function bindEmailLote() {
       }
     } else if (e.target.id === 'btn-el-abrir-todos') {
       // abre até 5 mailto consecutivos (mais que isso fica abusivo)
-      const itens = JSON.parse($('#dlg-email-lote').dataset.itens || '[]');
+      const itens = JSON.parse($('#panel-email-lote').dataset.itens || '[]');
       const limite = Math.min(itens.length, 5);
       if (itens.length > 5) {
         if (!confirm(`Você tem ${itens.length} e-mails. Vou abrir os 5 primeiros agora; clique novamente para os próximos.`)) return;

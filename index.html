@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260506a" />
+  <link rel="stylesheet" href="styles.css?v=20260506b" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a3d7a'/%3E%3Cpath d='M9 11h14M9 16h14M9 21h9' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='25.5' cy='21' r='2' fill='%23f08000'/%3E%3C/svg%3E" />
 
   <!-- Bibliotecas: jsPDF, html2canvas, SheetJS, Chart.js -->
@@ -94,24 +94,17 @@
           </div>
 
           <div class="field field--full eisen-row">
-            <span>Classificação Eisenhower</span>
-            <div class="eisen-toggles">
-              <label class="toggle" title="Importante = contribui para metas estratégicas">
-                <input type="checkbox" id="f-importante" />
-                <span class="toggle__track"></span>
-                <span class="toggle__label">Importante</span>
-              </label>
-              <label class="toggle" title="Urgente = pressão de tempo iminente">
-                <input type="checkbox" id="f-urgente" />
-                <span class="toggle__track"></span>
-                <span class="toggle__label">Urgente</span>
-              </label>
-              <label class="toggle toggle--neutral" title="Marque se a tarefa ainda não foi classificada">
-                <input type="checkbox" id="f-naoclass" checked />
-                <span class="toggle__track"></span>
-                <span class="toggle__label">Não classificar agora</span>
-              </label>
+            <div class="oe-label-row">
+              <span>Quadrante</span>
+              <button type="button" class="btn-link-icon" id="btn-sobre-quadrantes-form" title="Sobre os quadrantes" aria-label="Sobre os quadrantes">Sobre os quadrantes</button>
             </div>
+            <select id="f-quadrante">
+              <option value="NC" selected>Não classificar agora</option>
+              <option value="Q1">Q1 — Crise e Contenção</option>
+              <option value="Q2">Q2 — Estratégia Direcional</option>
+              <option value="Q3">Q3 — Deliberação Estratégica Operacional</option>
+              <option value="Q4">Q4 — Sustentação Operacional</option>
+            </select>
             <div id="quad-preview" class="quad-chip quad-chip--nc">Não classificada · classificar depois</div>
           </div>
 
@@ -183,12 +176,13 @@
             <option value="Q4">Q4 — Sustentação Operacional</option>
             <option value="NC">Não classificada</option>
           </select>
-          <select id="filtro-importante" aria-label="Filtrar por importante">
+          <!-- Filtros Importante/Urgente ocultos (redundantes com Filtro por quadrante) -->
+          <select id="filtro-importante" aria-label="Filtrar por importante" hidden>
             <option value="">Importante: todos</option>
             <option value="sim">Importante: sim</option>
             <option value="nao">Importante: não</option>
           </select>
-          <select id="filtro-urgente" aria-label="Filtrar por urgente">
+          <select id="filtro-urgente" aria-label="Filtrar por urgente" hidden>
             <option value="">Urgente: todos</option>
             <option value="sim">Urgente: sim</option>
             <option value="nao">Urgente: não</option>
@@ -219,6 +213,52 @@
             <input type="file" id="file-import" accept="application/json" hidden />
           </div>
         </div>
+
+        <!-- Painel inline: E-mail em lote -->
+        <section id="panel-email-lote" class="email-lote-panel" hidden aria-label="E-mail em lote">
+          <header class="email-lote-panel__head">
+            <h3>E-mail em lote</h3>
+            <button class="btn btn--ghost btn--sm" id="el-close" type="button">Fechar</button>
+          </header>
+          <div class="email-toggles">
+            <div class="email-toggle-grupo">
+              <span class="email-toggle-rot">Agrupar</span>
+              <div class="bilhete-modes" role="tablist" aria-label="Agrupar">
+                <button class="seg__btn seg__btn--ativo" data-elagrup="destinatario" type="button" title="Junta várias tarefas no mesmo e-mail por destinatário">Por destinatário</button>
+                <button class="seg__btn" data-elagrup="tarefa" type="button" title="Um e-mail por tarefa">Por tarefa</button>
+              </div>
+            </div>
+            <div class="email-toggle-grupo">
+              <span class="email-toggle-rot">Tom</span>
+              <div class="bilhete-modes" role="tablist" aria-label="Tom">
+                <button class="seg__btn" data-eltom="pessoal" type="button">Pessoal</button>
+                <button class="seg__btn seg__btn--ativo" data-eltom="institucional" type="button">Institucional</button>
+              </div>
+            </div>
+            <div class="email-toggle-grupo">
+              <span class="email-toggle-rot">Assunto</span>
+              <div class="bilhete-modes" role="tablist" aria-label="Assunto">
+                <button class="seg__btn seg__btn--ativo" data-elassunto="curto" type="button">Curto</button>
+                <button class="seg__btn" data-elassunto="completo" type="button">Completo</button>
+              </div>
+            </div>
+            <div class="email-toggle-grupo">
+              <span class="email-toggle-rot">Corpo</span>
+              <div class="bilhete-modes" role="tablist" aria-label="Corpo">
+                <button class="seg__btn seg__btn--ativo" data-elcorpo="normal" type="button">Normal</button>
+                <button class="seg__btn" data-elcorpo="compacto" type="button">Compacto</button>
+              </div>
+            </div>
+          </div>
+          <div class="lote-resumo" id="email-lote-resumo"></div>
+          <div id="email-lote-conteudo" class="email-lote-conteudo"></div>
+          <div class="email-lote-panel__actions">
+            <button class="btn btn--primary btn--sm" id="btn-el-copy-tudo" type="button">Copiar tudo</button>
+            <button class="btn btn--ghost btn--sm" id="btn-el-docx" type="button">Baixar Word</button>
+            <button class="btn btn--ghost btn--sm" id="btn-el-print" type="button">Imprimir</button>
+            <button class="btn btn--ghost btn--sm" id="btn-el-abrir-todos" type="button">Abrir cada um no cliente</button>
+          </div>
+        </section>
 
         <div id="banner-drucker" class="druk" hidden></div>
         <div id="grupos" class="grupos"></div>
@@ -455,12 +495,14 @@
           <div id="ef-objetivo-detalhe" class="oe-detalhe" hidden></div>
         </div>
         <div class="field field--full eisen-row">
-          <span>Classificação Eisenhower</span>
-          <div class="eisen-toggles">
-            <label class="toggle"><input type="checkbox" id="ef-importante" /><span class="toggle__track"></span><span class="toggle__label">Importante</span></label>
-            <label class="toggle"><input type="checkbox" id="ef-urgente" /><span class="toggle__track"></span><span class="toggle__label">Urgente</span></label>
-            <label class="toggle toggle--neutral"><input type="checkbox" id="ef-naoclass" /><span class="toggle__track"></span><span class="toggle__label">Não classificar</span></label>
-          </div>
+          <span>Quadrante</span>
+          <select id="ef-quadrante">
+            <option value="NC">Não classificar</option>
+            <option value="Q1">Q1 — Crise e Contenção</option>
+            <option value="Q2">Q2 — Estratégia Direcional</option>
+            <option value="Q3">Q3 — Deliberação Estratégica Operacional</option>
+            <option value="Q4">Q4 — Sustentação Operacional</option>
+          </select>
           <div id="ef-quad-preview" class="quad-chip quad-chip--nc">Não classificada</div>
         </div>
         <label class="field"><span>Responsável</span><input type="text" id="ef-responsavel" /></label>
@@ -570,53 +612,7 @@
     </div>
   </dialog>
 
-  <!-- Modal de e-mail em lote -->
-  <dialog id="dlg-email-lote" class="modal modal--lg">
-    <div class="modal__inner">
-      <header class="modal__head">
-        <h3>E-mail em lote</h3>
-        <button class="btn btn--ghost btn--sm" id="el-close" type="button">Fechar</button>
-      </header>
-      <div class="email-toggles">
-        <div class="email-toggle-grupo">
-          <span class="email-toggle-rot">Agrupar</span>
-          <div class="bilhete-modes" role="tablist" aria-label="Agrupar">
-            <button class="seg__btn seg__btn--ativo" data-elagrup="destinatario" type="button" title="Junta várias tarefas no mesmo e-mail por destinatário">Por destinatário</button>
-            <button class="seg__btn" data-elagrup="tarefa" type="button" title="Um e-mail por tarefa">Por tarefa</button>
-          </div>
-        </div>
-        <div class="email-toggle-grupo">
-          <span class="email-toggle-rot">Tom</span>
-          <div class="bilhete-modes" role="tablist" aria-label="Tom">
-            <button class="seg__btn" data-eltom="pessoal" type="button">Pessoal</button>
-            <button class="seg__btn seg__btn--ativo" data-eltom="institucional" type="button">Institucional</button>
-          </div>
-        </div>
-        <div class="email-toggle-grupo">
-          <span class="email-toggle-rot">Assunto</span>
-          <div class="bilhete-modes" role="tablist" aria-label="Assunto">
-            <button class="seg__btn seg__btn--ativo" data-elassunto="curto" type="button">Curto</button>
-            <button class="seg__btn" data-elassunto="completo" type="button">Completo</button>
-          </div>
-        </div>
-        <div class="email-toggle-grupo">
-          <span class="email-toggle-rot">Corpo</span>
-          <div class="bilhete-modes" role="tablist" aria-label="Corpo">
-            <button class="seg__btn seg__btn--ativo" data-elcorpo="normal" type="button">Normal</button>
-            <button class="seg__btn" data-elcorpo="compacto" type="button">Compacto</button>
-          </div>
-        </div>
-      </div>
-      <div class="lote-resumo" id="email-lote-resumo"></div>
-      <div id="email-lote-conteudo" class="email-lote-conteudo"></div>
-      <div class="modal__actions">
-        <button class="btn btn--primary btn--sm" id="btn-el-copy-tudo" type="button">Copiar tudo</button>
-        <button class="btn btn--ghost btn--sm" id="btn-el-docx" type="button">Baixar Word</button>
-        <button class="btn btn--ghost btn--sm" id="btn-el-print" type="button">Imprimir</button>
-        <button class="btn btn--ghost btn--sm" id="btn-el-abrir-todos" type="button">Abrir cada um no cliente</button>
-      </div>
-    </div>
-  </dialog>
+  <!-- (e-mail em lote agora é painel inline em #panel-email-lote, não modal) -->
 
   <!-- Modal: Sobre os quadrantes (taxonomia da Camila) -->
   <dialog id="dlg-sobre-quadrantes" class="modal modal--lg">
@@ -881,10 +877,10 @@
   </dialog>
 
   <!-- Firebase: config + sync compartilhado (equipe) -->
-  <script src="firebase-config.js?v=20260506a"></script>
-  <script src="firebase-sync.js?v=20260506a"></script>
-  <script src="app.js?v=20260506a"></script>
+  <script src="firebase-config.js?v=20260506b"></script>
+  <script src="firebase-sync.js?v=20260506b"></script>
+  <script src="app.js?v=20260506b"></script>
   <!-- Captura rápida em linguagem natural + voz -->
-  <script src="quick-capture.js?v=20260506a"></script>
+  <script src="quick-capture.js?v=20260506b"></script>
 </body>
 </html>
