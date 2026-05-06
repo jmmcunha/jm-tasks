@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260506b" />
+  <link rel="stylesheet" href="styles.css?v=20260506c" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a3d7a'/%3E%3Cpath d='M9 11h14M9 16h14M9 21h9' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='25.5' cy='21' r='2' fill='%23f08000'/%3E%3C/svg%3E" />
 
   <!-- Bibliotecas: jsPDF, html2canvas, SheetJS, Chart.js -->
@@ -213,6 +213,90 @@
             <input type="file" id="file-import" accept="application/json" hidden />
           </div>
         </div>
+
+        <!-- Painel inline: Exportação (PDF / Excel) -->
+        <section id="panel-exportar" class="export-panel" hidden aria-label="Exportar PDF ou Excel">
+          <header class="export-panel__head">
+            <h3 id="export-titulo">Exportar</h3>
+            <button class="btn btn--ghost btn--sm" id="export-close" type="button">Fechar</button>
+          </header>
+
+          <div class="export-grid">
+            <fieldset class="export-bloco">
+              <legend>Escopo</legend>
+              <label class="export-radio"><input type="radio" name="exp-escopo" value="todas" checked /> Todas as tarefas</label>
+              <label class="export-radio"><input type="radio" name="exp-escopo" value="filtradas" /> Somente as filtradas na tela</label>
+              <label class="export-radio"><input type="radio" name="exp-escopo" value="selecionadas" /> Somente as selecionadas no quadro</label>
+            </fieldset>
+
+            <fieldset class="export-bloco">
+              <legend>Agrupar por</legend>
+              <select id="exp-agrupar">
+                <option value="quadrante" selected>Quadrante</option>
+                <option value="responsavel">Responsável</option>
+                <option value="oe">Objetivo Estratégico</option>
+                <option value="status">Status</option>
+                <option value="prioridade">Prioridade</option>
+                <option value="">Sem agrupamento</option>
+              </select>
+              <label class="export-rotulo" style="margin-top:8px">Ordenar dentro do grupo</label>
+              <select id="exp-ordem">
+                <option value="prazo" selected>Prazo</option>
+                <option value="prioridade">Prioridade</option>
+                <option value="responsavel">Responsável</option>
+                <option value="titulo">Título</option>
+              </select>
+            </fieldset>
+
+            <fieldset class="export-bloco">
+              <legend>Filtrar por quadrante</legend>
+              <div class="export-chips" id="exp-filtro-quad"></div>
+            </fieldset>
+
+            <fieldset class="export-bloco">
+              <legend>Filtrar por responsável</legend>
+              <div class="export-chips" id="exp-filtro-resp"></div>
+            </fieldset>
+
+            <fieldset class="export-bloco">
+              <legend>Filtrar por OE</legend>
+              <div class="export-chips" id="exp-filtro-oe"></div>
+            </fieldset>
+
+            <fieldset class="export-bloco">
+              <legend>Filtrar por status / prioridade</legend>
+              <label class="export-rotulo">Status</label>
+              <div class="export-chips" id="exp-filtro-status"></div>
+              <label class="export-rotulo" style="margin-top:8px">Prioridade</label>
+              <div class="export-chips" id="exp-filtro-prio"></div>
+            </fieldset>
+
+            <fieldset class="export-bloco export-bloco--full">
+              <legend>Campos a incluir</legend>
+              <div class="export-campos" id="exp-campos"></div>
+            </fieldset>
+
+            <fieldset class="export-bloco export-bloco--full">
+              <legend>Abas extras no Excel</legend>
+              <p class="muted" style="margin:4px 0 8px">Além da aba principal, gerar uma aba para cada:</p>
+              <div class="export-chips">
+                <label class="export-chip"><input type="checkbox" data-aba="quadrante" /> Quadrante</label>
+                <label class="export-chip"><input type="checkbox" data-aba="responsavel" /> Responsável</label>
+                <label class="export-chip"><input type="checkbox" data-aba="oe" /> Objetivo Estratégico</label>
+                <label class="export-chip"><input type="checkbox" data-aba="status" /> Status</label>
+              </div>
+            </fieldset>
+          </div>
+
+          <div class="export-resumo" id="exp-resumo">—</div>
+
+          <div class="export-panel__actions">
+            <button class="btn btn--primary btn--sm" id="btn-exp-pdf" type="button">Gerar PDF</button>
+            <button class="btn btn--primary btn--sm" id="btn-exp-xlsx" type="button">Gerar Excel</button>
+            <span class="spacer"></span>
+            <button class="btn btn--ghost btn--sm" id="btn-exp-reset" type="button">Restaurar padrões</button>
+          </div>
+        </section>
 
         <!-- Painel inline: E-mail em lote -->
         <section id="panel-email-lote" class="email-lote-panel" hidden aria-label="E-mail em lote">
@@ -877,10 +961,10 @@
   </dialog>
 
   <!-- Firebase: config + sync compartilhado (equipe) -->
-  <script src="firebase-config.js?v=20260506b"></script>
-  <script src="firebase-sync.js?v=20260506b"></script>
-  <script src="app.js?v=20260506b"></script>
+  <script src="firebase-config.js?v=20260506c"></script>
+  <script src="firebase-sync.js?v=20260506c"></script>
+  <script src="app.js?v=20260506c"></script>
   <!-- Captura rápida em linguagem natural + voz -->
-  <script src="quick-capture.js?v=20260506b"></script>
+  <script src="quick-capture.js?v=20260506c"></script>
 </body>
 </html>

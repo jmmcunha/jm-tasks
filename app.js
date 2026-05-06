@@ -528,6 +528,7 @@ function initApp() {
   bindDespachos();
   bindEmail();
   bindEmailLote();
+  bindPainelExportar();
   bindSobreQuadrantes();
   bindDrucker();
   bindAgenda();
@@ -1623,8 +1624,8 @@ function serieQ2Semanas(n) {
 function bindExports() {
   $('#btn-csv').addEventListener('click', exportarCSV);
   $('#btn-json').addEventListener('click', exportarJSON);
-  $('#btn-xlsx').addEventListener('click', exportarXLSX);
-  $('#btn-pdf').addEventListener('click', exportarPDF);
+  $('#btn-xlsx').addEventListener('click', () => abrirPainelExportar('xlsx'));
+  $('#btn-pdf').addEventListener('click', () => abrirPainelExportar('pdf'));
   $('#file-import').addEventListener('change', importarJSON);
 }
 
@@ -1837,6 +1838,403 @@ function hexToRgb(hex) {
   const h = hex.replace('#','');
   const n = parseInt(h.length === 3 ? h.split('').map(c=>c+c).join('') : h, 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/* ===================================================================
+   EXPORTAR — painel inline (Leva 9)
+   =================================================================== */
+
+const EXP_CAMPOS_PADRAO = [
+  { key: 'titulo',       label: 'Título',           on: true,  pdf: 100 },
+  { key: 'quadrante',    label: 'Quadrante',         on: true,  pdf: 28  },
+  { key: 'oe',           label: 'Objetivo Estratégico', on: true,  pdf: 28  },
+  { key: 'responsavel',  label: 'Responsável',       on: true,  pdf: 38  },
+  { key: 'prazo',        label: 'Prazo',             on: true,  pdf: 24  },
+  { key: 'status',       label: 'Status',            on: true,  pdf: 26  },
+  { key: 'prioridade',   label: 'Prioridade',        on: true,  pdf: 22  },
+  { key: 'resultado',    label: 'Resultado esperado',on: false, pdf: 60  },
+  { key: 'dataInicio',   label: 'Data de início',    on: false, pdf: 22  },
+  { key: 'criadaEm',     label: 'Criada em',         on: false, pdf: 22  },
+  { key: 'atualizadaEm', label: 'Atualizada em',     on: false, pdf: 22  },
+  { key: 'atrasada',     label: 'Atrasada',          on: false, pdf: 18  }
+];
+
+let _expModoSaida = 'pdf'; // 'pdf' | 'xlsx'
+
+// Extrai um valor de tarefa para uma chave de campo.
+function _expValor(t, key) {
+  switch (key) {
+    case 'titulo':       return t.titulo || '';
+    case 'quadrante':    {
+      const q = quadranteDe(t);
+      return q === 'NC' ? 'Não classificada' : `${q} — ${QUADRANTES[q].nome}`;
+    }
+    case 'oe': {
+      const obj = OBJETIVOS.find(o => o.id === t.oeId);
+      return obj ? `OE ${obj.id} · ${obj.curto}` : '—';
+    }
+    case 'responsavel':  return t.responsavel || '—';
+    case 'prazo':        return t.prazo ? fmtData(t.prazo) + (isAtrasada(t) ? ' (atr.)' : '') : '—';
+    case 'status':       return STATUS_ROTULOS[t.status] || '—';
+    case 'prioridade':   return PRIORIDADE_ROTULOS[t.prioridade] || '—';
+    case 'resultado':    return t.resultado || '';
+    case 'dataInicio':   return t.dataInicio ? fmtData(t.dataInicio) : '';
+    case 'criadaEm':     {
+      const v = t.criadaEm || t.criadoEm; if (!v) return '';
+      try { return fmtData(String(v).slice(0,10)); } catch { return ''; }
+    }
+    case 'atualizadaEm': {
+      const v = t.atualizadaEm; if (!v) return '';
+      try { return fmtData(String(v).slice(0,10)); } catch { return ''; }
+    }
+    case 'atrasada':     return isAtrasada(t) ? 'Sim' : 'Não';
+    default: return '';
+  }
+}
+
+function _expChavesAtivas() {
+  const checks = $$('#exp-campos input[type=checkbox]');
+  const out = [];
+  for (const ck of checks) if (ck.checked) out.push(ck.dataset.campo);
+  return out;
+}
+
+function _expChipsValores(containerSel) {
+  return $$(`${containerSel} input[type=checkbox]:checked`).map(ck => ck.dataset.val);
+}
+
+function _expEscopo() {
+  const radio = document.querySelector('input[name="exp-escopo"]:checked');
+  return radio ? radio.value : 'todas';
+}
+
+function _expAplicarOpcoes() {
+  const escopo = _expEscopo();
+  let base;
+  if (escopo === 'filtradas') base = aplicarFiltros();
+  else if (escopo === 'selecionadas') base = tarefas.filter(t => selecaoTarefasIds.has(t.id));
+  else base = tarefas.slice();
+
+  const fQ = _expChipsValores('#exp-filtro-quad');
+  const fR = _expChipsValores('#exp-filtro-resp');
+  const fO = _expChipsValores('#exp-filtro-oe');
+  const fS = _expChipsValores('#exp-filtro-status');
+  const fP = _expChipsValores('#exp-filtro-prio');
+
+  base = base.filter(t => {
+    if (fQ.length && !fQ.includes(quadranteDe(t))) return false;
+    if (fR.length && !fR.includes((t.responsavel || '').trim() || '—')) return false;
+    if (fO.length && !fO.includes(String(t.oeId || ''))) return false;
+    if (fS.length && !fS.includes(t.status || '')) return false;
+    if (fP.length && !fP.includes(t.prioridade || '')) return false;
+    return true;
+  });
+
+  // Ordenação
+  const ordem = $('#exp-ordem').value;
+  const pesoPrio = { alta: 1, media: 2, baixa: 3 };
+  base.sort((a, b) => {
+    if (ordem === 'prazo') {
+      if (!a.prazo && !b.prazo) return (a.titulo || '').localeCompare(b.titulo || '');
+      if (!a.prazo) return 1;
+      if (!b.prazo) return -1;
+      return a.prazo.localeCompare(b.prazo);
+    }
+    if (ordem === 'prioridade') return (pesoPrio[a.prioridade]||9) - (pesoPrio[b.prioridade]||9);
+    if (ordem === 'responsavel') return (a.responsavel || '').localeCompare(b.responsavel || '', 'pt-BR');
+    return (a.titulo || '').localeCompare(b.titulo || '', 'pt-BR');
+  });
+
+  return base;
+}
+
+function _expChaveAgrupamento(t, modo) {
+  switch (modo) {
+    case 'quadrante': return quadranteDe(t);
+    case 'responsavel': return (t.responsavel || '').trim() || '— Sem responsável';
+    case 'oe': {
+      const obj = OBJETIVOS.find(o => o.id === t.oeId);
+      return obj ? `OE ${obj.id} · ${obj.curto}` : '— Sem OE';
+    }
+    case 'status': return STATUS_ROTULOS[t.status] || '—';
+    case 'prioridade': return PRIORIDADE_ROTULOS[t.prioridade] || '—';
+    default: return '—';
+  }
+}
+
+function _expRotuloGrupo(modo, chave) {
+  if (modo === 'quadrante') {
+    if (chave === 'NC') return 'Não classificadas';
+    const info = QUADRANTES[chave];
+    return info ? `${chave} — ${info.nome} · ${info.postura}` : chave;
+  }
+  return chave;
+}
+
+function _expAgrupar(lista, modo) {
+  if (!modo) return [['', lista]];
+  const map = new Map();
+  for (const t of lista) {
+    const k = _expChaveAgrupamento(t, modo);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(t);
+  }
+  // Ordenação dos grupos
+  const ordemQ = ['Q1','Q2','Q3','Q4','NC'];
+  const ordemP = { alta: 1, media: 2, baixa: 3 };
+  const arr = Array.from(map.entries());
+  if (modo === 'quadrante') {
+    arr.sort((a, b) => ordemQ.indexOf(a[0]) - ordemQ.indexOf(b[0]));
+  } else if (modo === 'prioridade') {
+    arr.sort((a, b) => (ordemP[a[0]]||9) - (ordemP[b[0]]||9));
+  } else {
+    arr.sort((a, b) => String(a[0]).localeCompare(String(b[0]), 'pt-BR'));
+  }
+  return arr;
+}
+
+function _expAtualizarResumo() {
+  const lista = _expAplicarOpcoes();
+  const agr = $('#exp-agrupar').value;
+  const grupos = _expAgrupar(lista, agr);
+  const abas = $$('input[data-aba]:checked').map(ck => ck.dataset.aba);
+  const partes = [];
+  partes.push(`<strong>${lista.length}</strong> tarefa(s) serão exportadas`);
+  if (agr) partes.push(`em <strong>${grupos.length}</strong> grupo(s) por ${$('#exp-agrupar option:checked').textContent.toLowerCase()}`);
+  if (_expModoSaida === 'xlsx' && abas.length) partes.push(`com abas extras: ${abas.join(', ')}`);
+  $('#exp-resumo').innerHTML = partes.join(' · ');
+}
+
+function _expRenderChips(containerSel, items) {
+  const html = items.map(it =>
+    `<label class="export-chip"><input type="checkbox" data-val="${escHtml(it.val)}" /> ${escHtml(it.label)}</label>`
+  ).join('');
+  $(containerSel).innerHTML = html;
+}
+
+function _expPopularDinamicos() {
+  // Quadrantes
+  _expRenderChips('#exp-filtro-quad', [
+    { val: 'Q1', label: 'Q1 — Crise e Contenção' },
+    { val: 'Q2', label: 'Q2 — Estratégia Direcional' },
+    { val: 'Q3', label: 'Q3 — Deliberação Estratégica Operacional' },
+    { val: 'Q4', label: 'Q4 — Sustentação Operacional' },
+    { val: 'NC', label: 'Não classificadas' }
+  ]);
+
+  // Responsáveis (apenas os que aparecem nas tarefas)
+  const resps = Array.from(new Set(tarefas.map(t => (t.responsavel || '').trim() || '—'))).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  _expRenderChips('#exp-filtro-resp', resps.length ? resps.map(r => ({ val: r, label: r })) : [{ val: '—', label: 'Sem responsável' }]);
+
+  // OEs (apenas os usados)
+  const oeIdsUsados = Array.from(new Set(tarefas.map(t => t.oeId).filter(Boolean)));
+  const oeItems = oeIdsUsados.map(id => {
+    const o = OBJETIVOS.find(x => x.id === id);
+    return { val: String(id), label: o ? `OE ${o.id} · ${o.curto}` : `OE ${id}` };
+  });
+  if (tarefas.some(t => !t.oeId)) oeItems.push({ val: '', label: 'Sem OE' });
+  _expRenderChips('#exp-filtro-oe', oeItems);
+
+  // Status
+  _expRenderChips('#exp-filtro-status', [
+    { val: 'a-fazer', label: 'A fazer' },
+    { val: 'em-andamento', label: 'Em andamento' },
+    { val: 'concluida', label: 'Concluída' },
+    { val: 'bloqueada', label: 'Bloqueada' }
+  ]);
+
+  // Prioridade
+  _expRenderChips('#exp-filtro-prio', [
+    { val: 'alta', label: 'Alta' },
+    { val: 'media', label: 'Média' },
+    { val: 'baixa', label: 'Baixa' }
+  ]);
+
+  // Campos
+  $('#exp-campos').innerHTML = EXP_CAMPOS_PADRAO.map(c =>
+    `<label><input type="checkbox" data-campo="${c.key}"${c.on ? ' checked' : ''} /> ${escHtml(c.label)}</label>`
+  ).join('');
+}
+
+function _expResetar() {
+  // Restaura padrões
+  document.querySelector('input[name="exp-escopo"][value="todas"]').checked = true;
+  $('#exp-agrupar').value = 'quadrante';
+  $('#exp-ordem').value = 'prazo';
+  $$('#panel-exportar .export-chips input[type=checkbox]').forEach(ck => { ck.checked = false; });
+  $$('#exp-campos input[type=checkbox]').forEach(ck => {
+    const def = EXP_CAMPOS_PADRAO.find(c => c.key === ck.dataset.campo);
+    ck.checked = !!(def && def.on);
+  });
+  _expAtualizarResumo();
+}
+
+function abrirPainelExportar(modo) {
+  if (!tarefas.length) return mostrarMsg('Nada para exportar.', true);
+  _expModoSaida = modo === 'xlsx' ? 'xlsx' : 'pdf';
+  _expPopularDinamicos();
+  // Título dependendo do modo de origem (mas o painel oferece ambos)
+  $('#export-titulo').textContent = _expModoSaida === 'xlsx' ? 'Exportar (Excel → destacado)' : 'Exportar (PDF → destacado)';
+  const painel = $('#panel-exportar');
+  painel.hidden = false;
+  _expAtualizarResumo();
+  painel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function fecharPainelExportar() {
+  const p = $('#panel-exportar');
+  if (p) p.hidden = true;
+}
+
+function bindPainelExportar() {
+  const painel = $('#panel-exportar');
+  if (!painel) return;
+  painel.addEventListener('click', e => {
+    if (e.target.id === 'export-close') { fecharPainelExportar(); return; }
+    if (e.target.id === 'btn-exp-reset') { _expResetar(); return; }
+    if (e.target.id === 'btn-exp-pdf') { exportarPDFCustom(); return; }
+    if (e.target.id === 'btn-exp-xlsx') { exportarXLSXCustom(); return; }
+  });
+  painel.addEventListener('change', () => _expAtualizarResumo());
+  painel.addEventListener('input', () => _expAtualizarResumo());
+}
+
+/* ---------- Geração PDF custom ---------- */
+
+function exportarPDFCustom() {
+  const lista = _expAplicarOpcoes();
+  if (!lista.length) return mostrarMsg('Nenhuma tarefa atende aos filtros escolhidos.', true);
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const azul = [10, 61, 122], laranja = [240, 128, 0];
+
+  doc.setFillColor(...azul); doc.rect(0, 0, 297, 22, 'F');
+  doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15); doc.text('Tarefas Estratégicas — Cebraspe', 14, 11);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+  doc.text('Plano Diretor 2023–2026 · Relatório personalizado', 14, 17);
+  doc.setFontSize(8);
+  doc.text(`Emitido em ${fmtData(hojeISO())}`, 297 - 14, 11, { align: 'right' });
+  const concl = lista.filter(t => t.status === 'concluida').length;
+  const atras = lista.filter(isAtrasada).length;
+  doc.text(`Total: ${lista.length} · Concluídas: ${concl} · Atrasadas: ${atras}`, 297 - 14, 17, { align: 'right' });
+  doc.setFillColor(...laranja); doc.rect(0, 22, 297, 1.2, 'F');
+
+  const camposAtivos = _expChavesAtivas();
+  if (!camposAtivos.length) return mostrarMsg('Selecione ao menos um campo.', true);
+  const camposDef = EXP_CAMPOS_PADRAO.filter(c => camposAtivos.includes(c.key));
+  const head = camposDef.map(c => c.label);
+  const colunaStyles = {};
+  camposDef.forEach((c, i) => { colunaStyles[i] = { cellWidth: c.pdf }; });
+
+  const agr = $('#exp-agrupar').value;
+  const grupos = _expAgrupar(lista, agr);
+
+  let y = 30;
+  for (const [chave, itens] of grupos) {
+    if (y > 180) { doc.addPage(); y = 18; }
+    if (agr) {
+      let bg = [240, 240, 240], fg = [40, 40, 40];
+      if (agr === 'quadrante') {
+        const info = QUADRANTES[chave];
+        if (info) { bg = hexToRgb(info.bg); fg = hexToRgb(info.cor); }
+      }
+      doc.setFillColor(...bg); doc.rect(14, y - 5, 269, 8, 'F');
+      doc.setTextColor(...fg);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5);
+      doc.text(_expRotuloGrupo(agr, chave), 16, y);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(80,80,80);
+      doc.text(`${itens.length} tarefa(s)`, 281, y, { align: 'right' });
+      y += 4;
+    }
+    const headColor = (agr === 'quadrante' && QUADRANTES[chave]) ? hexToRgb(QUADRANTES[chave].cor) : azul;
+    doc.autoTable({
+      startY: y,
+      head: [head],
+      body: itens.map(t => camposDef.map(c => _expValor(t, c.key))),
+      styles: { fontSize: 8.5, cellPadding: 2.5, valign: 'top', overflow: 'linebreak' },
+      headStyles: { fillColor: headColor, textColor: 255, fontSize: 8.5, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [247, 249, 252] },
+      columnStyles: colunaStyles,
+      margin: { left: 14, right: 14 }
+    });
+    y = doc.lastAutoTable.finalY + 8;
+  }
+
+  const total = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= total; i++) {
+    doc.setPage(i);
+    doc.setFontSize(7.5); doc.setTextColor(120,120,120);
+    doc.text(`Página ${i} de ${total}`, 297 - 14, 205, { align: 'right' });
+    doc.text('Cebraspe · Tarefas Estratégicas · Plano Diretor 2023–2026', 14, 205);
+  }
+  doc.save(`tarefas_cebraspe_${hojeISO()}.pdf`);
+  mostrarFlash('PDF gerado.');
+}
+
+/* ---------- Geração XLSX custom ---------- */
+
+function _expLinhaParaExcel(t, camposDef) {
+  const obj = {};
+  for (const c of camposDef) obj[c.label] = _expValor(t, c.key);
+  return obj;
+}
+
+function _expSheetDeLista(lista, camposDef) {
+  const linhas = lista.map(t => _expLinhaParaExcel(t, camposDef));
+  const ws = XLSX.utils.json_to_sheet(linhas);
+  ws['!cols'] = camposDef.map(c => ({ wch: Math.max(10, Math.min(60, Math.round(c.pdf * 0.6))) }));
+  return ws;
+}
+
+function _expSafeSheetName(nome) {
+  // Excel: max 31 chars, sem caracteres : \\ / ? * [ ]
+  return String(nome).replace(/[\\/?*\[\]:]/g, ' ').slice(0, 31).trim() || 'Aba';
+}
+
+function exportarXLSXCustom() {
+  const lista = _expAplicarOpcoes();
+  if (!lista.length) return mostrarMsg('Nenhuma tarefa atende aos filtros escolhidos.', true);
+  const camposAtivos = _expChavesAtivas();
+  if (!camposAtivos.length) return mostrarMsg('Selecione ao menos um campo.', true);
+  const camposDef = EXP_CAMPOS_PADRAO.filter(c => camposAtivos.includes(c.key));
+
+  const wb = XLSX.utils.book_new();
+
+  // Aba principal: lista completa filtrada
+  const wsAll = _expSheetDeLista(lista, camposDef);
+  XLSX.utils.book_append_sheet(wb, wsAll, 'Tarefas');
+
+  // Aba resumo por quadrante
+  const cont = { Q1:0, Q2:0, Q3:0, Q4:0, NC:0 };
+  for (const t of lista) cont[quadranteDe(t)]++;
+  const resumo = ['Q1','Q2','Q3','Q4','NC'].map(q => ({
+    'Quadrante': q === 'NC' ? 'Não classificada' : `${q} — ${QUADRANTES[q].nome}`,
+    'Postura': QUADRANTES[q].postura,
+    'Total': cont[q]
+  }));
+  const wsResumo = XLSX.utils.json_to_sheet(resumo);
+  wsResumo['!cols'] = [{wch:36},{wch:32},{wch:8}];
+  XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo por quadrante');
+
+  // Abas extras
+  const abasPedidas = $$('input[data-aba]:checked').map(ck => ck.dataset.aba);
+  for (const modo of abasPedidas) {
+    const grupos = _expAgrupar(lista, modo);
+    for (const [chave, itens] of grupos) {
+      if (!itens.length) continue;
+      const ws = _expSheetDeLista(itens, camposDef);
+      let prefixo = '';
+      if (modo === 'quadrante') prefixo = chave === 'NC' ? 'NC' : chave;
+      else if (modo === 'responsavel') prefixo = 'R·' + chave;
+      else if (modo === 'oe') prefixo = chave;
+      else if (modo === 'status') prefixo = 'S·' + chave;
+      XLSX.utils.book_append_sheet(wb, ws, _expSafeSheetName(prefixo));
+    }
+  }
+
+  XLSX.writeFile(wb, `tarefas_cebraspe_${hojeISO()}.xlsx`);
+  mostrarFlash('Excel gerado.');
 }
 
 function escolherImport(qtd) {
