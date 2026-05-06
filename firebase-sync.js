@@ -19,6 +19,13 @@
     'cebraspe_reunioes_v1'
   ];
 
+  // Chave de tombstones de tarefas excluídas (sincronizada à parte)
+  const TOMBSTONES_KEY = 'cebraspe_tarefas_v3_tombstones';
+  const TOMBSTONES_DOC = 'cebraspe_tarefas_v3_tombstones';
+
+  // Chaves que usam merge inteligente por id (em vez de overwrite)
+  const MERGE_KEYS = new Set(['cebraspe_tarefas_v3']);
+
   // Modo equipe compartilhada: TODAS as usuárias logadas leem/escrevem no mesmo doc.
   // Caminho: shared/team/data/{key}
   const TEAM_ID = 'team';
@@ -100,6 +107,8 @@
       #fb-userbar button{background:transparent;border:0;color:#0a3d7a;cursor:pointer;
         font:600 12px 'General Sans',system-ui,sans-serif;padding:0;}
       #fb-userbar button:hover{text-decoration:underline;}
+      #fb-userbar #fb-resync{padding:0 6px;border-left:1px solid #e3e7ef;}
+      #fb-userbar #fb-logout{padding-left:6px;border-left:1px solid #e3e7ef;}
     `;
     const style = document.createElement('style');
     style.id = 'fb-login-styles';
@@ -212,8 +221,52 @@
       el.id = 'fb-userbar';
       document.body.appendChild(el);
     }
-    el.innerHTML = `<span>☁️ ${email}</span><button id="fb-logout">Sair</button>`;
+    el.innerHTML = `<span>☁️ ${email}</span><button id="fb-resync" title="Buscar atualizações da equipe agora">Resincronizar</button><button id="fb-logout">Sair</button>`;
     el.classList.add('show');
+    el.querySelector('#fb-resync').addEventListener('click', async () => {
+      showStatus('☁️ buscando atualizações…');
+      try {
+        const snapshot = await pullSnapshot();
+        // Faz merge entre local e remoto (não sobrescreve)
+        let localList = [];
+        try {
+          const raw = localStorage.getItem('cebraspe_tarefas_v3');
+          localList = raw ? JSON.parse(raw) : [];
+          if (!Array.isArray(localList)) localList = [];
+        } catch { localList = []; }
+        const localTombs = lerTombstones();
+        const remoteList = snapshot['cebraspe_tarefas_v3'] && Array.isArray(snapshot['cebraspe_tarefas_v3'].value)
+          ? snapshot['cebraspe_tarefas_v3'].value : [];
+        const remoteTombs = snapshot[TOMBSTONES_KEY] && Array.isArray(snapshot[TOMBSTONES_KEY].value)
+          ? snapshot[TOMBSTONES_KEY].value : [];
+        const merged = mergeTarefas(localList, remoteList, localTombs, remoteTombs);
+        const mergedTombs = mergeTombstones(localTombs, remoteTombs);
+        try {
+          hydrating = true;
+          localStorage.setItem('cebraspe_tarefas_v3', JSON.stringify(merged));
+          localStorage.setItem(TOMBSTONES_KEY, JSON.stringify(mergedTombs));
+          // Também hidrata as outras chaves (config, reunioes, revisoes) cegamente
+          SYNC_KEYS.forEach(k => {
+            if (k === 'cebraspe_tarefas_v3') return;
+            const cloud = snapshot[k];
+            if (cloud && Object.prototype.hasOwnProperty.call(cloud, 'value')) {
+              try { localStorage.setItem(k, JSON.stringify(cloud.value)); } catch {}
+            }
+          });
+        } finally { hydrating = false; }
+        // Recarrega no app
+        if (typeof window.carregarTarefas === 'function') window.carregarTarefas();
+        if (typeof window.carregarRevisoes === 'function') window.carregarRevisoes();
+        if (typeof window.carregarReunioes === 'function') window.carregarReunioes();
+        if (typeof window.carregarConfig === 'function') window.carregarConfig();
+        if (typeof window.carregarTombstones === 'function') window.carregarTombstones();
+        if (typeof window.renderTudo === 'function') window.renderTudo();
+        showStatus('☁️ atualizado');
+      } catch (e) {
+        console.error('[firebase-sync] resync falhou', e);
+        showStatus('⚠ falha ao buscar');
+      }
+    });
     el.querySelector('#fb-logout').addEventListener('click', async () => {
       if (!confirm('Sair da conta? Os dados sincronizados ficarão na nuvem.')) return;
       try { await auth.signOut(); } catch {}
@@ -275,8 +328,153 @@
     if (ops.length) await Promise.all(ops);
   }
 
+  // ---------- Merge por id (tarefas) ----------
+
+  // Lê tombstones locais.
+  function lerTombstones() {
+    try {
+      const raw = localStorage.getItem(TOMBSTONES_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch { return []; }
+  }
+
+  // Faz merge entre lista local e lista remota usando _lwm (last-write-marker).
+  // Tombstones (de qualquer lado) vão ser respeitados: id presente em tombstone
+  // posterior a _lwm da tarefa significa que ela foi excluída.
+  function mergeTarefas(localList, remoteList, localTombs, remoteTombs) {
+    const porId = new Map();
+    // Index remote primeiro
+    for (const t of (remoteList || [])) {
+      if (t && t.id) porId.set(t.id, { ...t, _origin: 'remote' });
+    }
+    // Sobrepõe local só quando local é mais novo
+    for (const t of (localList || [])) {
+      if (!t || !t.id) continue;
+      const r = porId.get(t.id);
+      if (!r) {
+        porId.set(t.id, { ...t, _origin: 'local' });
+      } else {
+        const lLwm = typeof t._lwm === 'number' ? t._lwm : 0;
+        const rLwm = typeof r._lwm === 'number' ? r._lwm : 0;
+        if (lLwm > rLwm) {
+          porId.set(t.id, { ...t, _origin: 'local' });
+        }
+      }
+    }
+    // Aplica tombstones: id em tombstone com _del > _lwm da tarefa => remove
+    const allTombs = new Map();
+    for (const x of (remoteTombs || [])) {
+      if (x && x.id) allTombs.set(x.id, x._del || 0);
+    }
+    for (const x of (localTombs || [])) {
+      if (x && x.id) {
+        const prev = allTombs.get(x.id) || 0;
+        if ((x._del || 0) > prev) allTombs.set(x.id, x._del);
+      }
+    }
+    for (const [id, delTs] of allTombs) {
+      const t = porId.get(id);
+      if (!t) continue;
+      const lwm = typeof t._lwm === 'number' ? t._lwm : 0;
+      if (delTs > lwm) porId.delete(id);
+    }
+    // Limpa marcador de origem antes de retornar
+    return Array.from(porId.values()).map(t => {
+      const { _origin, ...rest } = t;
+      return rest;
+    });
+  }
+
+  // Merge entre duas listas de tombstones, mantendo o _del mais recente por id.
+  function mergeTombstones(a, b) {
+    const m = new Map();
+    for (const arr of [a || [], b || []]) {
+      for (const x of arr) {
+        if (!x || !x.id) continue;
+        const prev = m.get(x.id);
+        if (!prev || (x._del || 0) > (prev._del || 0)) m.set(x.id, { id: x.id, _del: x._del || 0 });
+      }
+    }
+    return Array.from(m.values());
+  }
+
+  async function pushTarefasComMerge() {
+    if (!currentUser) return;
+    let localList = [];
+    let localTombs = [];
+    try {
+      const raw = localStorage.getItem('cebraspe_tarefas_v3');
+      localList = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(localList)) localList = [];
+    } catch { localList = []; }
+    localTombs = lerTombstones();
+
+    // Tenta uma transação: lê remoto, faz merge, escreve.
+    const tarefasRef = dataDocRef('cebraspe_tarefas_v3');
+    const tombsRef = dataDocRef(TOMBSTONES_DOC);
+    try {
+      const ts = Date.now();
+      lastLocalSetByUs['cebraspe_tarefas_v3'] = ts;
+      lastLocalSetByUs[TOMBSTONES_DOC] = ts;
+
+      await db.runTransaction(async (tx) => {
+        const [snapTar, snapTomb] = await Promise.all([tx.get(tarefasRef), tx.get(tombsRef)]);
+        const remoteList = snapTar.exists && snapTar.data() && Array.isArray(snapTar.data().value)
+          ? snapTar.data().value : [];
+        const remoteTombs = snapTomb.exists && snapTomb.data() && Array.isArray(snapTomb.data().value)
+          ? snapTomb.data().value : [];
+
+        const merged = mergeTarefas(localList, remoteList, localTombs, remoteTombs);
+        const mergedTombs = mergeTombstones(localTombs, remoteTombs);
+
+        tx.set(tarefasRef, {
+          value: merged,
+          updatedAt: ts,
+          updatedBy: (currentUser && currentUser.email) || currentUser.uid
+        });
+        tx.set(tombsRef, {
+          value: mergedTombs,
+          updatedAt: ts,
+          updatedBy: (currentUser && currentUser.email) || currentUser.uid
+        });
+
+        // Atualiza local com o resultado do merge para evitar perder tarefas remotas
+        try {
+          hydrating = true;
+          localStorage.setItem('cebraspe_tarefas_v3', JSON.stringify(merged));
+          localStorage.setItem(TOMBSTONES_KEY, JSON.stringify(mergedTombs));
+        } finally {
+          hydrating = false;
+        }
+      });
+      showStatus('☁️ sincronizado');
+      // Pede ao app pra recarregar/redesenhar (caso merge tenha trazido novidades)
+      try {
+        if (typeof window.carregarTarefas === 'function') window.carregarTarefas();
+        if (typeof window.renderTudo === 'function') window.renderTudo();
+      } catch {}
+    } catch (e) {
+      console.error('[firebase-sync] falha no merge de tarefas', e);
+      showStatus('⚠ falha ao sincronizar');
+    }
+  }
+
   function pushKey(key) {
     if (!currentUser || hydrating) return;
+    // Tarefas usam merge transacional (não sobrescreve array inteiro)
+    if (MERGE_KEYS.has(key)) {
+      clearTimeout(pushTimers[key]);
+      pushTimers[key] = setTimeout(() => { pushTarefasComMerge(); }, 800);
+      return;
+    }
+    // Caso especial: chave de tombstones é sempre sincronizada junto com tarefas
+    if (key === TOMBSTONES_KEY) {
+      clearTimeout(pushTimers['cebraspe_tarefas_v3']);
+      pushTimers['cebraspe_tarefas_v3'] = setTimeout(() => { pushTarefasComMerge(); }, 800);
+      return;
+    }
     clearTimeout(pushTimers[key]);
     pushTimers[key] = setTimeout(async () => {
       let value;
@@ -310,18 +508,33 @@
     stopRealtime();
     realtimeUnsub = dataColRef().onSnapshot(snap => {
       let changedAny = false;
+      // Acumula remoto de tarefas + tombstones para merge unificado
+      let remoteTarefas = null;
+      let remoteTombs = null;
+      let tarefasFromOther = false;
+
       snap.docChanges().forEach(change => {
         const key = change.doc.id;
-        if (SYNC_KEYS.indexOf(key) === -1) return;
         const data = change.doc.data();
         if (!data || !Object.prototype.hasOwnProperty.call(data, 'value')) return;
-        // Se a mudança veio da nossa própria escrita recém-feita, ignoramos
-        // (data.updatedBy === nosso email/uid + updatedAt próximo do nosso push)
         const myId = (currentUser && currentUser.email) || (currentUser && currentUser.uid) || '';
-        if (data.updatedBy === myId && lastLocalSetByUs[key] && Math.abs(data.updatedAt - lastLocalSetByUs[key]) < 4000) {
+        const isMine = data.updatedBy === myId && lastLocalSetByUs[key] && Math.abs(data.updatedAt - lastLocalSetByUs[key]) < 4000;
+
+        // Tarefas e tombstones: tratamos com merge especial
+        if (key === 'cebraspe_tarefas_v3') {
+          remoteTarefas = Array.isArray(data.value) ? data.value : [];
+          if (!isMine) tarefasFromOther = true;
           return;
         }
-        // Mudança vinda de outra usuária → atualiza local e re-renderiza
+        if (key === TOMBSTONES_KEY) {
+          remoteTombs = Array.isArray(data.value) ? data.value : [];
+          if (!isMine) tarefasFromOther = true;
+          return;
+        }
+
+        // Demais chaves seguem comportamento antigo (sobrescrever)
+        if (SYNC_KEYS.indexOf(key) === -1) return;
+        if (isMine) return;
         try {
           hydrating = true;
           localStorage.setItem(key, JSON.stringify(data.value));
@@ -330,19 +543,52 @@
         }
         changedAny = true;
       });
+
+      // Se chegou snapshot de tarefas/tombstones de outra pessoa, faz merge
+      if (remoteTarefas !== null || remoteTombs !== null) {
+        let localList = [];
+        try {
+          const raw = localStorage.getItem('cebraspe_tarefas_v3');
+          localList = raw ? JSON.parse(raw) : [];
+          if (!Array.isArray(localList)) localList = [];
+        } catch { localList = []; }
+        const localTombs = lerTombstones();
+
+        const merged = mergeTarefas(
+          localList,
+          remoteTarefas !== null ? remoteTarefas : localList,
+          localTombs,
+          remoteTombs !== null ? remoteTombs : localTombs
+        );
+        const mergedTombs = mergeTombstones(
+          localTombs,
+          remoteTombs !== null ? remoteTombs : []
+        );
+
+        try {
+          hydrating = true;
+          localStorage.setItem('cebraspe_tarefas_v3', JSON.stringify(merged));
+          localStorage.setItem(TOMBSTONES_KEY, JSON.stringify(mergedTombs));
+        } finally {
+          hydrating = false;
+        }
+        if (tarefasFromOther) changedAny = true;
+      }
+
       if (changedAny) {
-        // Pede ao app.js para recarregar e re-renderizar
         try {
           if (typeof window.carregarTarefas === 'function') window.carregarTarefas();
           if (typeof window.carregarRevisoes === 'function') window.carregarRevisoes();
           if (typeof window.carregarReunioes === 'function') window.carregarReunioes();
           if (typeof window.carregarConfig === 'function') window.carregarConfig();
+          if (typeof window.carregarTombstones === 'function') window.carregarTombstones();
           if (typeof window.renderTudo === 'function') window.renderTudo();
           showStatus('☁️ atualizado por outra pessoa');
         } catch (e) { console.warn('[firebase-sync] erro ao re-renderizar', e); }
       }
     }, err => {
       console.error('[firebase-sync] realtime err', err);
+      showStatus('⚠ sync offline');
     });
   }
 

@@ -411,6 +411,11 @@ function carregarTarefas() {
   const v3 = _read(KEY_TAREFAS_V3, null);
   if (Array.isArray(v3) && v3.length > 0) {
     tarefas = v3.map(normalizarTarefa);
+    // Repopula hash anterior para que mudanças recebidas via Firestore
+    // não sejam re-carimbadas como modificadas localmente.
+    if (typeof _hashTarefa === 'function') {
+      _tarefasHashAnterior = new Map(tarefas.map(t => [t.id, _hashTarefa(t)]));
+    }
     return;
   }
   // migrar v1 se existir
@@ -471,7 +476,83 @@ function normalizarTarefa(t) {
   };
 }
 
-function salvarTarefas() { _write(KEY_TAREFAS_V3, tarefas); }
+// Tombstones de tarefas excluídas: lista de { id, _del: timestamp }
+// Mantidas para evitar que a sincronização de outra aba "ressuscite" tarefas apagadas.
+const KEY_TAREFAS_TOMBSTONES = 'cebraspe_tarefas_v3_tombstones';
+let tarefasTombstones = [];
+function carregarTombstones() {
+  tarefasTombstones = _read(KEY_TAREFAS_TOMBSTONES, []) || [];
+  // Limpeza automática: descarta tombstones com mais de 30 dias
+  const limite = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const antes = tarefasTombstones.length;
+  tarefasTombstones = tarefasTombstones.filter(x => (x._del || 0) > limite);
+  if (tarefasTombstones.length !== antes) _write(KEY_TAREFAS_TOMBSTONES, tarefasTombstones);
+}
+function salvarTombstones() { _write(KEY_TAREFAS_TOMBSTONES, tarefasTombstones); }
+function adicionarTombstone(id) {
+  const ts = Date.now();
+  // Substitui se já existir tombstone do mesmo id (renova timestamp)
+  tarefasTombstones = tarefasTombstones.filter(x => x.id !== id);
+  tarefasTombstones.push({ id, _del: ts });
+  salvarTombstones();
+}
+
+// Mapa id -> hash da última versão salva. Usado para detectar mudanças reais
+// e carimbar _lwm apenas em tarefas que de fato mudaram.
+let _tarefasHashAnterior = new Map();
+
+function _hashTarefa(t) {
+  // Hash leve: campos relevantes que justificam novo carimbo
+  // (não inclui _lwm nem atualizadaEm para evitar loop).
+  const campos = [
+    t.titulo, t.descricao, t.responsavel, t.objetivo,
+    t.importante ? 1 : 0, t.urgente ? 1 : 0,
+    t.prazo, t.dataInicio, t.status, t.prioridade, t.resultado,
+    Array.isArray(t.checklist) ? JSON.stringify(t.checklist) : '',
+    Array.isArray(t.tags) ? t.tags.join('|') : ''
+  ].join('\u241F');
+  // FNV-1a 32-bit
+  let h = 0x811c9dc5;
+  for (let i = 0; i < campos.length; i++) {
+    h ^= campos.charCodeAt(i);
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return h >>> 0;
+}
+
+// Carimba _lwm só nas tarefas que mudaram (ou são novas) desde o último salvar.
+// Tarefas vindas do Firestore mantêm o _lwm original.
+function _carimbarLWMSeNecessario() {
+  const novoMapa = new Map();
+  const agora = Date.now();
+  for (const t of tarefas) {
+    const hash = _hashTarefa(t);
+    novoMapa.set(t.id, hash);
+    const hashAntes = _tarefasHashAnterior.get(t.id);
+    if (typeof t._lwm !== 'number') {
+      // Primeira vez vendo essa tarefa nesta sessão: usa atualizadaEm/criadaEm como base.
+      const base = t.atualizadaEm || t.criadaEm || null;
+      const ms = base ? Date.parse(base) : 0;
+      t._lwm = Number.isFinite(ms) && ms > 0 ? ms : agora;
+    } else if (hashAntes !== undefined && hashAntes !== hash) {
+      // Mudou de fato nesta sessão: carimba agora.
+      t._lwm = agora;
+      t.atualizadaEm = new Date(agora).toISOString();
+    } else if (hashAntes === undefined) {
+      // É nova nesta sessão (criada agora) e ainda não tem hash anterior.
+      // Se _lwm é muito antigo (>60s), atualiza; senão respeita (veio do Firestore).
+      if (agora - t._lwm > 60000 && !t.criadaEm) {
+        t._lwm = agora;
+      }
+    }
+  }
+  _tarefasHashAnterior = novoMapa;
+}
+
+function salvarTarefas() {
+  _carimbarLWMSeNecessario();
+  _write(KEY_TAREFAS_V3, tarefas);
+}
 function carregarRevisoes() { revisoes = _read(KEY_REVISOES_V1, []); }
 function salvarRevisoes() { _write(KEY_REVISOES_V1, revisoes); }
 function carregarConfig() {
@@ -514,6 +595,10 @@ function init() {
 
 function initApp() {
   carregarTarefas();
+  carregarTombstones();
+  // Popula hash anterior das tarefas carregadas para que _carimbarLWMSeNecessario
+  // só marque novas mudanças como modificadas nesta sessão.
+  _tarefasHashAnterior = new Map(tarefas.map(t => [t.id, _hashTarefa(t)]));
   carregarRevisoes();
   carregarReunioes();
   carregarConfig();
@@ -809,6 +894,7 @@ async function excluirTarefa(id) {
   const ok = await confirmar('Excluir tarefa?', `"${t.titulo}" será removida permanentemente.`);
   if (!ok) return;
   tarefas = tarefas.filter(x => x.id !== id);
+  adicionarTombstone(id);
   // remove a tarefa de todas as reunioes vinculadas
   reunioes.forEach(r => {
     r.tarefasIds = (r.tarefasIds || []).filter(x => x !== id);
@@ -6326,6 +6412,7 @@ window.carregarTarefas = carregarTarefas;
 window.carregarRevisoes = carregarRevisoes;
 window.carregarReunioes = carregarReunioes;
 window.carregarConfig = carregarConfig;
+window.carregarTombstones = carregarTombstones;
 window.renderTudo = renderTudo;
 // para o módulo quick-capture.js
 window.salvarTarefas = salvarTarefas;
