@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260505k" />
+  <link rel="stylesheet" href="styles.css?v=20260506a" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a3d7a'/%3E%3Cpath d='M9 11h14M9 16h14M9 21h9' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='25.5' cy='21' r='2' fill='%23f08000'/%3E%3C/svg%3E" />
 
   <!-- Bibliotecas: jsPDF, html2canvas, SheetJS, Chart.js -->
@@ -46,6 +46,7 @@
           <span class="kq kq--q3"><strong id="k-q3">0</strong> Q3</span>
           <span class="kq kq--q4"><strong id="k-q4">0</strong> Q4</span>
           <span class="kq kq--nc"><strong id="k-nc">0</strong> Não class.</span>
+          <button type="button" class="btn btn--ghost btn--xs" id="btn-sobre-quadrantes" title="Sobre os quadrantes" aria-label="Sobre os quadrantes">i</button>
           <span class="spark-wrap" title="% Q2 nas últimas 8 semanas">
             <canvas id="spark-q2" width="90" height="28"></canvas>
             <span id="spark-placeholder" class="spark-placeholder">histórico em construção</span>
@@ -176,10 +177,10 @@
           </select>
           <select id="filtro-quadrante" aria-label="Filtrar por quadrante">
             <option value="">Todos os quadrantes</option>
-            <option value="Q1">Q1 — Crise</option>
-            <option value="Q2">Q2 — Estratégia</option>
-            <option value="Q3">Q3 — Interrupção</option>
-            <option value="Q4">Q4 — Trivial</option>
+            <option value="Q1">Q1 — Crise e Contenção</option>
+            <option value="Q2">Q2 — Estratégia Direcional</option>
+            <option value="Q3">Q3 — Deliberação Estratégica Operacional</option>
+            <option value="Q4">Q4 — Sustentação Operacional</option>
             <option value="NC">Não classificada</option>
           </select>
           <select id="filtro-importante" aria-label="Filtrar por importante">
@@ -207,6 +208,7 @@
             <button class="seg__btn" data-group="responsavel">Por Responsável</button>
           </div>
           <div class="spacer"></div>
+          <button class="btn btn--ghost btn--sm" id="btn-sugerir-quadrantes" title="Sugerir quadrante automaticamente para tarefas não classificadas" type="button">Sugerir quadrantes</button>
           <button class="btn btn--ghost btn--sm" id="btn-retro" title="Retrospectiva semanal" type="button">Retrospectiva</button>
           <div class="export-group">
             <button class="btn btn--export" id="btn-pdf" title="Exportar PDF">PDF</button>
@@ -310,19 +312,19 @@
         <div class="eisen-axis eisen-axis--y"><span>Importante</span><span>Não importante</span></div>
         <div class="eisen-axis eisen-axis--x"><span>Urgente</span><span>Não urgente</span></div>
         <div class="eisen-quad eisen-quad--q1" data-quad="Q1">
-          <header><strong>Q1 — Crise</strong><em>atender com prioridade absoluta</em></header>
+          <header><strong>Q1 — Crise e Contenção</strong><em>decidir rápido e reduzir danos</em></header>
           <div class="eisen-drop" data-quad="Q1"></div>
         </div>
         <div class="eisen-quad eisen-quad--q2" data-quad="Q2">
-          <header><strong>Q2 — Estratégia</strong><em>proteger e investir</em></header>
+          <header><strong>Q2 — Estratégia Direcional</strong><em>pensar o futuro e fazer escolhas</em></header>
           <div class="eisen-drop" data-quad="Q2"></div>
         </div>
         <div class="eisen-quad eisen-quad--q3" data-quad="Q3">
-          <header><strong>Q3 — Interrupção</strong><em>delegar ou recusar</em></header>
+          <header><strong>Q3 — Deliberação Estratégica</strong><em>traduzir estratégia em decisão concreta</em></header>
           <div class="eisen-drop" data-quad="Q3"></div>
         </div>
         <div class="eisen-quad eisen-quad--q4" data-quad="Q4">
-          <header><strong>Q4 — Trivial</strong><em>eliminar ou postergar</em></header>
+          <header><strong>Q4 — Sustentação Operacional</strong><em>delegar e proteger a agenda</em></header>
           <div class="eisen-drop" data-quad="Q4"></div>
         </div>
       </div>
@@ -398,7 +400,7 @@
           <li><strong>Versão:</strong> v3</li>
           <li><strong>Persistência:</strong> armazenamento do navegador (com fallback em memória quando o sandbox bloqueia)</li>
           <li><strong>Plano Diretor 2023–2026:</strong> 8 Objetivos Estratégicos do Cebraspe — agora opcionais por tarefa.</li>
-          <li><strong>Matriz de Eisenhower:</strong> Q1 — Crise · Q2 — Estratégia · Q3 — Interrupção · Q4 — Trivial.</li>
+          <li><strong>Quadrantes (taxonomia da Camila):</strong> Q1 — Crise e Contenção · Q2 — Estratégia Direcional · Q3 — Deliberação Estratégica Operacional · Q4 — Sustentação Operacional.</li>
           <li><strong>Bilhetes e e-mails:</strong> registro corporativo cordial, ancorado no Manual de Redação da Presidência da República (3ª ed.).</li>
         </ul>
       </div>
@@ -520,6 +522,10 @@
         <div class="retro-corpo__main">
           <div id="retro-metricas"></div>
           <section class="retro-secao">
+            <h4>Distribuição por quadrante</h4>
+            <div id="retro-distribuicao"></div>
+          </section>
+          <section class="retro-secao">
             <h4>Concluídas no período</h4>
             <div id="retro-concluidas"></div>
           </section>
@@ -608,6 +614,21 @@
         <button class="btn btn--ghost btn--sm" id="btn-el-docx" type="button">Baixar Word</button>
         <button class="btn btn--ghost btn--sm" id="btn-el-print" type="button">Imprimir</button>
         <button class="btn btn--ghost btn--sm" id="btn-el-abrir-todos" type="button">Abrir cada um no cliente</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Modal: Sobre os quadrantes (taxonomia da Camila) -->
+  <dialog id="dlg-sobre-quadrantes" class="modal modal--lg">
+    <div class="modal__inner">
+      <header class="modal__head">
+        <h3>Sobre os quadrantes</h3>
+        <button class="btn btn--ghost btn--sm" id="sq-close" type="button">Fechar</button>
+      </header>
+      <p class="muted" style="margin-top:0">Taxonomia desenhada com a Camila Diógenes, adaptada à natureza do trabalho de liderança institucional. Cada tarefa permanece vinculada a um Objetivo Estratégico (OE).</p>
+      <div id="sq-conteudo" class="sq-conteudo"></div>
+      <div class="modal__actions">
+        <button class="btn btn--primary btn--sm" id="btn-sq-fechar" type="button">Fechar</button>
       </div>
     </div>
   </dialog>
@@ -860,10 +881,10 @@
   </dialog>
 
   <!-- Firebase: config + sync compartilhado (equipe) -->
-  <script src="firebase-config.js?v=20260505k"></script>
-  <script src="firebase-sync.js?v=20260505k"></script>
-  <script src="app.js?v=20260505k"></script>
+  <script src="firebase-config.js?v=20260506a"></script>
+  <script src="firebase-sync.js?v=20260506a"></script>
+  <script src="app.js?v=20260506a"></script>
   <!-- Captura rápida em linguagem natural + voz -->
-  <script src="quick-capture.js?v=20260505k"></script>
+  <script src="quick-capture.js?v=20260506a"></script>
 </body>
 </html>

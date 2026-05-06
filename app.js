@@ -92,11 +92,48 @@ const OBJETIVOS = [
   }
 ];
 
+// Taxonomia da Camila (Leva 7) — quadrantes redefinidos pela natureza do trabalho
+// de liderança, em vez da matriz Eisenhower clássica.
 const QUADRANTES = {
-  Q1: { id: 'Q1', nome: 'Crise', postura: 'atender com prioridade absoluta', cor: '#c0392b', bg: '#fdecea' },
-  Q2: { id: 'Q2', nome: 'Estratégia', postura: 'proteger e investir', cor: '#0a3d7a', bg: '#e8f0fb' },
-  Q3: { id: 'Q3', nome: 'Interrupção', postura: 'delegar ou recusar', cor: '#e67e22', bg: '#fdf0e2' },
-  Q4: { id: 'Q4', nome: 'Trivial', postura: 'eliminar ou postergar', cor: '#7f8c8d', bg: '#eef0f1' },
+  Q1: {
+    id: 'Q1',
+    nome: 'Crise e Contenção',
+    postura: 'decidir rápido e reduzir danos',
+    cor: '#c0392b', bg: '#fdecea',
+    natureza: ['Alto impacto', 'Alta urgência', 'Pouca margem de escolha'],
+    exemplos: ['Crise institucional', 'Conflitos graves', 'Prazos legais iminentes', 'Falhas críticas de execução', 'Exposição política ou administrativa'],
+    papel: ['Decidir rápido', 'Reduzir danos', 'Proteger pessoas, resultados e imagem'],
+  },
+  Q2: {
+    id: 'Q2',
+    nome: 'Estratégia Direcional',
+    postura: 'pensar o futuro e fazer escolhas',
+    cor: '#0a3d7a', bg: '#e8f0fb',
+    natureza: ['Alto impacto', 'Baixa urgência imediata', 'Exige reflexão e visão sistêmica'],
+    exemplos: ['Definição de prioridades estratégicas', 'Redesenho de políticas, processos ou programas', 'Pactuação de diretrizes', 'Planejamento, metas, indicadores', 'Avaliação de cenários'],
+    papel: ['Escolher o que NÃO será feito', 'Direcionar recursos e esforços', 'Dar sentido e coerência às ações'],
+    nota: 'Aqui nasce a estratégia — mas ela ainda não está em ação.',
+  },
+  Q3: {
+    id: 'Q3',
+    nome: 'Deliberação Estratégica Operacional',
+    postura: 'traduzir estratégia em decisão concreta',
+    cor: '#0e7c66', bg: '#e6f4ef',
+    natureza: ['Impacto estratégico indireto', 'Urgência média', 'Forte carga decisória e relacional'],
+    exemplos: ['Reuniões decisórias (não informativas)', 'Despachos', 'Pactuação de encaminhamentos', 'Priorização de demandas', 'Autorizações, validações, ajustes de rota', 'Alinhamento entre áreas'],
+    papel: ['Traduzir diretrizes em decisões práticas', 'Resolver ambiguidades', 'Garantir coerência entre estratégia e ação', 'Dar fluidez ao sistema'],
+    nota: 'Q3 é governança.',
+  },
+  Q4: {
+    id: 'Q4',
+    nome: 'Sustentação Operacional',
+    postura: 'delegar e proteger a agenda',
+    cor: '#7f8c8d', bg: '#eef0f1',
+    natureza: ['Baixo impacto estratégico isolado', 'Alta frequência', 'Necessária para a organização não travar'],
+    exemplos: ['Demandas rotineiras', 'Acompanhamentos simples', 'Checagens de status', 'Atendimentos rápidos'],
+    papel: ['Delegar sempre que possível', 'Criar padrões e rotinas', 'Evitar que o Q4 engula Q2 e Q3'],
+    nota: 'Q4 não é trivial — é estrutural, mas não pode dominar a agenda.',
+  },
   NC: { id: 'NC', nome: 'Não classificada', postura: 'classificar depois', cor: '#bdc3c7', bg: '#f3f4f5' }
 };
 
@@ -248,6 +285,73 @@ function quadranteDe(t) {
   if (t.importante && !t.urgente) return 'Q2';
   if (!t.importante && t.urgente) return 'Q3';
   return 'Q4';
+}
+
+// Sugere quadrante a partir do título + categoria (Leva 7).
+// Retorna { quadrante: 'Q1'|'Q2'|'Q3'|'Q4', importante: bool, urgente: bool, motivo: string }
+// ou null se não conseguir inferir com confiança.
+function sugerirQuadrante(tarefa) {
+  const titulo = (tarefa.titulo || '').toLowerCase();
+  const resultado = (tarefa.resultado || '').toLowerCase();
+  const texto = `${titulo} ${resultado}`;
+  // ordem importa: padrões mais específicos primeiro
+  // Q1 — crise, urgência legal, falha crítica
+  if (/\bcrise\b|\bfalha cr[ií]tica\b|\burgent[ie]ssim[oa]\b|\bemerg[êée]nci[ao]\b|\bprazo legal\b|\bmandado\b|\bintima[cç]ão\b|\bauditori[ao] urgente\b|\bden[uú]ncia\b|\bauto de infra[cç]ão\b/.test(texto)) {
+    return { quadrante: 'Q1', importante: true, urgente: true, motivo: 'contém termo de crise, urgência legal ou falha crítica' };
+  }
+  // Q3 — governança/deliberação (despacho, reunião decisória, alinhamento, autorização)
+  if (/\bdespacho\b|\bdespachar\b|\breuni[ãa]o decis[oó]ria\b|\bpactu[a-z]+\b|\bautoriza[cç][aã]o\b|\bvalida[cç][aã]o\b|\bajuste de rota\b|\balinhamento\b|\balinhar\b|\bencaminhamento\b|\bprioriza[cç][aã]o\b|\bdelibera[cç][aã]o\b/.test(texto)) {
+    return { quadrante: 'Q3', importante: false, urgente: true, motivo: 'governança/deliberação (despacho, alinhamento, autorização)' };
+  }
+  // Q2 — estratégia direcional (planejamento, redesenho, diretriz, cenário, indicador)
+  if (/\bplanejamento\b|\bredesenho\b|\bdiretriz(?:es)?\b|\bpol[ií]tica\b|\bestrat[ée]gi[ao]\b|\bplano (?:diretor|estrat[ée]gico|de a[cç][aã]o)\b|\bcen[aá]rio\b|\bvis[aã]o\b|\bproposta estrutur(?:al|ante)\b|\bindicador(?:es)?\b|\bmeta(?:s)?\b/.test(texto)) {
+    return { quadrante: 'Q2', importante: true, urgente: false, motivo: 'estratégia direcional (planejamento, diretriz, cenário)' };
+  }
+  // Q4 — rotina, acompanhamento simples, checagem, atendimento rápido
+  if (/\brotina\b|\bacompanhamento\b|\bchecagem\b|\bcheck.?list\b|\batendimento\b|\brelat[oó]rio mensal\b|\binforme\b|\bcomunicado\b|\bnota informativa\b/.test(texto)) {
+    return { quadrante: 'Q4', importante: false, urgente: false, motivo: 'rotina/acompanhamento (sustentação operacional)' };
+  }
+  // Heurísticas auxiliares (peso menor)
+  if (/\bparecer\b|\bnota t[ée]cnica\b|\brelat[oó]rio\b|\bdocumento\b/.test(texto)) {
+    return { quadrante: 'Q3', importante: false, urgente: true, motivo: 'documento de deliberação (parecer, nota técnica)' };
+  }
+  if (/\bedital\b|\blicita[cç][aã]o\b|\bcontrata[cç][aã]o\b|\btermo de refer[êée]ncia\b/.test(texto)) {
+    return { quadrante: 'Q2', importante: true, urgente: false, motivo: 'instrumento estratégico (edital, TR)' };
+  }
+  return null;
+}
+
+// Aplica sugestão nas tarefas não classificadas; não sobrescreve classificação existente.
+async function aplicarSugestoesQuadranteEmLote() {
+  const ncs = tarefas.filter(t => quadranteDe(t) === 'NC');
+  if (!ncs.length) {
+    mostrarFlash('Não há tarefas não classificadas.');
+    return;
+  }
+  const sugestoes = ncs.map(t => ({ t, s: sugerirQuadrante(t) })).filter(x => x.s);
+  if (!sugestoes.length) {
+    mostrarFlash('Nenhuma sugestão pôde ser inferida pelos títulos.');
+    return;
+  }
+  const cont = { Q1:0, Q2:0, Q3:0, Q4:0 };
+  for (const x of sugestoes) cont[x.s.quadrante]++;
+  const linhas = [
+    `Encontrei sugestão para ${sugestoes.length} de ${ncs.length} tarefa(s) não classificada(s):`,
+    `• Q1 — Crise e Contenção: ${cont.Q1}`,
+    `• Q2 — Estratégia Direcional: ${cont.Q2}`,
+    `• Q3 — Deliberação Estratégica Operacional: ${cont.Q3}`,
+    `• Q4 — Sustentação Operacional: ${cont.Q4}`,
+    '',
+    'Aplicar a classificação sugerida agora?'
+  ];
+  if (!confirm(linhas.join('\n'))) return;
+  for (const { t, s } of sugestoes) {
+    t.importante = s.importante;
+    t.urgente = s.urgente;
+  }
+  salvarTarefas();
+  renderTudo();
+  mostrarFlash(`${sugestoes.length} tarefa(s) classificada(s) automaticamente.`);
 }
 
 function isAtrasada(t) {
@@ -412,6 +516,7 @@ function initApp() {
   bindDespachos();
   bindEmail();
   bindEmailLote();
+  bindSobreQuadrantes();
   bindDrucker();
   bindAgenda();
   bindRevisao();
@@ -1002,6 +1107,30 @@ function gerarRetrospectiva(periodo) {
     if (com) pctNoPrazo = Math.round((np / com) * 100);
   }
 
+  // Distribuição por quadrante (Leva 7) — considera todas as tarefas "ativas no período":
+  // novas + tocadas + concluídas + vencidas no recorte. Cada tarefa conta UMA vez.
+  const ativasIds = new Set();
+  const ativas = [];
+  const inclui = (t) => { if (!ativasIds.has(t.id)) { ativasIds.add(t.id); ativas.push(t); } };
+  for (const t of concluidasPer) inclui(t);
+  for (const t of vencidasPer) inclui(t);
+  for (const t of novas) inclui(t);
+  for (const { t } of paradas) inclui(t);
+  // Também inclui tarefas abertas que tiveram alguma atualização no período
+  for (const t of tarefas) {
+    if (t.status === 'concluida' || t.status === 'cancelada') continue;
+    if (t.atualizadoEm && _entreISO(t.atualizadoEm, inicio, fim)) inclui(t);
+  }
+  const distQ = { Q1: 0, Q2: 0, Q3: 0, Q4: 0, NC: 0 };
+  for (const t of ativas) distQ[quadranteDe(t)]++;
+  const distTotal = ativas.length;
+  const distPct = { Q1: 0, Q2: 0, Q3: 0, Q4: 0, NC: 0 };
+  if (distTotal > 0) {
+    for (const k of Object.keys(distQ)) distPct[k] = Math.round((distQ[k] / distTotal) * 100);
+  }
+  const q4Domina = distTotal > 0 && distPct.Q4 >= 50;
+  const q2Anemico = distTotal >= 4 && distPct.Q2 < 10;
+
   // pergunta rotativa (estavel pela semana)
   const semanaIso = inicio.replace(/-/g,'');
   const idx = parseInt(semanaIso, 10) % _DRUCKER_PERGUNTAS.length;
@@ -1013,6 +1142,7 @@ function gerarRetrospectiva(periodo) {
     vencidasPer,
     paradas,
     novas,
+    distribuicao: { contagem: distQ, percentuais: distPct, total: distTotal, q4Domina, q2Anemico },
     metricas: { tempoMedio, pctNoPrazo, totalConcluidas: concluidasPer.length, totalVencidas: vencidasPer.length, totalParadas: paradas.length, totalNovas: novas.length, backfillUsado },
     pergunta
   };
@@ -1068,6 +1198,44 @@ function renderRetrospectiva() {
     </div>
   `;
   $('#retro-metricas').innerHTML = metricasHtml;
+  // Distribuição por quadrante (Leva 7)
+  if (r.distribuicao) {
+    const d = r.distribuicao;
+    if (d.total === 0) {
+      $('#retro-distribuicao').innerHTML = '<p class="retro__vazio">Sem tarefas ativas no período para distribuir.</p>';
+    } else {
+      const ordem = ['Q1', 'Q2', 'Q3', 'Q4', 'NC'];
+      const linhas = ordem.map(qid => {
+        const q = QUADRANTES[qid];
+        const n = d.contagem[qid];
+        const p = d.percentuais[qid];
+        const fill = `<span class="retro-dist__fill" style="width:${p}%; background:${q.cor}"></span>`;
+        return `
+          <div class="retro-dist__linha">
+            <span class="retro-dist__id" style="color:${q.cor}">${qid}</span>
+            <span class="retro-dist__nome">${escHtml(q.nome)}</span>
+            <span class="retro-dist__bar">${fill}</span>
+            <span class="retro-dist__num">${n} <span class="retro-dist__pct">(${p}%)</span></span>
+          </div>`;
+      }).join('');
+      let alertas = '';
+      if (d.q4Domina) {
+        alertas += `<p class="retro-dist__alerta retro-dist__alerta--warn">Q4 — Sustentação Operacional está em ${d.percentuais.Q4}% do período. Pondere delegar acompanhamentos simples e proteger tempo para Q2/Q3.</p>`;
+      }
+      if (d.q2Anemico) {
+        alertas += `<p class="retro-dist__alerta retro-dist__alerta--warn">Q2 — Estratégia Direcional ficou em ${d.percentuais.Q2}%. Considere reservar bloco de tempo para reflexão estratégica.</p>`;
+      }
+      if (!alertas && d.percentuais.Q3 >= 30 && d.percentuais.Q2 >= 15) {
+        alertas = `<p class="retro-dist__alerta retro-dist__alerta--ok">Boa cadência: Q2 (${d.percentuais.Q2}%) e Q3 (${d.percentuais.Q3}%) estão presentes na agenda.</p>`;
+      }
+      $('#retro-distribuicao').innerHTML = `
+        <div class="retro-dist">
+          <div class="retro-dist__total">${d.total} tarefa(s) ativa(s) no período</div>
+          ${linhas}
+          ${alertas}
+        </div>`;
+    }
+  }
   $('#retro-concluidas').innerHTML = _retroFormatLista(r.concluidasPer, t => {
     const oe = t.oeId ? OBJETIVOS.find(o=>o.id===t.oeId) : null;
     const oeTag = oe ? ` <span class="retro-tag">OE ${oe.id}</span>` : '';
@@ -1111,6 +1279,19 @@ function _retroTextoPlano(periodo) {
     linhas.push(titulo + ':');
     if (!arr.length) { linhas.push('  — nada a registrar.'); }
     else { for (const x of arr) linhas.push('  • ' + fn(x)); }
+    linhas.push('');
+  }
+  // Distribuição por quadrante (Leva 7)
+  if (r.distribuicao && r.distribuicao.total > 0) {
+    const d = r.distribuicao;
+    linhas.push('Distribuição por quadrante:');
+    linhas.push(`  Q1 — Crise e Contenção: ${d.contagem.Q1} (${d.percentuais.Q1}%)`);
+    linhas.push(`  Q2 — Estratégia Direcional: ${d.contagem.Q2} (${d.percentuais.Q2}%)`);
+    linhas.push(`  Q3 — Deliberação Estratégica Operacional: ${d.contagem.Q3} (${d.percentuais.Q3}%)`);
+    linhas.push(`  Q4 — Sustentação Operacional: ${d.contagem.Q4} (${d.percentuais.Q4}%)`);
+    if (d.contagem.NC > 0) linhas.push(`  Não classificadas: ${d.contagem.NC} (${d.percentuais.NC}%)`);
+    if (d.q4Domina) linhas.push(`  Aviso: Q4 em ${d.percentuais.Q4}% — risco de a sustentação engolir a estratégia.`);
+    if (d.q2Anemico) linhas.push(`  Aviso: Q2 em ${d.percentuais.Q2}% — reservar bloco de estratégia.`);
     linhas.push('');
   }
   bloco('Concluídas no período', r.concluidasPer, t => `${t.titulo} (${t.responsavel || '—'})`);
@@ -3861,6 +4042,61 @@ function bindEmail() {
     if (corpoBtn) {
       _emailModoCorpo = corpoBtn.dataset.ecorpo === 'compacto' ? 'compacto' : 'normal';
       atualizarCorpoEmail();
+      return;
+    }
+  });
+}
+
+// === Modal "Sobre os quadrantes" (Leva 7) =================================
+function renderSobreQuadrantes() {
+  const ordem = ['Q1', 'Q2', 'Q3', 'Q4'];
+  const html = ordem.map(qid => {
+    const q = QUADRANTES[qid];
+    const liNat = (q.natureza || []).map(x => `<li>${escHtml(x)}</li>`).join('');
+    const liEx  = (q.exemplos || []).map(x => `<li>${escHtml(x)}</li>`).join('');
+    const liPap = (q.papel || []).map(x => `<li>${escHtml(x)}</li>`).join('');
+    const nota  = q.nota ? `<p class="sq-nota">${escHtml(q.nota)}</p>` : '';
+    return `
+      <article class="sq-card sq-card--${qid.toLowerCase()}">
+        <header class="sq-card__head">
+          <span class="sq-card__id">${qid}</span>
+          <div class="sq-card__titles">
+            <h4>${escHtml(q.nome)}</h4>
+            <p class="sq-card__sub">${escHtml(q.postura)}</p>
+          </div>
+        </header>
+        <div class="sq-card__cols">
+          <section><h5>Natureza</h5><ul>${liNat}</ul></section>
+          <section><h5>Exemplos</h5><ul>${liEx}</ul></section>
+          <section><h5>Papel da liderança</h5><ul>${liPap}</ul></section>
+        </div>
+        ${nota}
+      </article>`;
+  }).join('');
+  $('#sq-conteudo').innerHTML = html;
+}
+
+function abrirSobreQuadrantes() {
+  renderSobreQuadrantes();
+  const dlg = $('#dlg-sobre-quadrantes');
+  if (dlg && !dlg.open) dlg.showModal();
+}
+
+function bindSobreQuadrantes() {
+  document.addEventListener('click', e => {
+    if (e.target.closest('#btn-sobre-quadrantes')) {
+      e.preventDefault();
+      abrirSobreQuadrantes();
+      return;
+    }
+    if (e.target.closest('#sq-close, #btn-sq-fechar')) {
+      const dlg = $('#dlg-sobre-quadrantes');
+      if (dlg && dlg.open) dlg.close();
+      return;
+    }
+    if (e.target.closest('#btn-sugerir-quadrantes')) {
+      e.preventDefault();
+      aplicarSugestoesQuadranteEmLote();
       return;
     }
   });
