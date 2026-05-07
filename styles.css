@@ -364,6 +364,11 @@ select {
 .badge--bloqueada { color: var(--red); background: var(--red-bg); border-color: #f3c2bd; }
 .badge--atrasada { color: #fff; background: var(--red); border-color: var(--red); }
 .badge--atrasada::before { background: #fff; opacity: 1; }
+/* Status "Em maturação" — tom neutro, sem alarme */
+.badge--maturacao { color: #4a5560; background: #eef1f5; border-color: #d4dae3; }
+.badge--maturacao::before { background: #6b7886; opacity: 0.8; }
+.badge--maturacao-devida { color: #2e3a48; background: #dde3eb; border-color: #b9c2cf; font-weight: 600; }
+.badge--maturacao-devida::before { background: #3a4756; opacity: 0.9; }
 .badge--q1 { color: var(--q1); background: var(--q1-bg); border-color: rgba(192,57,43,.3); }
 .badge--q2 { color: var(--q2); background: var(--q2-bg); border-color: rgba(10,61,122,.25); }
 .badge--q3 { color: var(--q3); background: var(--q3-bg); border-color: rgba(230,126,34,.3); }
@@ -523,6 +528,7 @@ select {
 .druk__chip strong { font-size: 1rem; font-weight: 700; }
 .druk__chip--alerta { background: #c0392b; color: #fff; border-color: #a8311f; }
 .druk__chip--alerta-leve { background: #fff; color: #8a5a14; border-color: #e2c690; }
+.druk__chip--neutro { background: #eef1f5; color: #3a4756; border-color: #c6cfdb; }
 .druk__close { width: 28px; height: 28px; border-radius: 50%; border: 0; background: transparent; color: var(--text-3); font-size: 1.3rem; line-height: 1; cursor: pointer; flex: none; }
 .druk__close:hover { background: rgba(0,0,0,0.05); color: var(--text); }
 .druk__sub { font-size: 0.85rem; color: var(--text-2); margin: 4px 0 0; line-height: 1.4; }

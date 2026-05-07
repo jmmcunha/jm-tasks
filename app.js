@@ -140,9 +140,19 @@ const QUADRANTES = {
 const STATUS_ROTULOS = {
   'a-fazer': 'A fazer',
   'em-andamento': 'Em andamento',
+  'em-maturacao': 'Em maturação',
   'concluida': 'Concluída',
   'bloqueada': 'Bloqueada'
 };
+
+// Rótulo de status para exportações: anexa a data de revisão quando aplicável
+function statusLabelExport(t) {
+  const base = STATUS_ROTULOS[t.status] || '';
+  if (t.status === 'em-maturacao' && t.revisitarEm) {
+    return `${base} (revisitar em ${t.revisitarEm})`;
+  }
+  return base;
+}
 
 const PRIORIDADE_ROTULOS = { alta: 'Alta', media: 'Média', baixa: 'Baixa' };
 
@@ -434,8 +444,8 @@ function carregarTarefas() {
 function migrarV1ParaV3(t) {
   // v1: { id, titulo, objetivoId, responsavel, prazo, prioridade ('Alta'/'Média'/'Baixa'), status ('A fazer'...), resultado, criadoEm, atualizadoEm }
   const prioMap = { 'Alta':'alta','Média':'media','Baixa':'baixa','alta':'alta','media':'media','baixa':'baixa' };
-  const stMap = { 'A fazer':'a-fazer','Em andamento':'em-andamento','Concluída':'concluida','Bloqueada':'bloqueada',
-                  'a-fazer':'a-fazer','em-andamento':'em-andamento','concluida':'concluida','bloqueada':'bloqueada' };
+  const stMap = { 'A fazer':'a-fazer','Em andamento':'em-andamento','Em maturação':'em-maturacao','Concluída':'concluida','Bloqueada':'bloqueada',
+                  'a-fazer':'a-fazer','em-andamento':'em-andamento','em-maturacao':'em-maturacao','concluida':'concluida','bloqueada':'bloqueada' };
   return {
     id: t.id || uid(),
     titulo: t.titulo || '',
@@ -447,6 +457,7 @@ function migrarV1ParaV3(t) {
     prazo: t.prazo || '',
     prioridade: prioMap[t.prioridade] || 'media',
     status: stMap[t.status] || 'a-fazer',
+    revisitarEm: t.revisitarEm || '',
     resultado: t.resultado || '',
     criadaEm: t.criadoEm || t.criadaEm || new Date().toISOString(),
     atualizadaEm: t.atualizadoEm || t.atualizadaEm || new Date().toISOString()
@@ -466,6 +477,7 @@ function normalizarTarefa(t) {
     prazo: t.prazo || '',
     prioridade: t.prioridade || 'media',
     status: t.status || 'a-fazer',
+    revisitarEm: t.revisitarEm || '',
     resultado: t.resultado || '',
     criadaEm: t.criadaEm || t.criadoEm || new Date().toISOString(),
     atualizadaEm: t.atualizadaEm || t.atualizadoEm || new Date().toISOString()
@@ -741,6 +753,16 @@ function bindForm() {
   selQ.addEventListener('change', atualizarPreviewQuad);
   atualizarPreviewQuad();
 
+  // Visibilidade do campo "Revisitar em" conforme status (só aparece para em-maturacao)
+  const selStatus = $('#f-status');
+  const wrapRev = $('#f-revisitar-wrap');
+  function atualizarVisibilidadeRevisitar() {
+    if (!wrapRev) return;
+    wrapRev.hidden = (selStatus.value !== 'em-maturacao');
+  }
+  selStatus.addEventListener('change', atualizarVisibilidadeRevisitar);
+  atualizarVisibilidadeRevisitar();
+
   // Botão "Sobre os quadrantes" no formulário (delega para o modal já existente)
   const btnSobre = $('#btn-sobre-quadrantes-form');
   if (btnSobre) btnSobre.addEventListener('click', () => abrirSobreQuadrantes());
@@ -749,6 +771,14 @@ function bindForm() {
     e.preventDefault();
     const titulo = $('#f-titulo').value.trim();
     if (!titulo) { mostrarMsg('Preencha o título da tarefa.', true); return; }
+
+    const statusVal = $('#f-status').value;
+    const revisitarVal = $('#f-revisitar-em').value;
+    if (statusVal === 'em-maturacao' && !revisitarVal) {
+      mostrarMsg('Informe a data prevista para revisão.', true);
+      $('#f-revisitar-em').focus();
+      return;
+    }
 
     const id = $('#f-id').value || uid();
     const existente = tarefas.find(t => t.id === id);
@@ -764,7 +794,8 @@ function bindForm() {
       dataInicio: $('#f-data-inicio').value,
       prazo: $('#f-prazo').value,
       prioridade: $('#f-prioridade').value,
-      status: $('#f-status').value,
+      status: statusVal,
+      revisitarEm: statusVal === 'em-maturacao' ? revisitarVal : '',
       resultado: $('#f-resultado').value.trim(),
       criadaEm: existente?.criadaEm || new Date().toISOString(),
       atualizadaEm: new Date().toISOString()
@@ -781,6 +812,7 @@ function bindForm() {
     selQ.value = 'NC';
     preencherDataInicioPadrao();
     atualizarPreviewQuad();
+    atualizarVisibilidadeRevisitar();
     renderOeDetalhe('f-objetivo', 'f-objetivo-detalhe');
     $('#btn-cancelar').hidden = true;
     $('#btn-salvar').textContent = 'Salvar tarefa';
@@ -797,6 +829,7 @@ function bindForm() {
     selQ.value = 'NC';
     preencherDataInicioPadrao();
     atualizarPreviewQuad();
+    atualizarVisibilidadeRevisitar();
     renderOeDetalhe('f-objetivo', 'f-objetivo-detalhe');
     $('#btn-cancelar').hidden = true;
     $('#btn-salvar').textContent = 'Salvar tarefa';
@@ -833,6 +866,20 @@ function abrirEdicao(id) {
   $('#ef-prazo').value = t.prazo || '';
   $('#ef-prioridade').value = t.prioridade;
   $('#ef-status').value = t.status;
+  $('#ef-revisitar-em').value = t.revisitarEm || '';
+  // Visibilidade do campo "Revisitar em" no modal de edição
+  const efSel = $('#ef-status');
+  const efWrap = $('#ef-revisitar-wrap');
+  const efAtualizarRev = () => { if (efWrap) efWrap.hidden = (efSel.value !== 'em-maturacao'); };
+  // Limpa listener antigo via clone (mesmo padrão do quadrante)
+  const efSelOld = efSel;
+  const efSelNovo = efSelOld.cloneNode(true);
+  efSelOld.replaceWith(efSelNovo);
+  efSelNovo.value = t.status;
+  efSelNovo.addEventListener('change', () => {
+    if (efWrap) efWrap.hidden = (efSelNovo.value !== 'em-maturacao');
+  });
+  if (efWrap) efWrap.hidden = (efSelNovo.value !== 'em-maturacao');
   $('#ef-resultado').value = t.resultado || '';
   const qAtual = quadranteDe(t);
   // limpa listeners prévios via clone
@@ -873,7 +920,15 @@ function bindModaisGlobais() {
     t.dataInicio = $('#ef-data-inicio').value;
     t.prazo = $('#ef-prazo').value;
     t.prioridade = $('#ef-prioridade').value;
-    t.status = $('#ef-status').value;
+    const novoStatus = $('#ef-status').value;
+    const novoRevisitar = $('#ef-revisitar-em').value;
+    if (novoStatus === 'em-maturacao' && !novoRevisitar) {
+      alert('Informe a data prevista para revisão.');
+      $('#ef-revisitar-em').focus();
+      return;
+    }
+    t.status = novoStatus;
+    t.revisitarEm = novoStatus === 'em-maturacao' ? novoRevisitar : '';
     t.resultado = $('#ef-resultado').value.trim();
     t.atualizadaEm = new Date().toISOString();
     salvarTarefas();
@@ -906,6 +961,18 @@ async function excluirTarefa(id) {
 
 function alterarStatus(id, novo) {
   const t = tarefas.find(x => x.id === id); if (!t) return;
+  if (novo === 'em-maturacao' && !t.revisitarEm) {
+    // Transição inline pelo card: pede a data via prompt nativo. Sem data, abre a edição em modal.
+    const sugerida = new Date(Date.now() + 14*24*60*60*1000).toISOString().slice(0,10);
+    const dt = prompt('Em maturação exige data de revisão (YYYY-MM-DD).\nSugestão: ' + sugerida, sugerida);
+    if (!dt || !/^\d{4}-\d{2}-\d{2}$/.test(dt)) {
+      // reverte: dispara render para o select voltar ao valor atual
+      renderTudo();
+      return;
+    }
+    t.revisitarEm = dt;
+  }
+  if (novo !== 'em-maturacao') t.revisitarEm = '';
   t.status = novo;
   t.atualizadaEm = new Date().toISOString();
   salvarTarefas();
@@ -999,7 +1066,16 @@ function tarefasPreventivas() {
   const hoje = hojeISO();
   const lembretes = [];
   const cobrancas = [];
+  const revisoes = []; // tarefas em-maturacao com revisitarEm <= hoje
   for (const t of tarefas) {
+    // Tarefas em maturação não entram em lembretes/cobranças do prazo regular
+    if (t.status === 'em-maturacao') {
+      if (t.revisitarEm && t.revisitarEm <= hoje) {
+        const diasRev = diasEntre(hoje, t.revisitarEm);
+        revisoes.push({ t, dias: diasRev });
+      }
+      continue;
+    }
     if (!t.prazo || t.status === 'concluida' || t.status === 'cancelada') continue;
     const dias = diasEntre(hoje, t.prazo); // positivo: ainda falta; negativo: passou
     if (dias === null) continue;
@@ -1009,17 +1085,18 @@ function tarefasPreventivas() {
       lembretes.push({ t, dias });
     }
   }
-  // ordena: cobrancas primeiro pelo mais atrasado; lembretes pelo mais proximo
+  // ordena: cobrancas primeiro pelo mais atrasado; lembretes pelo mais proximo; revisoes pelo há mais tempo
   cobrancas.sort((a,b) => a.dias - b.dias);
   lembretes.sort((a,b) => a.dias - b.dias);
-  return { lembretes, cobrancas };
+  revisoes.sort((a,b) => a.dias - b.dias);
+  return { lembretes, cobrancas, revisoes };
 }
 
 function renderBannerDrucker() {
   const banner = $('#banner-drucker');
   if (!banner) return;
-  const { lembretes, cobrancas } = tarefasPreventivas();
-  if (!lembretes.length && !cobrancas.length) {
+  const { lembretes, cobrancas, revisoes } = tarefasPreventivas();
+  if (!lembretes.length && !cobrancas.length && !revisoes.length) {
     banner.hidden = true;
     banner.innerHTML = '';
     return;
@@ -1030,6 +1107,9 @@ function renderBannerDrucker() {
   }
   if (lembretes.length) {
     partes.push(`<button class="druk__chip druk__chip--alerta-leve" data-druk="lembrete" type="button" title="Ver tarefas com prazo nos próximos 3 dias"><strong>${lembretes.length}</strong> ${lembretes.length===1?'cabe lembrete':'cabem lembretes'}</button>`);
+  }
+  if (revisoes.length) {
+    partes.push(`<button class="druk__chip druk__chip--neutro" data-druk="revisao" type="button" title="Tarefas em maturação cuja data prevista de revisão já passou"><strong>${revisoes.length}</strong> ${revisoes.length===1?'pede revisão':'pedem revisão'}</button>`);
   }
   banner.innerHTML = `
     <div class="druk__corpo">
@@ -1042,18 +1122,22 @@ function renderBannerDrucker() {
 }
 
 // abre lista de tarefas elegiveis num popover/modal simples
-function abrirDruckerLista(tipo /* 'lembrete' | 'cobranca' */) {
-  const { lembretes, cobrancas } = tarefasPreventivas();
-  const itens = (tipo === 'cobranca') ? cobrancas : lembretes;
+function abrirDruckerLista(tipo /* 'lembrete' | 'cobranca' | 'revisao' */) {
+  const { lembretes, cobrancas, revisoes } = tarefasPreventivas();
+  const itens = (tipo === 'cobranca') ? cobrancas : (tipo === 'revisao') ? revisoes : lembretes;
   if (!itens.length) return;
   const dlg = $('#dlg-druk');
   if (!dlg) return;
   $('#druk-titulo').textContent = (tipo === 'cobranca')
     ? 'Tarefas que pedem cobrança'
-    : 'Tarefas que pedem lembrete';
+    : (tipo === 'revisao')
+      ? 'Revisão devida'
+      : 'Tarefas que pedem lembrete';
   $('#druk-subtitulo').textContent = (tipo === 'cobranca')
     ? 'Prazo já venceu. Um clique abre o e-mail de cobrança.'
-    : 'Prazo nos próximos 3 dias. Um clique abre o e-mail de lembrete.';
+    : (tipo === 'revisao')
+      ? 'As tarefas abaixo estavam em maturação até a data prevista para revisão. Vale reabrir o exame.'
+      : 'Prazo nos próximos 3 dias. Um clique abre o e-mail de lembrete.';
   const lista = $('#druk-lista');
   lista.innerHTML = '';
   for (const { t, dias } of itens) {
@@ -1061,16 +1145,21 @@ function abrirDruckerLista(tipo /* 'lembrete' | 'cobranca' */) {
     li.className = 'druk-item';
     const meta = (tipo === 'cobranca')
       ? `<span class="druk-item__meta druk-item__meta--alerta">Vencida há ${Math.abs(dias)} ${Math.abs(dias)===1?'dia':'dias'}</span>`
-      : `<span class="druk-item__meta">${dias===0?'Vence hoje':(dias===1?'Vence amanhã':'Vence em '+dias+' dias')}</span>`;
+      : (tipo === 'revisao')
+        ? `<span class="druk-item__meta">Revisão prevista para ${fmtData(t.revisitarEm)}${dias < 0 ? ' · há ' + Math.abs(dias) + ' ' + (Math.abs(dias)===1?'dia':'dias') : ''}</span>`
+        : `<span class="druk-item__meta">${dias===0?'Vence hoje':(dias===1?'Vence amanhã':'Vence em '+dias+' dias')}</span>`;
     const oe = t.oeId ? OBJETIVOS.find(o=>o.id===t.oeId) : null;
     const oeTag = oe ? `<span class="druk-item__oe">OE ${oe.id}</span>` : '';
+    const acoesHtml = (tipo === 'revisao')
+      ? `<button class="btn btn--sm" data-druk-act="editar" data-tid="${t.id}" type="button" title="Reabrir o exame da tarefa">Reabrir exame</button>`
+      : `<button class="btn btn--sm" data-druk-act="email" data-tid="${t.id}" type="button">E-mail</button>`;
     li.innerHTML = `
       <div class="druk-item__corpo">
         <div class="druk-item__titulo">${escHtml(t.titulo)}</div>
         <div class="druk-item__rod">${oeTag}<span class="druk-item__resp">${escHtml(t.responsavel || '—')}</span>${meta}</div>
       </div>
       <div class="druk-item__acoes">
-        <button class="btn btn--sm" data-druk-act="email" data-tid="${t.id}" type="button">E-mail</button>
+        ${acoesHtml}
       </div>
     `;
     lista.appendChild(li);
@@ -1611,6 +1700,17 @@ function renderTarefa(t) {
   const obj = OBJETIVOS.find(o => o.id === t.oeId);
   const prClass = t.prioridade === 'alta' ? 'badge--alta' : t.prioridade === 'media' ? 'badge--media' : 'badge--baixa';
   const stClass = 'badge--' + (t.status === 'em-andamento' ? 'andamento' : t.status === 'concluida' ? 'concluida' : t.status === 'bloqueada' ? 'bloqueada' : '');
+  // Chip de maturação: neutro até a data; escurece quando passa
+  let chipMaturacao = '';
+  if (t.status === 'em-maturacao' && t.revisitarEm) {
+    const venceu = t.revisitarEm <= hojeISO();
+    const dataFmt = fmtData(t.revisitarEm).slice(0,5); // DD/MM
+    chipMaturacao = venceu
+      ? `<span class="badge badge--maturacao-devida" title="Tarefa em maturação cuja data de revisão já passou">⧖ Revisão devida desde ${dataFmt}</span>`
+      : `<span class="badge badge--maturacao" title="Tarefa em maturação, com revisão prevista">⧖ Em maturação · ${dataFmt}</span>`;
+  } else if (t.status === 'em-maturacao') {
+    chipMaturacao = `<span class="badge badge--maturacao">⧖ Em maturação</span>`;
+  }
   return `
     <div class="tarefa ${done ? 'done' : ''}" data-id="${t.id}">
       <div class="tarefa__main">
@@ -1623,6 +1723,7 @@ function renderTarefa(t) {
           ${obj ? `<span class="badge">OE ${obj.id}</span>` : ''}
           <span class="badge ${prClass}">${PRIORIDADE_ROTULOS[t.prioridade]}</span>
           ${atrasada ? '<span class="badge badge--atrasada">Atrasada</span>' : ''}
+          ${chipMaturacao}
           ${t.prazo ? `<span>📅 <strong>${fmtData(t.prazo)}</strong></span>` : ''}
           ${t.responsavel ? `<span>👤 <strong>${escapeHTML(t.responsavel)}</strong></span>` : ''}
         </div>
@@ -1780,7 +1881,7 @@ function tarefasParaLinhas() {
       'Responsável': t.responsavel || '',
       'Prazo': t.prazo ? fmtData(t.prazo) : '',
       'Prioridade': PRIORIDADE_ROTULOS[t.prioridade] || '',
-      'Status': STATUS_ROTULOS[t.status] || '',
+      'Status': statusLabelExport(t),
       'Atrasada': isAtrasada(t) ? 'Sim' : 'Não',
       'Resultado esperado': t.resultado || '',
       'Criada em': (() => {
@@ -1887,7 +1988,7 @@ function exportarPDF() {
         t.responsavel || '—',
         t.prazo ? fmtData(t.prazo) + (isAtrasada(t) ? ' (atr.)' : '') : '—',
         PRIORIDADE_ROTULOS[t.prioridade] || '—',
-        STATUS_ROTULOS[t.status] || '—'
+        statusLabelExport(t) || '—'
       ]),
       styles: { fontSize: 8.5, cellPadding: 2.5, valign: 'top', overflow: 'linebreak' },
       headStyles: { fillColor: hexToRgb(info.cor), textColor: 255, fontSize: 8.5, fontStyle: 'bold' },
@@ -3764,6 +3865,8 @@ function bindDrucker() {
     const tplPre = tipoBanner === 'cobranca' ? 'cobranca' : (tipoBanner === 'lembrete' ? 'lembrete' : 'auto');
     if (act === 'email') {
       abrirIAEmailDireto(tid);
+    } else if (act === 'editar') {
+      abrirEdicao(tid);
     }
   });
   // Fechar modal Drucker
