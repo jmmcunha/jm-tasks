@@ -236,6 +236,17 @@ const CONFIG_PADRAO = {
   plannerBuckets: { ...BUCKETS_PADRAO },
   meuNome: 'João Marcelo Marques Cunha',
   meuCargo: 'Diretor-Executivo',
+  // Lista de variações de identificação pessoal usadas para distinguir
+  // compromissos próprios de compromissos de terceiros nos painel de reuniões.
+  // Comparada por trim().toLowerCase(); pre-populada com variações comuns.
+  meusIdentificadores: [
+    'João Marcelo Marques Cunha',
+    'João Marcelo',
+    'JM',
+    'DE',
+    'Diretor-Executivo',
+    'Diretor Executivo'
+  ],
 };
 let config = JSON.parse(JSON.stringify(CONFIG_PADRAO));
 let agendaSelecionada = null; // ISO 'YYYY-MM-DD' ou null
@@ -574,6 +585,24 @@ function carregarConfig() {
       ...(lido.plannerBuckets || {})
     }
   };
+  // Garante que meusIdentificadores seja sempre array de strings não-vazias
+  if (!Array.isArray(config.meusIdentificadores) || !config.meusIdentificadores.length) {
+    config.meusIdentificadores = [...CONFIG_PADRAO.meusIdentificadores];
+  } else {
+    config.meusIdentificadores = config.meusIdentificadores
+      .map(s => (s || '').toString().trim())
+      .filter(Boolean);
+    if (!config.meusIdentificadores.length) {
+      config.meusIdentificadores = [...CONFIG_PADRAO.meusIdentificadores];
+    }
+  }
+}
+
+// Helper: retorna Set normalizado (lowercased, trimmed) dos identificadores próprios.
+// Usado pela Leva 24 (painel de compromissos de terceiros) para classificação.
+function meusIdentificadoresNormalizados() {
+  const arr = Array.isArray(config.meusIdentificadores) ? config.meusIdentificadores : [];
+  return new Set(arr.map(s => (s || '').toString().trim().toLowerCase()).filter(Boolean));
 }
 function salvarConfig() { _write(KEY_CONFIG_V1, config); }
 function carregarReunioes() { reunioes = _read(KEY_REUNIOES_V1, []); }
@@ -601,6 +630,29 @@ function init() {
   // firebase-sync vai chamar initApp() no momento certo
 }
 
+// Migração silenciosa (idempotente): tarefas sem responsável recebem o
+// nome próprio configurado. Roda uma vez por sessão, depois de carregar
+// config e tarefas. Não exibe mensagem ao usuário; apenas console.
+let _migracaoResponsavelRodou = false;
+function migrarResponsavelVazio() {
+  if (_migracaoResponsavelRodou) return;
+  _migracaoResponsavelRodou = true;
+  const nomeProprio = (config && config.meuNome ? config.meuNome.trim() : '');
+  if (!nomeProprio) return;
+  let afetadas = 0;
+  for (const t of tarefas) {
+    if (!t.responsavel || !t.responsavel.toString().trim()) {
+      t.responsavel = nomeProprio;
+      t.atualizadaEm = new Date().toISOString();
+      afetadas++;
+    }
+  }
+  if (afetadas > 0) {
+    salvarTarefas();
+    console.log(`[migrar-responsavel] ${afetadas} tarefa(s) sem responsável atribuída(s) a "${nomeProprio}".`);
+  }
+}
+
 function initApp() {
   carregarTarefas();
   carregarTombstones();
@@ -610,6 +662,8 @@ function initApp() {
   carregarRevisoes();
   carregarReunioes();
   carregarConfig();
+  // Migração silenciosa de responsável: depende de config carregada.
+  migrarResponsavelVazio();
   popularSelectsOE();
   popularResponsaveis();
   bindTabs();
@@ -622,6 +676,7 @@ function initApp() {
   bindEmailLote();
   bindPainelExportar();
   bindPainelRevisaoIA();
+  bindConfigIdentidade();
   bindConfigIA();
   bindBotoesIA();
   bindSobreQuadrantes();
@@ -772,6 +827,13 @@ function bindForm() {
     const titulo = $('#f-titulo').value.trim();
     if (!titulo) { mostrarMsg('Preencha o título da tarefa.', true); return; }
 
+    const responsavelVal = $('#f-responsavel').value.trim();
+    if (!responsavelVal) {
+      mostrarMsg('Informe o responsável pela tarefa.', true);
+      $('#f-responsavel').focus();
+      return;
+    }
+
     const statusVal = $('#f-status').value;
     const revisitarVal = $('#f-revisitar-em').value;
     if (statusVal === 'em-maturacao' && !revisitarVal) {
@@ -790,7 +852,7 @@ function bindForm() {
       oeId: $('#f-objetivo').value ? Number($('#f-objetivo').value) : null,
       importante: par.importante,
       urgente: par.urgente,
-      responsavel: $('#f-responsavel').value.trim(),
+      responsavel: responsavelVal,
       dataInicio: $('#f-data-inicio').value,
       prazo: $('#f-prazo').value,
       prioridade: $('#f-prioridade').value,
@@ -916,7 +978,13 @@ function bindModaisGlobais() {
     t.oeId = $('#ef-objetivo').value ? Number($('#ef-objetivo').value) : null;
     t.importante = par.importante;
     t.urgente = par.urgente;
-    t.responsavel = $('#ef-responsavel').value.trim();
+    const efResp = $('#ef-responsavel').value.trim();
+    if (!efResp) {
+      alert('Informe o responsável pela tarefa.');
+      $('#ef-responsavel').focus();
+      return;
+    }
+    t.responsavel = efResp;
     t.dataInicio = $('#ef-data-inicio').value;
     t.prazo = $('#ef-prazo').value;
     t.prioridade = $('#ef-prioridade').value;
@@ -5444,6 +5512,45 @@ function atualizarStatusSeguranca() {
    =================================================================== */
 
 // ----- Configuração (aba Config → IA) -----
+function bindConfigIdentidade() {
+  const inpNome = $('#cf-meunome');
+  const inpCargo = $('#cf-meucargo');
+  const inpIds = $('#cf-meusid');
+  const btn = $('#btn-cf-identidade-salvar');
+  const msg = $('#cf-identidade-msg');
+  if (!inpNome || !btn) return;
+
+  function carregarValores() {
+    inpNome.value = config.meuNome || '';
+    inpCargo.value = config.meuCargo || '';
+    const ids = Array.isArray(config.meusIdentificadores) ? config.meusIdentificadores : [];
+    inpIds.value = ids.join(', ');
+  }
+  carregarValores();
+
+  btn.addEventListener('click', () => {
+    const nome = inpNome.value.trim();
+    const cargo = inpCargo.value.trim();
+    if (!nome) {
+      msg.textContent = 'Informe o nome próprio.';
+      msg.classList.add('error');
+      inpNome.focus();
+      return;
+    }
+    const ids = inpIds.value
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+    config.meuNome = nome;
+    config.meuCargo = cargo;
+    config.meusIdentificadores = ids.length ? ids : [nome];
+    salvarConfig();
+    msg.classList.remove('error');
+    msg.textContent = 'Identidade salva.';
+    setTimeout(() => { msg.textContent = ''; }, 2500);
+  });
+}
+
 function bindConfigIA() {
   const inp = $('#f-ia-chave');
   const sel = $('#f-ia-modelo');

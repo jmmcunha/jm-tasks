@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260506r" />
+  <link rel="stylesheet" href="styles.css?v=20260506s" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a3d7a'/%3E%3Cpath d='M9 11h14M9 16h14M9 21h9' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='25.5' cy='21' r='2' fill='%23f08000'/%3E%3C/svg%3E" />
 
   <!-- Bibliotecas: jsPDF, html2canvas, SheetJS, Chart.js -->
@@ -577,6 +577,23 @@
         </ul>
       </div>
 
+      <div class="card config-section" id="sec-identidade">
+        <h2>Identidade</h2>
+        <p class="muted">Como você aparece no app: o <strong>nome próprio</strong> assina e-mails gerados pela IA; os <strong>identificadores</strong> dizem ao app o que é compromisso seu (e não de terceiro) nos painel de reuniões — use variações comuns que aparecem nos registros (nome, sigla do cargo, abreviações), separadas por vírgula.</p>
+        <div class="form-row" style="flex-direction:column;gap:0.5rem;">
+          <label for="cf-meunome"><strong>Nome próprio</strong></label>
+          <input type="text" id="cf-meunome" maxlength="120" autocomplete="name" />
+          <label for="cf-meucargo"><strong>Cargo</strong></label>
+          <input type="text" id="cf-meucargo" maxlength="120" autocomplete="organization-title" />
+          <label for="cf-meusid"><strong>Meus identificadores</strong> <span class="muted">(separe por vírgula)</span></label>
+          <input type="text" id="cf-meusid" placeholder="Ex.: João Marcelo, JM, DE, Diretor-Executivo" autocomplete="off" />
+        </div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.6rem;">
+          <button class="btn btn--primary btn--sm" id="btn-cf-identidade-salvar" type="button">Salvar identidade</button>
+          <span class="msg" role="status" aria-live="polite" id="cf-identidade-msg"></span>
+        </div>
+      </div>
+
       <div class="card config-section" id="sec-config">
         <h2>Segurança e privacidade</h2>
         <p class="muted" id="sec-status">Carregando...</p>
@@ -606,7 +623,7 @@
       <div class="card config-section">
         <h2>Sobre o app</h2>
         <ul class="muted-list">
-          <li><strong>Build:</strong> Leva 22 (cache <code>v=20260506r</code>)</li>
+          <li><strong>Build:</strong> Leva 22 (cache <code>v=20260506s</code>)</li>
           <li><strong>Persistência:</strong> Firebase Firestore (Google Cloud) com criptografia AES-GCM 256 aplicada localmente antes do upload — o servidor só vê <em>blobs</em> cifrados.</li>
           <li><strong>Plano Diretor 2023–2026:</strong> 8 Objetivos Estratégicos do Cebraspe — opcionais por tarefa.</li>
           <li><strong>Quadrantes (taxonomia da Camila):</strong> Q1 — Crise e Contenção · Q2 — Estratégia Direcional · Q3 — Deliberação Estratégica Operacional · Q4 — Sustentação Operacional.</li>
@@ -1045,11 +1062,11 @@
   </dialog>
 
   <!-- Firebase: config + sync compartilhado (equipe) -->
-  <script src="firebase-config.js?v=20260506r"></script>
-  <script src="firebase-sync.js?v=20260506r"></script>
-  <script src="ia-gemini.js?v=20260506r"></script>
-  <script src="app.js?v=20260506r"></script>
+  <script src="firebase-config.js?v=20260506s"></script>
+  <script src="firebase-sync.js?v=20260506s"></script>
+  <script src="ia-gemini.js?v=20260506s"></script>
+  <script src="app.js?v=20260506s"></script>
   <!-- Captura rápida em linguagem natural + voz -->
-  <script src="quick-capture.js?v=20260506r"></script>
+  <script src="quick-capture.js?v=20260506s"></script>
 </body>
 </html>
