@@ -1165,11 +1165,35 @@ function tarefasPreventivas() {
   return { lembretes, cobrancas, revisoes };
 }
 
+// LEVA 26 — deriva, dos compromissos de terceiros, as solicitações que cabem agora.
+// Vencidas: prazo do encaminhamento já passou.
+// Iminentes: prazo nos próximos 2 dias.
+// Em ambos casos, apenas itens cuja última solicitação não está em aberto (evita duplicidade).
+function solicitacoesPreventivas() {
+  if (typeof compromissosDeTerceiros !== 'function') return { vencidas: [], iminentes: [] };
+  const itens = compromissosDeTerceiros();
+  const vencidas = [];
+  const iminentes = [];
+  for (const c of itens) {
+    const sit = situacaoCompromisso(c.prazo);
+    if (sit !== 'vencido' && sit !== 'iminente') continue;
+    const r = reunioes.find(x => x.id === c.reuniaoId);
+    const enc = r && r.encaminhamentos && r.encaminhamentos[c.taskId] ? r.encaminhamentos[c.taskId] : null;
+    if (solicitacoesAbertas(enc) > 0) continue; // já tem solicitação aberta, nao reabre chip
+    if (sit === 'vencido') vencidas.push(c);
+    else iminentes.push(c);
+  }
+  vencidas.sort((a, b) => (a.prazo || '').localeCompare(b.prazo || ''));
+  iminentes.sort((a, b) => (a.prazo || '').localeCompare(b.prazo || ''));
+  return { vencidas, iminentes };
+}
+
 function renderBannerDrucker() {
   const banner = $('#banner-drucker');
   if (!banner) return;
   const { lembretes, cobrancas, revisoes } = tarefasPreventivas();
-  if (!lembretes.length && !cobrancas.length && !revisoes.length) {
+  const { vencidas: solVenc, iminentes: solImi } = (typeof solicitacoesPreventivas === 'function') ? solicitacoesPreventivas() : { vencidas: [], iminentes: [] };
+  if (!lembretes.length && !cobrancas.length && !revisoes.length && !solVenc.length && !solImi.length) {
     banner.hidden = true;
     banner.innerHTML = '';
     return;
@@ -1178,8 +1202,14 @@ function renderBannerDrucker() {
   if (cobrancas.length) {
     partes.push(`<button class="druk__chip druk__chip--alerta" data-druk="cobranca" type="button" title="Ver tarefas com prazo vencido"><strong>${cobrancas.length}</strong> ${cobrancas.length===1?'aguarda cobrança':'aguardam cobrança'}</button>`);
   }
+  if (solVenc.length) {
+    partes.push(`<button class="druk__chip druk__chip--alerta" data-druk="sol-vencidas" type="button" title="Encaminhamentos a terceiros com prazo vencido sem solicitação em aberto"><strong>${solVenc.length}</strong> ${solVenc.length===1?'solicitação vencida':'solicitações vencidas'}</button>`);
+  }
   if (lembretes.length) {
     partes.push(`<button class="druk__chip druk__chip--alerta-leve" data-druk="lembrete" type="button" title="Ver tarefas com prazo nos próximos 3 dias"><strong>${lembretes.length}</strong> ${lembretes.length===1?'cabe lembrete':'cabem lembretes'}</button>`);
+  }
+  if (solImi.length) {
+    partes.push(`<button class="druk__chip druk__chip--alerta-leve" data-druk="sol-iminentes" type="button" title="Encaminhamentos a terceiros com prazo nos próximos 2 dias"><strong>${solImi.length}</strong> ${solImi.length===1?'solicitação iminente':'solicitações iminentes'}</button>`);
   }
   if (revisoes.length) {
     partes.push(`<button class="druk__chip druk__chip--neutro" data-druk="revisao" type="button" title="Tarefas em maturação cuja data prevista de revisão já passou"><strong>${revisoes.length}</strong> ${revisoes.length===1?'pede revisão':'pedem revisão'}</button>`);
@@ -1195,7 +1225,11 @@ function renderBannerDrucker() {
 }
 
 // abre lista de tarefas elegiveis num popover/modal simples
-function abrirDruckerLista(tipo /* 'lembrete' | 'cobranca' | 'revisao' */) {
+function abrirDruckerLista(tipo /* 'lembrete' | 'cobranca' | 'revisao' | 'sol-vencidas' | 'sol-iminentes' */) {
+  // LEVA 26 — caminho dedicado para solicitações de terceiros
+  if (tipo === 'sol-vencidas' || tipo === 'sol-iminentes') {
+    return abrirDruckerListaSolicitacoes(tipo);
+  }
   const { lembretes, cobrancas, revisoes } = tarefasPreventivas();
   const itens = (tipo === 'cobranca') ? cobrancas : (tipo === 'revisao') ? revisoes : lembretes;
   if (!itens.length) return;
@@ -1233,6 +1267,43 @@ function abrirDruckerLista(tipo /* 'lembrete' | 'cobranca' | 'revisao' */) {
       </div>
       <div class="druk-item__acoes">
         ${acoesHtml}
+      </div>
+    `;
+    lista.appendChild(li);
+  }
+  dlg.dataset.druktipo = tipo;
+  dlg.showModal();
+}
+
+// LEVA 26 — lista de solicitações de terceiros (vencidas / iminentes)
+function abrirDruckerListaSolicitacoes(tipo /* 'sol-vencidas' | 'sol-iminentes' */) {
+  const { vencidas, iminentes } = solicitacoesPreventivas();
+  const itens = (tipo === 'sol-vencidas') ? vencidas : iminentes;
+  if (!itens.length) return;
+  const dlg = $('#dlg-druk');
+  if (!dlg) return;
+  $('#druk-titulo').textContent = (tipo === 'sol-vencidas')
+    ? 'Solicitações vencidas'
+    : 'Solicitações iminentes';
+  $('#druk-subtitulo').textContent = (tipo === 'sol-vencidas')
+    ? 'Encaminhamentos a terceiros com prazo vencido. Um clique abre o redator de IA.'
+    : 'Encaminhamentos a terceiros com prazo nos próximos 2 dias.';
+  const lista = $('#druk-lista');
+  lista.innerHTML = '';
+  for (const c of itens) {
+    const li = document.createElement('div');
+    li.className = 'druk-item';
+    const dias = c.prazo ? diasEntre(hojeISO(), c.prazo) : null;
+    const meta = (tipo === 'sol-vencidas')
+      ? `<span class="druk-item__meta druk-item__meta--alerta">Vencida há ${Math.abs(dias)} ${Math.abs(dias)===1?'dia':'dias'}</span>`
+      : `<span class="druk-item__meta">${dias===0?'Vence hoje':(dias===1?'Vence amanhã':'Vence em '+dias+' dias')}</span>`;
+    li.innerHTML = `
+      <div class="druk-item__corpo">
+        <div class="druk-item__titulo">${escHtml(c.tarefaTitulo)}</div>
+        <div class="druk-item__rod"><span class="druk-item__resp">${escHtml(c.responsavel)}</span>${meta}</div>
+      </div>
+      <div class="druk-item__acoes">
+        <button class="btn btn--sm" data-druk-act="solicitar" data-tid="${escHtml(c.taskId)}" data-rid="${escHtml(c.reuniaoId)}" type="button">Solicitar</button>
       </div>
     `;
     lista.appendChild(li);
@@ -3940,6 +4011,9 @@ function bindDrucker() {
       abrirIAEmailDireto(tid);
     } else if (act === 'editar') {
       abrirEdicao(tid);
+    } else if (act === 'solicitar') {
+      const rid = btn.dataset.rid;
+      if (rid && tid) abrirSolicitacaoIA(rid, tid);
     }
   });
   // Fechar modal Drucker
@@ -4921,12 +4995,34 @@ function renderPainelCompromissos() {
       const proxBlock = c.proximoPasso
         ? `<div class="compr-card__prox"><span class="compr-card__lbl">Próximo passo</span><div>${escHtml(c.proximoPasso)}</div></div>`
         : '<div class="compr-card__prox compr-card__prox--vazio muted">Próximo passo não foi registrado.</div>';
+      // Bloco de ações Leva 26
+      const enc = (reunioes.find(x => x.id === c.reuniaoId) || {}).encaminhamentos || {};
+      const encItem = enc[c.taskId] || {};
+      const ult = ultimaSolicitacao(encItem);
+      const abertas = solicitacoesAbertas(encItem);
+      const verbo = _verboSolicitar(sit);
+      const histLabel = ult
+        ? (abertas > 0
+            ? `Aberta desde ${escHtml(fmtData(ult.em.slice(0, 10)))}`
+            : `Última concluída em ${escHtml(fmtData((ult.concluidoEm || ult.em).slice(0, 10)))}`)
+        : '';
+      const histBlock = ult
+        ? `<div class="compr-card__hist ${abertas > 0 ? 'compr-card__hist--aberta' : 'compr-card__hist--concluida'}">${histLabel}</div>`
+        : '';
+      const btnConcluir = abertas > 0
+        ? `<button class="btn btn--ghost btn--sm compr-card__concluir" data-compr-concluir="${escHtml(c.taskId)}" data-compr-reun="${escHtml(c.reuniaoId)}" type="button" title="Marcar a solicitação aberta como concluída">Marcar concluída</button>`
+        : '';
       return `<article class="compr-card compr-card--${sit}" data-task-id="${escHtml(c.taskId)}" data-reun-id="${escHtml(c.reuniaoId)}">
         <header class="compr-card__hdr">
           <div class="compr-card__resp">${escHtml(c.responsavel)}</div>
           <div class="compr-card__prazo">${prazoLabel}</div>
         </header>
         ${proxBlock}
+        ${histBlock}
+        <div class="compr-card__acoes">
+          <button class="btn btn--primary btn--sm compr-card__solicitar" data-compr-solicitar="${escHtml(c.taskId)}" data-compr-reun="${escHtml(c.reuniaoId)}" type="button" title="Abrir o redator de IA com pedido pronto para envio">${escHtml(verbo)}</button>
+          ${btnConcluir}
+        </div>
         <div class="compr-card__meta">
           <button class="btn btn--ghost btn--sm compr-card__tarefa" data-compr-tarefa="${escHtml(c.taskId)}" title="Ver tarefa-pai">${escHtml(c.tarefaTitulo)}</button>
           <span class="compr-card__reu">de <button class="btn btn--ghost btn--sm compr-card__reu-btn" data-compr-reuniao="${escHtml(c.reuniaoId)}" title="Abrir reunião de origem">${escHtml(c.reuniaoTitulo)}</button> &middot; ${escHtml(reuDataLabel)}</span>
@@ -4956,6 +5052,155 @@ function renderPainelCompromissos() {
       if (typeof abrirModalReuniaoEditar === 'function') abrirModalReuniaoEditar(rid);
     });
   });
+  // Bind Leva 26: botão Solicitar abre modal IA e registra solicitação
+  cont.querySelectorAll('[data-compr-solicitar]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const rid = btn.dataset.comprReun;
+      const tid = btn.dataset.comprSolicitar;
+      abrirSolicitacaoIA(rid, tid);
+    });
+  });
+  // Bind Leva 26: botão Marcar concluída arquiva a última solicitação em aberto
+  cont.querySelectorAll('[data-compr-concluir]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const rid = btn.dataset.comprReun;
+      const tid = btn.dataset.comprConcluir;
+      const ok = concluirUltimaSolicitacao(rid, tid);
+      if (ok) {
+        if (typeof mostrarFlash === 'function') mostrarFlash('Solicitação marcada como concluída.');
+        renderPainelCompromissos();
+        if (typeof renderBannerDrucker === 'function') renderBannerDrucker();
+      }
+    });
+  });
+}
+
+/* ===================================================================
+   LEVA 26 — Botão Solicitar (Drucker para compromissos de terceiros)
+   Persistência em r.encaminhamentos[taskId].cobrancas (nome interno).
+   Texto visível sempre 'solicitar' / 'solicitação'.
+   =================================================================== */
+
+// Verbo do botão de acordo com a situação do compromisso.
+function _verboSolicitar(situacao) {
+  if (situacao === 'vencido' || situacao === 'iminente') return 'Solicitar retorno';
+  return 'Solicitar atualização';
+}
+
+// Frase curta para o cabeçalho do modal IA, por situação.
+function _instrucaoSolicitarPorSituacao(situacao) {
+  if (situacao === 'vencido') {
+    return 'Redija pedido cordial de retorno sobre encaminhamento cujo prazo já venceu. Peça a gentileza de uma posição sobre o próximo passo. Não use o verbo determinar nem expressões de cobrança; trate como solicitação de atualização.';
+  }
+  if (situacao === 'iminente') {
+    return 'Redija pedido cordial de retorno sobre encaminhamento cujo prazo se aproxima (dois dias ou menos). Peça a gentileza de confirmar o andamento e a expectativa de cumprimento.';
+  }
+  if (situacao === 'proximo') {
+    return 'Redija solicitação cordial de atualização sobre encaminhamento com prazo na próxima semana. Peça a gentileza de uma sinalização de progresso.';
+  }
+  if (situacao === 'futuro') {
+    return 'Redija solicitação cordial de atualização sobre encaminhamento com prazo mais distante. Sem urgência, apenas pedido de visibilidade.';
+  }
+  // sem-prazo
+  return 'Redija solicitação cordial de atualização sobre encaminhamento sem prazo definido. Peça a gentileza de propor uma data ou de informar o estado atual.';
+}
+
+// Marca uma solicitação no array enc.cobrancas (compatibilidade histórica do nome).
+function registrarSolicitacao(reuniaoId, taskId, situacao) {
+  const r = reunioes.find(x => x.id === reuniaoId);
+  if (!r) return null;
+  if (!r.encaminhamentos) r.encaminhamentos = {};
+  if (!r.encaminhamentos[taskId]) r.encaminhamentos[taskId] = {};
+  const e = r.encaminhamentos[taskId];
+  if (!Array.isArray(e.cobrancas)) e.cobrancas = [];
+  const reg = {
+    em: new Date().toISOString(),
+    situacao: situacao || 'sem-prazo',
+    verbo: _verboSolicitar(situacao),
+    autor: (config && config.meuNome) || ''
+  };
+  e.cobrancas.push(reg);
+  salvarReunioes();
+  return reg;
+}
+
+// Marca a solicitação mais recente como concluída (arquiva sem apagar).
+function concluirUltimaSolicitacao(reuniaoId, taskId) {
+  const r = reunioes.find(x => x.id === reuniaoId);
+  if (!r || !r.encaminhamentos || !r.encaminhamentos[taskId]) return false;
+  const arr = r.encaminhamentos[taskId].cobrancas;
+  if (!Array.isArray(arr) || !arr.length) return false;
+  // marca a mais recente que ainda não foi concluída
+  for (let i = arr.length - 1; i >= 0; i--) {
+    if (!arr[i].concluidoEm) { arr[i].concluidoEm = new Date().toISOString(); salvarReunioes(); return true; }
+  }
+  return false;
+}
+
+// Número de solicitações ainda em aberto (sem concluidoEm) para o item.
+function solicitacoesAbertas(enc) {
+  if (!enc || !Array.isArray(enc.cobrancas)) return 0;
+  return enc.cobrancas.filter(x => x && !x.concluidoEm).length;
+}
+
+function ultimaSolicitacao(enc) {
+  if (!enc || !Array.isArray(enc.cobrancas) || !enc.cobrancas.length) return null;
+  return enc.cobrancas[enc.cobrancas.length - 1];
+}
+
+// Abre o modal IA com contexto montado a partir do compromisso de terceiro.
+// Registra a solicitação no enc.cobrancas ao confirmar a abertura.
+function abrirSolicitacaoIA(reuniaoId, taskId) {
+  const r = reunioes.find(x => x.id === reuniaoId);
+  if (!r) { mostrarMsg('Reunião não encontrada.', true); return; }
+  const e = (r.encaminhamentos || {})[taskId] || {};
+  const t = tarefas.find(x => x.id === taskId);
+  const situacao = situacaoCompromisso((e.prazo || '').trim());
+  // monta contexto híbrido: dados da tarefa-pai (quando existir) + dados do encaminhamento
+  const baseTarefa = t ? _ctxDeTarefa(t, {}) : {};
+  const ctx = Object.assign({}, baseTarefa, {
+    titulo: t ? t.titulo : '(tarefa removida)',
+    responsavel: (e.responsavel || '').trim(),
+    prazo: e.prazo ? fmtDataExtenso(e.prazo) : '',
+    descricao: [
+      e.proximoPasso ? 'Próximo passo registrado em reunião: ' + e.proximoPasso : '',
+      e.decisao ? 'Decisão prévia da reunião: ' + e.decisao : '',
+      r.titulo ? 'Origem: ' + r.titulo + (r.data ? ' (' + fmtData(r.data) + ')' : '') : ''
+    ].filter(Boolean).join('\n'),
+    _atrasada: situacao === 'vencido',
+    _diasAteVenc: e.prazo ? diasEntre(hojeISO(), e.prazo) : null
+  });
+  const instrucao = _instrucaoSolicitarPorSituacao(situacao);
+  // Registra a solicitação (vista pura no painel se atualiza ao reabrir; aqui salvamos imediatamente)
+  registrarSolicitacao(reuniaoId, taskId, situacao);
+  abrirIAModal({
+    titulo: 'Solicitar atualização (Drucker)',
+    subtitulo: 'Encaminhamento atribuído a ' + ((e.responsavel || '').trim() || '—') + ' · origem: ' + (r.titulo || 'reunião'),
+    modo: 'gerar',
+    tipo: 'e-mail',
+    contexto: ctx,
+    onAceitar: () => {
+      if (typeof renderPainelCompromissos === 'function') renderPainelCompromissos();
+      if (typeof renderBannerDrucker === 'function') renderBannerDrucker();
+    }
+  });
+  // Injeta instrução por situação no campo do modal (assincronicamente para garantir que o DOM já está montado)
+  setTimeout(() => _passarInstrucaoIA(instrucao), 0);
+}
+
+// Wrapper que aceita instrução adicional (usado pela Leva 26).
+// Reaproveita o modal existente; se o núcleo não souber injetar, anexa no campo de instrução do modal.
+function _passarInstrucaoIA(instrucao) {
+  try {
+    const ta = $('#ria12-instrucao');
+    if (ta && instrucao) {
+      // só injeta se o usuário não tiver digitado nada manualmente nesta abertura
+      if (!ta.value || ta.dataset.injetadoPorLeva26 === '1') {
+        ta.value = instrucao;
+        ta.dataset.injetadoPorLeva26 = '1';
+      }
+    }
+  } catch(_) {}
 }
 
 // Alterna entre vista Reuniões e vista Compromissos.
