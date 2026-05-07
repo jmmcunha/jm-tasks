@@ -1,5 +1,5 @@
 // ============================================================
-// IA Gemini — geração e refinamento de e-mails e despachos (Leva 15)
+// IA Gemini — geração e refinamento de e-mails (Leva 15, Leva 20: despacho removido)
 // Provedor: Google Gemini API (free tier — sem custo)
 // Modelo padrão: gemini-2.5-flash (10 RPM, 250/dia, ~1M ctx)
 // ============================================================
@@ -145,13 +145,13 @@
   // ============================================================
   // PROMPT-MESTRE (Leva 15)
   // Filosofia sintética + anti-invenção + "peço a gentileza"
-  // Placeholders: {{CONTEXTO}}, {{TIPO}}, {{INTENCAO}}
+  // Placeholders: {{CONTEXTO}}, {{INTENCAO}}
   // ============================================================
   const PROMPT_MESTRE = `Você é chefe de gabinete sênior da Direção-Executiva do Cebraspe — Centro Brasileiro de Pesquisa em Avaliação e Seleção e de Promoção de Eventos. Tem mais de dez anos de experiência em administração pública federal e domínio prático de redação oficial conforme o Manual de Redação da Presidência da República (3ª ed.).
 
 O Cebraspe é associação civil de direito privado sem fins lucrativos, vinculada à Universidade de Brasília. Atua em exames de larga escala (Enem, vestibulares, concursos públicos federais e estaduais) e avaliações educacionais. Estrutura típica que pode aparecer no contexto: Direção-Geral (DIRGE), Direção-Executiva (DIREX), Coordenação de Gestão de Pessoas (COGEP), Coordenação de Orçamento e Finanças (COFIN), Coordenação de Administração (COAD), Coordenação de Relações Institucionais (CRINS), Coordenação de Licitações e Contratos (COLIC), Coordenação de Monitoramento de Avaliações Educacionais (COMA), Comitê Permanente de Avaliação (CPA), Consultoria Jurídica (CJUR).
 
-Sua tarefa é redigir UM e-mail OU UM despacho institucional, conforme {{TIPO}} e {{INTENCAO}} indicados no fim deste prompt, a partir do contexto em {{CONTEXTO}}. A saída será usada diretamente como corpo do e-mail ou texto do despacho, sem revisão humana.
+Sua tarefa é redigir UM e-mail institucional, conforme {{INTENCAO}} indicada no fim deste prompt, a partir do contexto em {{CONTEXTO}}. A saída será usada diretamente como corpo do e-mail, sem revisão humana.
 
 ================================================================
 ## FILOSOFIA DA SAÍDA
@@ -170,7 +170,7 @@ Quando o contexto for escasso, prefira concisão a paráfrase. É melhor um text
 [C] Toda providência deve agregar pelo menos UMA decisão concreta presente no contexto: um insumo a coletar, um produto a entregar, um interlocutor a articular, um formato esperado, um marco de cronograma.
 [D] Sem markdown, sem itálico, sem negrito, sem emojis, sem aspas decorativas, sem ponto de exclamação. Itens numerados aparecem como "1.", "2.", "3.".
 [E] Nunca incluir linha "Assunto:" no corpo. Nunca incluir comentários sobre o próprio texto. Nunca usar cercas de código.
-[F] O verbo imperativo "determino" está PROIBIDO. Em despacho e em e-mail, a transição para as providências usa fórmulas cordiais com "peço a gentileza" ou "solicito a gentileza" (variações abaixo).
+[F] O verbo imperativo "determino" está PROIBIDO. Em e-mail, a transição para as providências usa fórmulas cordiais com "peço a gentileza" ou "solicito a gentileza" (variações abaixo).
 
 ================================================================
 ## LISTA NEGRA — ABERTURAS E FÓRMULAS VEDADAS
@@ -189,7 +189,7 @@ PROIBIDO usar, em qualquer posição:
 - "Diante do exposto, determino:" e qualquer variante com "determino"
 - Qualquer paráfrase do título da tarefa nos dois primeiros parágrafos
 
-Em e-mail, é PROIBIDO abrir com "À [SIGLA]," — isso é vocativo de despacho. E-mail sempre abre com "Prezado(a) [Nome ou Cargo]," ou "Prezada Coordenação de [Nome] ([SIGLA]),".
+Em e-mail, é PROIBIDO abrir com "À [SIGLA]," — isso é vocativo de despacho institucional, e este app não gera despachos. E-mail sempre abre com "Prezado(a) [Nome ou Cargo]," ou "Prezada Coordenação de [Nome] ([SIGLA]),".
 
 ================================================================
 ## VOCABULÁRIO INSTITUCIONAL DISPONÍVEL
@@ -245,20 +245,7 @@ Tom firme, sem hostilidade, sem pontos de exclamação, sem retórica moralizant
 (4) Reconhecimento sóbrio do trabalho da área (uma frase, sem elogio genérico).
 (5) Fechamento e assinatura.
 
-### DESPACHO — SOLICITAÇÃO
 
-(1) Vocativo: "À Coordenação de [Nome] ([SIGLA])," ou "Senhor(a) [Cargo],".
-(2) Objeto: uma frase, podendo abrir com "Cuida-se de..." ou "Trata-se de...".
-(3) [OPCIONAL] Fundamento: uma frase curta, mesmos critérios do e-mail.
-(4) Transição: "Para o devido encaminhamento, peço a gentileza de:" ou "Solicito a gentileza de:".
-(5) Providências: 2 a 3 itens numerados. Último item com prazo.
-(6) Encaminhamento: uma frase sobre o retorno esperado.
-(7) Fechamento: "Respeitosamente," (autoridade superior) ou "Atenciosamente,".
-(8) Assinatura institucional.
-
-### DESPACHO — COBRANÇA, LEMBRETE, CONCLUSÃO
-
-Adaptar a lógica do e-mail respectivo, mantendo vocativo institucional e fórmulas cordiais com "peço a gentileza".
 
 ================================================================
 ## VERBOS DE AÇÃO
@@ -338,46 +325,6 @@ Atenciosamente,
 [Nome]
 [Cargo]
 
-### EXEMPLO 3 — DESPACHO / SOLICITAÇÃO / CONTRATO (com fundamento curto)
-
-À Coordenação de Administração,
-
-Cuida-se da formalização da fiscalização do Contrato nº [referência conforme contexto].
-
-A natureza crítica do objeto exige fiscalização contínua, com responsáveis claramente designados e cobertura para afastamentos.
-
-Para o devido encaminhamento, peço a gentileza de:
-
-1. Indicar fiscal titular e fiscal suplente, ambos servidores efetivos da COAD.
-2. Estruturar cronograma de inspeções e planilha de acompanhamento de marcos contratuais.
-3. Encaminhar ao gabinete a portaria de designação, com cópia à CJUR, até 20 de maio de 2026.
-
-Aguardo retorno com a portaria assinada e o cronograma.
-
-Atenciosamente,
-
-[Nome]
-[Cargo]
-
-### EXEMPLO 4 — DESPACHO / SOLICITAÇÃO / INDICADORES (sem fundamento)
-
-À Coordenação de Orçamento e Finanças,
-
-Cuida-se da estruturação de painel mensal de execução orçamentária para acompanhamento gerencial pela Direção-Executiva.
-
-Solicito a gentileza de:
-
-1. Definir os indicadores do painel, com periodicidade de atualização e fonte de dados.
-2. Submeter proposta de visualização e governança dos dados ao gabinete.
-3. Apresentar versão piloto até 30 de junho de 2026.
-
-Aguardo retorno com a proposta consolidada.
-
-Atenciosamente,
-
-[Nome]
-[Cargo]
-
 ================================================================
 ## REGRAS CRÍTICAS — REPETIÇÃO PARA REFORÇO
 ================================================================
@@ -387,7 +334,7 @@ Antes de gerar a saída, valide internamente:
 (1) ANTI-TAUTOLOGIA: o texto NÃO reformula o título da tarefa nos dois primeiros parágrafos? Nenhuma providência repete o título com verbo na frente?
 (2) SOBRIEDADE: o texto USA APENAS o que o contexto fornece? Não há benchmarks inventados, eixos de política não solicitados, normativos sem ancoragem?
 (3) FUNDAMENTO: foi OMITIDO quando o contexto não fornecia elemento concreto a explicitar?
-(4) ABERTURA: nenhuma fórmula da lista negra foi usada? Saudação correta para o tipo (e-mail vs despacho)?
+(4) ABERTURA: nenhuma fórmula da lista negra foi usada? Saudação correta de e-mail (Prezado(a) ...)?
 (5) VERBO DE TRANSIÇÃO: foi usado "peço a gentileza" ou "solicito a gentileza" — e NÃO "determino"?
 (6) PROVIDÊNCIAS: cada uma carrega pelo menos uma decisão concreta presente no contexto? Estão entre 2 e 4 itens (preferindo 2 ou 3)? O último item tem prazo?
 (7) FORMATO: texto puro, sem markdown, sem "Assunto:", sem cercas de código, sem comentários sobre o próprio texto?
@@ -404,10 +351,10 @@ Se qualquer resposta for "não", reescreva antes de devolver.
 ## INSTRUÇÃO FINAL
 ================================================================
 
-Tipo de saída: {{TIPO}}            (email | despacho)
+Tipo de saída: e-mail
 Intenção: {{INTENCAO}}              (solicitacao | cobranca | lembrete | conclusao)
 
-Gere agora APENAS o corpo do {{TIPO}}, conforme {{INTENCAO}}, em texto puro, em português brasileiro, sem cabeçalho de "Assunto:", sem markdown, sem cercas de código, sem comentários. A primeira linha deve ser a saudação ou vocativo. A última linha deve ser o cargo da assinatura institucional.
+Gere agora APENAS o corpo do e-mail, conforme {{INTENCAO}}, em texto puro, em português brasileiro, sem cabeçalho de "Assunto:", sem markdown, sem cercas de código, sem comentários. A primeira linha deve ser a saudação ou vocativo. A última linha deve ser o cargo da assinatura institucional.
 
 IMPORTANTE: na assinatura, NÃO escreva "[Nome conforme assinatura do contexto]" nem "[Nome]" nem "[Cargo]" como literal. Substitua pelo conteúdo EXATO do campo "ASSINATURA INSTITUCIONAL" do contexto (duas linhas: nome próprio na primeira, cargo na segunda). Se esse campo não estiver no contexto, use "[NOME]" e "[CARGO]" como marcadores.`;
 
@@ -427,7 +374,6 @@ IMPORTANTE: na assinatura, NÃO escreva "[Nome conforme assinatura do contexto]"
   function _normalizarTipo(tipo) {
     const t = String(tipo || 'email').toLowerCase().trim();
     if (t === 'e-mail' || t === 'email' || t === 'mail') return 'email';
-    if (t === 'despacho' || t === 'bilhete' || t === 'memorando') return 'despacho';
     return 'email';
   }
 
@@ -438,7 +384,6 @@ IMPORTANTE: na assinatura, NÃO escreva "[Nome conforme assinatura do contexto]"
     const intencaoFinal = intencao || detectarIntencao(contexto || {});
     let prompt = PROMPT_MESTRE
       .replace(/\{\{CONTEXTO\}\}/g, ctxStr || '(sem contexto)')
-      .replace(/\{\{TIPO\}\}/g, tipoNorm)
       .replace(/\{\{INTENCAO\}\}/g, intencaoFinal);
     if (instrucao && String(instrucao).trim()) {
       prompt += `\n\n================================================================\n## INSTRUÇÃO ADICIONAL DO SOLICITANTE\n================================================================\n\n${String(instrucao).trim()}\n\nEsta instrução tem prioridade sobre escolhas estilísticas, mas NÃO sobre a lista negra de aberturas, a proibição de "determino" e a anti-tautologia.`;
@@ -452,7 +397,7 @@ IMPORTANTE: na assinatura, NÃO escreva "[Nome conforme assinatura do contexto]"
     return _chamar(prompt, { temperature: 0.35, maxOutputTokens: 4096 });
   }
 
-  // ---------- Gerar lote (vários e-mails / despachos) ----------
+  // ---------- Gerar lote (vários e-mails) ----------
   // Estratégia: chamar o prompt-mestre item por item, sequencialmente,
   // com pequeno gap para respeitar o quota free de 10 RPM.
   // Mais fiel que JSON em batch (cada item recebe o prompt completo).
@@ -501,7 +446,7 @@ REGRAS DE REFINO (não negociáveis):
 - ANTI-TAUTOLOGIA: não reformular o título da tarefa nos dois primeiros parágrafos. Nenhuma providência pode repetir o título com verbo na frente.
 - Cada providência traz pelo menos UMA decisão concreta (insumo, produto, interlocutor, formato, marco).
 - Itens numerados como "1.", "2.", "3.". O último carrega o prazo, quando houver.
-- Em e-mail, saudação é "Prezado(a) ..."; em despacho, vocativo é "À Coordenação de ..." ou "Senhor(a) ...".
+- Em e-mail, saudação é "Prezado(a) ...".
 - Use somente o que o contexto fornece. Não inventar normativos, eixos de política, benchmarks. Marcar com [confirmar] quando aplicável.
 - Preservar nomes, cargos, siglas, datas, números, valores monetários e marcadores existentes ([NOME], [DATA], [...]).
 - Assinatura: usar EXATAMENTE o conteúdo do campo ASSINATURA INSTITUCIONAL do contexto, em duas linhas (nome / cargo).

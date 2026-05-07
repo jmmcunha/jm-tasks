@@ -224,12 +224,8 @@ const CONFIG_PADRAO = {
   webhookUrl: '',
   plannerEmail: 'joao.cunha@cebraspe.org.br',
   plannerBuckets: { ...BUCKETS_PADRAO },
-  // === Despacho institucional ===
   meuNome: 'João Marcelo Marques Cunha',
   meuCargo: 'Diretor-Executivo',
-  despachoCounterAno: null,         // ano em vigor do contador (e.g. 2026)
-  despachoCounter: 0,               // último número emitido neste ano
-  despachoMap: {}                   // { taskId: { numero, ano } } — fixa o nº por tarefa
 };
 let config = JSON.parse(JSON.stringify(CONFIG_PADRAO));
 let agendaSelecionada = null; // ISO 'YYYY-MM-DD' ou null
@@ -610,7 +606,6 @@ function initApp() {
   bindAgrupamento();
   bindExports();
   bindExemplosPA2026();
-  bindDespachos();
   bindEmail();
   bindEmailLote();
   bindPainelExportar();
@@ -886,7 +881,6 @@ function bindModaisGlobais() {
     renderTudo();
     dlg.close();
   });
-  $('#bilhete-close').addEventListener('click', () => $('#dlg-bilhete').close());
   $('#email-close').addEventListener('click', () => $('#dlg-email').close());
   $('#rev-detail-close').addEventListener('click', () => $('#dlg-rev').close());
 }
@@ -1001,8 +995,8 @@ function aplicarFiltros() {
 }
 
 /* ===================================================================
-   DRUCKER-2: Despacho preventivo automatico
-   - Lembrete: 3 dias antes do prazo (em-andamento, sem despacho recente)
+   DRUCKER-2: Alertas preventivos de prazo
+   - Lembrete: 3 dias antes do prazo (em-andamento)
    - Cobranca: prazo vencido ha pelo menos 1 dia
    =================================================================== */
 function tarefasPreventivas() {
@@ -1043,7 +1037,6 @@ function renderBannerDrucker() {
   }
   banner.innerHTML = `
     <div class="druk__corpo">
-      <span class="druk__rotulo">Despacho preventivo</span>
       <span class="druk__hint">Drucker dizia que antecipar a fricção é mais barato que resolvê-la.</span>
       <div class="druk__chips">${partes.join('')}</div>
     </div>
@@ -1063,8 +1056,8 @@ function abrirDruckerLista(tipo /* 'lembrete' | 'cobranca' */) {
     ? 'Tarefas que pedem cobrança'
     : 'Tarefas que pedem lembrete';
   $('#druk-subtitulo').textContent = (tipo === 'cobranca')
-    ? 'Prazo já venceu. Um clique abre o despacho de cobrança.'
-    : 'Prazo nos próximos 3 dias. Um clique abre o lembrete cordial.';
+    ? 'Prazo já venceu. Um clique abre o e-mail de cobrança.'
+    : 'Prazo nos próximos 3 dias. Um clique abre o e-mail de lembrete.';
   const lista = $('#druk-lista');
   lista.innerHTML = '';
   for (const { t, dias } of itens) {
@@ -1081,8 +1074,7 @@ function abrirDruckerLista(tipo /* 'lembrete' | 'cobranca' */) {
         <div class="druk-item__rod">${oeTag}<span class="druk-item__resp">${escHtml(t.responsavel || '—')}</span>${meta}</div>
       </div>
       <div class="druk-item__acoes">
-        <button class="btn btn--sm" data-druk-act="despacho" data-tid="${t.id}" type="button">Despachar</button>
-        <button class="btn btn--sm btn--ghost" data-druk-act="email" data-tid="${t.id}" type="button">E-mail</button>
+        <button class="btn btn--sm" data-druk-act="email" data-tid="${t.id}" type="button">E-mail</button>
       </div>
     `;
     lista.appendChild(li);
@@ -1592,7 +1584,6 @@ function renderGrupos(lista) {
     el.querySelector('.tarefa__titulo').addEventListener('click', () => abrirEdicao(id));
     el.querySelector('[data-edit]').addEventListener('click', () => abrirEdicao(id));
     el.querySelector('[data-del]').addEventListener('click', () => excluirTarefa(id));
-    el.querySelector('[data-bilhete]').addEventListener('click', () => abrirIADespachoDireto(id));
     el.querySelector('[data-email]').addEventListener('click', () => abrirIAEmailDireto(id));
     const btnPlanner = el.querySelector('[data-planner]');
     if (btnPlanner) btnPlanner.addEventListener('click', () => enviarParaPlanner(id));
@@ -1643,7 +1634,6 @@ function renderTarefa(t) {
         <select class="tarefa__status-sel" aria-label="Alterar status">
           ${Object.entries(STATUS_ROTULOS).map(([v, r]) => `<option value="${v}" ${t.status === v ? 'selected' : ''}>${r}</option>`).join('')}
         </select>
-        <button class="btn btn--ghost btn--sm" data-bilhete title="Gerar despacho desta tarefa">Despacho</button>
         <button class="btn btn--ghost btn--sm" data-email title="Gerar e-mail">E-mail</button>
         <button class="btn btn--ghost btn--sm" data-planner title="Abrir Microsoft Forms pré-preenchido para criar tarefa no Planner">Planner</button>
         <button class="icon-btn" data-edit title="Editar"><svg viewBox="0 0 16 16"><path d="M11 1l4 4-9 9H2v-4l9-9z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></button>
@@ -2748,1224 +2738,6 @@ async function importarJSON(e) {
 }
 
 /* ===================================================================
-   12. BILHETE / DESPACHO — REGISTRO CORPORATIVO CORDIAL
-   =================================================================== */
-
-/* ---------- Despacho v2: estado e helpers ---------- */
-
-let _despachoOpts = { tom: 'institucional', destino: 'envio' };
-
-function tratamentoPara(nome) {
-  if (!nome || !nome.trim()) return 'Prezado(a)';
-  const g = inferirGenero(nome);
-  return g === 'f' ? 'Prezada' : 'Prezado';
-}
-
-function _hashStr(s) {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-  return Math.abs(h);
-}
-function _pickStable(arr, seed) {
-  if (!arr || !arr.length) return '';
-  return arr[_hashStr(String(seed || '')) % arr.length];
-}
-
-function primeiroNome(nomeCompleto) {
-  if (!nomeCompleto) return '';
-  return String(nomeCompleto).trim().split(/\s+/)[0];
-}
-
-// (C) Atribui ou recupera número de despacho da tarefa, anual.
-function numeroDespachoPara(t) {
-  const ano = new Date().getFullYear();
-  if (!config.despachoMap) config.despachoMap = {};
-  const reg = config.despachoMap[t.id];
-  if (reg && reg.ano === ano) return reg;
-  // novo ano → zera contador
-  if (config.despachoCounterAno !== ano) {
-    config.despachoCounterAno = ano;
-    config.despachoCounter = 0;
-  }
-  config.despachoCounter = (config.despachoCounter || 0) + 1;
-  const novo = { numero: config.despachoCounter, ano };
-  config.despachoMap[t.id] = novo;
-  try { salvarConfig(); } catch (e) { /* sync later */ }
-  return novo;
-}
-function fmtNumeroDespacho(reg) {
-  if (!reg) return '';
-  return `${String(reg.numero).padStart(4, '0')}/${reg.ano}`;
-}
-
-// (E) Próximos passos inferidos
-function proximosPassos(t) {
-  const passos = [];
-  const prazoExt = t.prazo ? fmtDataExtenso(t.prazo) : null;
-  const atrasada = isAtrasada(t);
-  if (t.status === 'concluida') return [];
-  if (t.status === 'bloqueada') {
-    passos.push('Identificar e formalizar os impedimentos atuais.');
-    passos.push('Definir responsável pelo desbloqueio e prazo para retomada.');
-    if (prazoExt) passos.push(`Confirmar viabilidade do prazo previsto (${prazoExt}).`);
-  } else if (atrasada) {
-    passos.push('Apresentar diagnóstico do estágio atual.');
-    passos.push('Propor nova projeção de prazo, se cabível.');
-    passos.push('Indicar apoios necessários para conclusão.');
-  } else if (t.status === 'em-andamento') {
-    if (prazoExt) passos.push(`Confirmar conclusão até ${prazoExt}.`);
-    passos.push('Sinalizar entraves ou riscos identificados.');
-    if (t.resultado) passos.push('Validar entregas parciais frente ao resultado esperado.');
-  } else {
-    // a-fazer
-    if (prazoExt) passos.push(`Iniciar a execução com vistas à conclusão em ${prazoExt}.`);
-    else passos.push('Definir prazo de execução em comum acordo.');
-    if (t.resultado) passos.push('Alinhar entregas previstas com o resultado esperado.');
-  }
-  return passos.slice(0, 3);
-}
-
-// Limpa pontuação final do conteúdo do usuário antes de aplicar a nossa.
-function _trimPunct(s) {
-  return String(s || '').trim().replace(/[.;:!?…]+$/u, '').trim();
-}
-
-// (H) Constrói estrutura completa do despacho a partir da tarefa + opts.
-function despachoEstrutura(t, opts) {
-  const o = Object.assign({ tom: 'institucional', destino: 'envio' }, opts || {});
-  const atrasada = isAtrasada(t);
-  const prazoExt = t.prazo ? fmtDataExtenso(t.prazo) : null;
-  const dataExt = fmtDataExtenso(hojeISO());
-  const oe = t.oeId ? OBJETIVOS.find(x => x.id === t.oeId) : null;
-  const reg = numeroDespachoPara(t);
-  const numero = fmtNumeroDespacho(reg);
-  const tituloLimpo = _trimPunct(t.titulo);
-  const resultadoLimpo = t.resultado ? _trimPunct(t.resultado) : null;
-  const seed = `${t.id}-${reg.numero}`;
-
-  // Categoria de tom
-  let categoria;
-  if (t.status === 'concluida') categoria = 'concluida';
-  else if (atrasada) categoria = 'atrasada';
-  else if (t.status === 'bloqueada') categoria = 'bloqueada';
-  else if (t.prioridade === 'alta') categoria = 'alta';
-  else if (t.status === 'em-andamento') categoria = 'andamento';
-  else categoria = 'rotina';
-
-  // Variantes (sorteio estável pelo seed) — sempre redondo, sem itálico
-  const VAR = {
-    concluida: {
-      abertura: [
-        'Comunico a conclusão da demanda em epígrafe.',
-        'Registro a conclusão da demanda em referência.',
-        'Informo o encerramento da demanda em epígrafe.'
-      ],
-      fecho: [
-        'Agradeço a colaboração e permaneço à disposição para os próximos encaminhamentos.',
-        'Agradeço o empenho e permaneço à disposição para tratativas subsequentes.',
-        'Permaneço à disposição para os desdobramentos decorrentes.'
-      ]
-    },
-    atrasada: {
-      abertura: [
-        'Solicito atenção prioritária à demanda em epígrafe, cujo prazo encontra-se vencido.',
-        'Submeto a Vossa apreciação, com caráter prioritário, a demanda em referência, com prazo já expirado.',
-        'Reitero a demanda em epígrafe, observando que o prazo previamente fixado foi ultrapassado.'
-      ],
-      fecho: [
-        'Solicito posicionamento sobre o estágio atual e, se cabível, nova projeção de prazo.',
-        'Solicito posicionamento e proposta de novo prazo, se for o caso.',
-        'Aguardo manifestação quanto ao estágio atual e a possíveis ajustes de prazo.'
-      ]
-    },
-    bloqueada: {
-      abertura: [
-        'Submeto a Vossa apreciação, para desbloqueio, a demanda em epígrafe.',
-        'Encaminho a demanda em referência, atualmente em situação de bloqueio, para deliberação.',
-        'Reporto entraves na execução da demanda em epígrafe, requerendo posicionamento.'
-      ],
-      fecho: [
-        'Permaneço à disposição para apoiar na remoção dos impedimentos.',
-        'Permaneço à disposição para articular as providências necessárias.',
-        'Coloco-me à disposição para tratativas que viabilizem o prosseguimento.'
-      ]
-    },
-    alta: {
-      abertura: [
-        'Encaminho, com tratamento prioritário, a demanda em epígrafe.',
-        'Submeto a Vossa apreciação, em caráter prioritário, a demanda em referência.',
-        'Encaminho a demanda em epígrafe, requerendo tratamento prioritário.'
-      ],
-      fecho: [
-        'Permaneço à disposição para esclarecimentos e ajustes que se fizerem necessários.',
-        'Permaneço à disposição para o que se fizer necessário.',
-        'Aguardo manifestação e permaneço à disposição para ajustes.'
-      ]
-    },
-    andamento: {
-      abertura: [
-        'Acompanho o andamento da demanda em epígrafe.',
-        'Reporto o andamento da demanda em referência.',
-        'Atualizo Vossa Senhoria sobre a demanda em epígrafe.'
-      ],
-      fecho: [
-        'Solicito breve sinalização sobre o estágio atual e eventuais entraves.',
-        'Solicito atualização quanto ao estágio e a obstáculos identificados.',
-        'Permaneço aguardando sinalização sobre o estágio atual.'
-      ]
-    },
-    rotina: {
-      abertura: [
-        'Encaminho a demanda em epígrafe.',
-        'Submeto a Vossa apreciação a demanda em referência.',
-        'Encaminho a demanda em epígrafe para conhecimento e providências.'
-      ],
-      fecho: [
-        'Permaneço à disposição para esclarecimentos.',
-        'Coloco-me à disposição para esclarecimentos.',
-        'Aguardo manifestação e permaneço à disposição.'
-      ]
-    }
-  };
-
-  const abertura = _pickStable(VAR[categoria].abertura, seed + ':a');
-  const fechoBase = _pickStable(VAR[categoria].fecho, seed + ':f');
-
-  // Contexto (frase de prazo)
-  let contexto = '';
-  if (categoria === 'atrasada' && prazoExt) contexto = `O prazo previsto era ${prazoExt}.`;
-  else if (categoria === 'bloqueada' && prazoExt) contexto = `O prazo previsto é ${prazoExt}.`;
-  else if (categoria === 'alta') contexto = prazoExt ? `Solicito conclusão até ${prazoExt}.` : 'Solicito definição de prazo de execução tão logo possível.';
-  else if (categoria === 'andamento' && prazoExt) contexto = `O prazo previsto é ${prazoExt}.`;
-  else if (categoria === 'rotina' && prazoExt) contexto = `Sugere-se como prazo ${prazoExt}, passível de revisão de comum acordo.`;
-
-  // Frase de resultado
-  let resultadoFrase = '';
-  if (resultadoLimpo) {
-    resultadoFrase = (categoria === 'concluida')
-      ? `Como entrega, registra-se: ${resultadoLimpo}.`
-      : `Como entrega prevista, registra-se: ${resultadoLimpo}.`;
-  }
-
-  // Próximos passos (E) — desativados a pedido do usuário (Leva 6.3): nunca incluir.
-  const passos = [];
-
-  // Vocativo (A)
-  const trat = tratamentoPara(t.responsavel);
-  const primeiro = primeiroNome(t.responsavel);
-  let vocativo;
-  if (o.destino === 'registro') {
-    vocativo = null; // não há vocativo em registro
-  } else if (o.tom === 'institucional') {
-    const g = inferirGenero(t.responsavel);
-    vocativo = g === 'f' ? 'Prezada Senhora,' : 'Prezado Senhor,';
-  } else {
-    vocativo = primeiro ? `${trat} ${primeiro},` : `${trat},`;
-  }
-
-  // Construção do parágrafo principal
-  let paragrafoPrincipal;
-  if (o.destino === 'registro') {
-    // Relato em 3ª pessoa
-    const acoes = {
-      concluida: 'concluiu a demanda em epígrafe',
-      atrasada: 'reiterou a demanda em epígrafe, com prazo já expirado',
-      bloqueada: 'reportou entraves na demanda em epígrafe e solicitou desbloqueio',
-      alta: 'encaminhou, em caráter prioritário, a demanda em epígrafe',
-      andamento: 'atualizou o andamento da demanda em epígrafe',
-      rotina: 'encaminhou a demanda em epígrafe'
-    };
-    const dest = t.responsavel ? ` ao(à) colega ${t.responsavel}` : '';
-    paragrafoPrincipal = `Em ${dataExt}, esta Diretoria-Executiva ${acoes[categoria]}${dest}.`;
-  } else {
-    paragrafoPrincipal = abertura;
-  }
-
-  // Fecho ajustado por destino
-  const fecho = (o.destino === 'registro') ? 'Registro lavrado para fins de acompanhamento.' : fechoBase;
-
-  // Referências (F)
-  const refs = [];
-  refs.push({ rotulo: 'Assunto', valor: tituloLimpo });
-  if (oe) refs.push({ rotulo: 'Referência', valor: `OE ${oe.id} — ${oe.curto}` });
-  if (prazoExt) refs.push({ rotulo: 'Prazo', valor: prazoExt });
-  if (t.responsavel) refs.push({ rotulo: 'Para', valor: t.responsavel });
-  refs.push({ rotulo: 'De', valor: `${config.meuNome || ''}${config.meuCargo ? ' — ' + config.meuCargo : ''}`.trim() || '—' });
-
-  // Parágrafos do corpo
-  const paragrafos = [];
-  paragrafos.push(paragrafoPrincipal + (contexto ? ' ' + contexto : '') + (resultadoFrase ? ' ' + resultadoFrase : ''));
-
-  return {
-    numero,
-    ano: reg.ano,
-    dataExt,
-    refs,
-    vocativo,
-    paragrafos,
-    proximosPassos: passos,
-    fecho,
-    assinatura: { nome: config.meuNome || '', cargo: config.meuCargo || '' },
-    categoria,
-    destino: o.destino,
-    tom: o.tom
-  };
-}
-
-// (G) Esqueleto de resposta para o destinatário.
-function respostaEsqueletoFlat(es, t) {
-  const dataExt = es.dataExt;
-  const numero = es.numero;
-  const remetente = es.assinatura.nome || 'esta Diretoria';
-  const linhas = [];
-  linhas.push(`Resposta ao Despacho nº ${numero} — [data da resposta]`);
-  linhas.push('');
-  linhas.push(`Assunto: ${es.refs.find(r => r.rotulo === 'Assunto')?.valor || es.refs[0].valor}`);
-  // Inverter Para/De
-  const para = es.refs.find(r => r.rotulo === 'De');
-  const de = es.refs.find(r => r.rotulo === 'Para');
-  if (para) linhas.push(`Para: ${para.valor}`);
-  if (de) linhas.push(`De: ${de.valor}`);
-  const ref = es.refs.find(r => r.rotulo === 'Referência');
-  if (ref) linhas.push(`Referência: ${ref.valor}`);
-  linhas.push('');
-  linhas.push('Prezado(a) Senhor(a),');
-  linhas.push('');
-  linhas.push(`Em atenção ao Despacho nº ${numero}, de ${dataExt}, manifesto-me nos termos a seguir.`);
-  linhas.push('');
-  // Esqueleto sensível à categoria
-  if (es.categoria === 'bloqueada') {
-    linhas.push('Sobre os impedimentos: [descrever entraves identificados].');
-    linhas.push('Sobre as providências: [indicar providências adotadas ou requeridas].');
-    linhas.push('Sobre o prazo: [confirmar viabilidade ou propor novo prazo].');
-  } else if (es.categoria === 'atrasada') {
-    linhas.push('Sobre o estágio atual: [descrever andamento e motivos do atraso].');
-    linhas.push('Sobre o novo prazo: [propor data realista].');
-    linhas.push('Sobre apoios necessários: [indicar suportes requeridos].');
-  } else if (es.categoria === 'andamento') {
-    linhas.push('Sobre o estágio atual: [resumir avanços].');
-    linhas.push('Sobre entraves: [indicar obstáculos, se houver].');
-    linhas.push('Sobre a previsão de conclusão: [confirmar ou ajustar].');
-  } else if (es.categoria === 'alta') {
-    linhas.push('Sobre a prioridade: [confirmar tratamento prioritário].');
-    linhas.push('Sobre o cronograma: [confirmar ou propor prazo].');
-    linhas.push('Sobre apoios necessários: [indicar suportes requeridos].');
-  } else if (es.categoria === 'concluida') {
-    linhas.push('Sobre a entrega: [registrar acolhimento ou observações].');
-    linhas.push('Sobre desdobramentos: [indicar próximas etapas, se cabível].');
-  } else {
-    linhas.push('Sobre o acolhimento da demanda: [manifestar concordância ou ressalvas].');
-    linhas.push('Sobre o prazo: [confirmar ou propor ajuste].');
-    linhas.push('Sobre apoios necessários: [indicar, se for o caso].');
-  }
-  linhas.push('');
-  linhas.push(`Permaneço à disposição de ${remetente} para os esclarecimentos que se fizerem necessários.`);
-  linhas.push('');
-  linhas.push('Atenciosamente,');
-  linhas.push('');
-  linhas.push('[Nome do responsável]');
-  linhas.push('[Cargo]');
-  return linhas.join('\n');
-}
-
-// Saida texto puro (cole em e-mail, WhatsApp etc.)
-function despachoTextoFlat(es) {
-  const linhas = [];
-  linhas.push(`Despacho nº ${es.numero} — ${es.dataExt}`);
-  linhas.push('');
-  for (const r of es.refs) linhas.push(`${r.rotulo}: ${r.valor}`);
-  linhas.push('');
-  if (es.vocativo) { linhas.push(es.vocativo); linhas.push(''); }
-  for (const p of es.paragrafos) { linhas.push(p); linhas.push(''); }
-  if (es.proximosPassos && es.proximosPassos.length) {
-    linhas.push('Próximos passos:');
-    es.proximosPassos.forEach((p, i) => linhas.push(`  ${i + 1}. ${p}`));
-    linhas.push('');
-  }
-  linhas.push(es.fecho);
-  linhas.push('');
-  if (es.destino === 'envio') {
-    linhas.push('Atenciosamente,');
-    linhas.push('');
-    if (es.assinatura.nome) linhas.push(es.assinatura.nome);
-    if (es.assinatura.cargo) linhas.push(es.assinatura.cargo);
-  }
-  return linhas.join('\n').trimEnd() + '\n';
-}
-
-// Compatibilidade: alguns lugares ainda chamam despachoSemMarcacao(texto).
-function despachoSemMarcacao(texto) {
-  return String(texto || '').replace(/\*([^*]+)\*/g, '$1');
-}
-
-// HTML do modo digital (caixa de texto colorida por quadrante)
-function despachoDigitalHTML(es, q) {
-  const linhas = [];
-  linhas.push(`<div class="bilhete-digital__cab"><strong>Despacho nº ${escapeHTML(es.numero)}</strong> — ${escapeHTML(es.dataExt)}</div>`);
-  linhas.push('<dl class="bilhete-digital__refs">');
-  for (const r of es.refs) linhas.push(`<dt>${escapeHTML(r.rotulo)}</dt><dd>${escapeHTML(r.valor)}</dd>`);
-  linhas.push('</dl>');
-  if (es.vocativo) linhas.push(`<p class="bilhete-digital__voc">${escapeHTML(es.vocativo)}</p>`);
-  for (const p of es.paragrafos) linhas.push(`<p>${escapeHTML(p)}</p>`);
-  if (es.proximosPassos && es.proximosPassos.length) {
-    linhas.push('<p class="bilhete-digital__pp-tit"><strong>Próximos passos</strong></p>');
-    linhas.push('<ol class="bilhete-digital__pp">');
-    for (const p of es.proximosPassos) linhas.push(`<li>${escapeHTML(p)}</li>`);
-    linhas.push('</ol>');
-  }
-  linhas.push(`<p>${escapeHTML(es.fecho)}</p>`);
-  if (es.destino === 'envio') {
-    linhas.push('<p>Atenciosamente,</p>');
-    if (es.assinatura.nome) linhas.push(`<p class="bilhete-digital__sig"><strong>${escapeHTML(es.assinatura.nome)}</strong>${es.assinatura.cargo ? '<br>' + escapeHTML(es.assinatura.cargo) : ''}</p>`);
-  }
-  return `<div class="bilhete-digital is-${q.toLowerCase()}">${linhas.join('')}</div>`;
-}
-
-// HTML do modo papel (padrão ofício austero)
-function despachoPapelHTML(es) {
-  const refsHtml = es.refs.map(r => `<div class="bilhete-papel__ref"><span class="bilhete-papel__ref-rot">${escapeHTML(r.rotulo)}:</span> <span class="bilhete-papel__ref-val">${escapeHTML(r.valor)}</span></div>`).join('');
-  const paragrafosHtml = es.paragrafos.map(p => `<p class="bilhete-papel__paragrafo">${escapeHTML(p)}</p>`).join('');
-  const passosHtml = (es.proximosPassos && es.proximosPassos.length)
-    ? `<p class="bilhete-papel__pp-tit"><strong>Próximos passos</strong></p><ol class="bilhete-papel__pp">${es.proximosPassos.map(p => `<li>${escapeHTML(p)}</li>`).join('')}</ol>`
-    : '';
-  const vocHtml = es.vocativo ? `<p class="bilhete-papel__vocativo">${escapeHTML(es.vocativo)}</p>` : '';
-  const fechoHtml = `<p class="bilhete-papel__paragrafo">${escapeHTML(es.fecho)}</p>`;
-  let assinaturaHtml = '';
-  if (es.destino === 'envio') {
-    assinaturaHtml = `<p class="bilhete-papel__fecho">Atenciosamente,</p>` +
-      `<div class="bilhete-papel__assinatura">` +
-      (es.assinatura.nome ? `<div class="bilhete-papel__assinante">${escapeHTML(es.assinatura.nome)}</div>` : '') +
-      (es.assinatura.cargo ? `<div class="bilhete-papel__cargo">${escapeHTML(es.assinatura.cargo)}</div>` : '') +
-      `</div>`;
-  }
-  return `
-    <div class="bilhete-papel-wrap">
-      <div class="bilhete-papel">
-        <div class="bilhete-papel__cabecalho">
-          <span class="bilhete-papel__rotulo">DESPACHO Nº ${escapeHTML(es.numero)}</span>
-          <span class="bilhete-papel__data">${escapeHTML(es.dataExt)}</span>
-        </div>
-        <div class="bilhete-papel__refs">${refsHtml}</div>
-        <div class="bilhete-papel__corpo">
-          ${vocHtml}
-          ${paragrafosHtml}
-          ${passosHtml}
-          ${fechoHtml}
-          ${assinaturaHtml}
-        </div>
-      </div>
-    </div>`;
-}
-
-/* ============ Modal de bilhete único ============ */
-
-let _bilheteAtualId = null;
-let _bilheteModo = 'digital';
-
-function abrirBilheteModal(id) {
-  // Leva 14: o modal antigo dlg-bilhete (Modo digital/papel/par+resposta) foi descontinuado.
-  // Qualquer chamada externa é redirecionada ao modal de IA.
-  return abrirIADespachoDireto(id);
-  // código legado abaixo mantido apenas como referência, nunca executado.
-  /* eslint-disable no-unreachable */
-  const t = tarefas.find(x => x.id === id);
-  if (!t) return;
-  _bilheteAtualId = id;
-  _bilheteModo = 'digital';
-  // Reseta toggles para defaults conservadores
-  _despachoOpts = { tom: 'institucional', destino: 'envio' };
-  $('#bilhete-title').textContent = `Despacho: ${t.titulo}`;
-  $$('#dlg-bilhete .seg__btn[data-bmode]').forEach(b => b.classList.toggle('is-active', b.dataset.bmode === 'digital'));
-  $$('#dlg-bilhete .seg__btn[data-btom]').forEach(b => b.classList.toggle('is-active', b.dataset.btom === _despachoOpts.tom));
-  $$('#dlg-bilhete .seg__btn[data-bdest]').forEach(b => b.classList.toggle('is-active', b.dataset.bdest === _despachoOpts.destino));
-  renderBilheteModal(t);
-  $('#dlg-bilhete').showModal();
-}
-
-function renderBilheteModal(t) {
-  const q = quadranteDe(t);
-  const es = despachoEstrutura(t, _despachoOpts);
-  const textoFlat = despachoTextoFlat(es);
-  $('#bilhete-digital').innerHTML = despachoDigitalHTML(es, q);
-  $('#bilhete-digital').dataset.texto = textoFlat;
-  $('#bilhete-digital').hidden = _bilheteModo !== 'digital';
-  $('#bilhete-papel').innerHTML = despachoPapelHTML(es);
-  $('#bilhete-papel').hidden = _bilheteModo !== 'papel';
-  const parEl = $('#bilhete-par');
-  if (parEl) {
-    const respostaTxt = respostaEsqueletoFlat(es, t);
-    parEl.dataset.envio = textoFlat;
-    parEl.dataset.resposta = respostaTxt;
-    parEl.innerHTML = `
-      <div class="bilhete-par__col">
-        <div class="bilhete-par__rotulo">A — Despacho de envio</div>
-        <pre class="bilhete-par__pre">${escapeHTML(textoFlat)}</pre>
-        <button class="btn btn--ghost btn--sm" data-par-copy="envio" type="button">Copiar A</button>
-      </div>
-      <div class="bilhete-par__col">
-        <div class="bilhete-par__rotulo">B — Esqueleto de resposta (para o destinatário)</div>
-        <pre class="bilhete-par__pre">${escapeHTML(respostaTxt)}</pre>
-        <button class="btn btn--ghost btn--sm" data-par-copy="resposta" type="button">Copiar B</button>
-      </div>`;
-    parEl.hidden = _bilheteModo !== 'par';
-    parEl.querySelectorAll('[data-par-copy]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const which = btn.dataset.parCopy;
-        const txt = which === 'envio' ? parEl.dataset.envio : parEl.dataset.resposta;
-        await navigator.clipboard.writeText(txt || '');
-        mostrarFlash(which === 'envio' ? 'Copiado: A (envio).' : 'Copiado: B (resposta).');
-      });
-    });
-  }
-}
-
-function bindDespachos() {
-  // bilhete modal: alternar Modo digital / Modo papel
-  $$('#dlg-bilhete .seg__btn[data-bmode]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      $$('#dlg-bilhete .seg__btn[data-bmode]').forEach(b => b.classList.remove('is-active'));
-      btn.classList.add('is-active');
-      _bilheteModo = btn.dataset.bmode;
-      const t = tarefas.find(x => x.id === _bilheteAtualId);
-      if (t) renderBilheteModal(t);
-    });
-  });
-
-  // Toggle Tom: pessoal / institucional
-  $$('#dlg-bilhete .seg__btn[data-btom]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      $$('#dlg-bilhete .seg__btn[data-btom]').forEach(b => b.classList.remove('is-active'));
-      btn.classList.add('is-active');
-      _despachoOpts.tom = btn.dataset.btom;
-      const t = tarefas.find(x => x.id === _bilheteAtualId);
-      if (t) renderBilheteModal(t);
-    });
-  });
-
-  // Toggle Destino: envio / registro
-  $$('#dlg-bilhete .seg__btn[data-bdest]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      $$('#dlg-bilhete .seg__btn[data-bdest]').forEach(b => b.classList.remove('is-active'));
-      btn.classList.add('is-active');
-      _despachoOpts.destino = btn.dataset.bdest;
-      const t = tarefas.find(x => x.id === _bilheteAtualId);
-      if (t) renderBilheteModal(t);
-    });
-  });
-
-  $('#btn-bilhete-copy').addEventListener('click', async () => {
-    const texto = $('#bilhete-digital').dataset.texto || '';
-    await navigator.clipboard.writeText(texto);
-    mostrarFlash('Copiado.');
-  });
-  $('#btn-bilhete-copy-plain').addEventListener('click', async () => {
-    const texto = despachoSemMarcacao($('#bilhete-digital').dataset.texto || '');
-    await navigator.clipboard.writeText(texto);
-    mostrarFlash('Copiado (sem marcação).');
-  });
-  $('#btn-bilhete-print').addEventListener('click', () => {
-    // alterna para papel e imprime
-    _bilheteModo = 'papel';
-    $$('#dlg-bilhete .seg__btn[data-bmode]').forEach(b => b.classList.toggle('is-active', b.dataset.bmode === 'papel'));
-    const t = tarefas.find(x => x.id === _bilheteAtualId);
-    if (t) renderBilheteModal(t);
-    setTimeout(() => window.print(), 50);
-  });
-  $('#btn-bilhete-pdf').addEventListener('click', exportarBilheteIndividualPDF);
-  const btnDocx = $('#btn-bilhete-docx');
-  if (btnDocx) btnDocx.addEventListener('click', exportarBilheteDocx);
-
-  // Despachar em lote
-  const btnLote = $('#btn-despachar-lote');
-  if (btnLote) btnLote.addEventListener('click', abrirDespachoLote);
-  const btnLoteClose = $('#lote-close');
-  if (btnLoteClose) btnLoteClose.addEventListener('click', () => $('#dlg-despacho-lote').close());
-  const btnLoteCopy = $('#btn-lote-copy');
-  if (btnLoteCopy) btnLoteCopy.addEventListener('click', async () => {
-    const txt = $('#lote-papel').dataset.texto || '';
-    await navigator.clipboard.writeText(txt);
-    mostrarFlash('Pauta copiada.');
-  });
-  const btnLotePrint = $('#btn-lote-print');
-  if (btnLotePrint) btnLotePrint.addEventListener('click', () => setTimeout(() => window.print(), 50));
-  const btnLotePdf = $('#btn-lote-pdf');
-  if (btnLotePdf) btnLotePdf.addEventListener('click', exportarLotePDF);
-  const btnLoteDocx = $('#btn-lote-docx');
-  if (btnLoteDocx) btnLoteDocx.addEventListener('click', exportarLoteDocx);
-}
-
-/* ---------- Lazy load da lib `docx` para geração de Word ---------- */
-let _docxLibPromise = null;
-function carregarLibDocx() {
-  if (window.docx) return Promise.resolve(window.docx);
-  if (_docxLibPromise) return _docxLibPromise;
-  _docxLibPromise = new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = 'https://unpkg.com/docx@8.5.0/build/index.umd.js';
-    s.onload = () => resolve(window.docx);
-    s.onerror = () => reject(new Error('Não foi possível carregar a biblioteca docx.'));
-    document.head.appendChild(s);
-  });
-  return _docxLibPromise;
-}
-
-/* ---------- Helpers para gerar Word ABNT ---------- */
-function _docxParagrafosDe(es) {
-  // Retorna array de docx.Paragraph
-  return carregarLibDocx().then(docx => {
-    const { Paragraph, TextRun, AlignmentType, HeadingLevel, BorderStyle } = docx;
-    const ps = [];
-    // Cabeçalho
-    ps.push(new Paragraph({
-      children: [
-        new TextRun({ text: `DESPACHO Nº ${es.numero}`, bold: true, size: 26 }),
-        new TextRun({ text: '\t' + es.dataExt, size: 22 })
-      ],
-      tabStops: [{ type: 'right', position: 9000 }],
-      spacing: { after: 100 },
-      border: { bottom: { color: '888888', size: 6, style: BorderStyle.SINGLE } }
-    }));
-    // Referências
-    for (const r of es.refs) {
-      ps.push(new Paragraph({
-        children: [
-          new TextRun({ text: `${r.rotulo}: `, bold: true, size: 22 }),
-          new TextRun({ text: String(r.valor), size: 22 })
-        ],
-        spacing: { after: 80 }
-      }));
-    }
-    // Vocativo
-    if (es.vocativo) {
-      ps.push(new Paragraph({
-        children: [new TextRun({ text: es.vocativo, size: 22 })],
-        spacing: { before: 200, after: 200 }
-      }));
-    }
-    // Parágrafos justificados com indentação
-    for (const p of es.paragrafos) {
-      ps.push(new Paragraph({
-        children: [new TextRun({ text: p, size: 22 })],
-        alignment: AlignmentType.JUSTIFIED,
-        indent: { firstLine: 720 },
-        spacing: { after: 200, line: 360 }
-      }));
-    }
-    // Próximos passos
-    if (es.proximosPassos && es.proximosPassos.length) {
-      ps.push(new Paragraph({
-        children: [new TextRun({ text: 'Próximos passos:', bold: true, size: 22 })],
-        spacing: { before: 200, after: 100 }
-      }));
-      es.proximosPassos.forEach((pp, i) => {
-        ps.push(new Paragraph({
-          children: [new TextRun({ text: `${i + 1}. ${pp}`, size: 22 })],
-          indent: { left: 720 },
-          spacing: { after: 80 }
-        }));
-      });
-    }
-    // Fecho
-    ps.push(new Paragraph({
-      children: [new TextRun({ text: es.fecho, size: 22 })],
-      alignment: AlignmentType.JUSTIFIED,
-      indent: { firstLine: 720 },
-      spacing: { before: 200, after: 200 }
-    }));
-    // Assinatura
-    if (es.destino === 'envio') {
-      ps.push(new Paragraph({
-        children: [new TextRun({ text: 'Atenciosamente,', size: 22 })],
-        spacing: { before: 200, after: 600 }
-      }));
-      ps.push(new Paragraph({
-        children: [new TextRun({ text: '_________________________________', size: 22 })],
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 60 }
-      }));
-      if (es.assinatura.nome) ps.push(new Paragraph({
-        children: [new TextRun({ text: es.assinatura.nome, bold: true, size: 22 })],
-        alignment: AlignmentType.CENTER
-      }));
-      if (es.assinatura.cargo) ps.push(new Paragraph({
-        children: [new TextRun({ text: es.assinatura.cargo, size: 22 })],
-        alignment: AlignmentType.CENTER
-      }));
-    }
-    return ps;
-  });
-}
-
-async function exportarBilheteDocx() {
-  const t = tarefas.find(x => x.id === _bilheteAtualId);
-  if (!t) return;
-  try {
-    mostrarFlash('Gerando Word…');
-    const docx = await carregarLibDocx();
-    const { Document, Packer } = docx;
-    const es = despachoEstrutura(t, _despachoOpts);
-    const paragrafos = await _docxParagrafosDe(es);
-    const doc = new Document({
-      styles: {
-        default: {
-          document: { run: { font: 'Times New Roman', size: 22 } }
-        }
-      },
-      sections: [{
-        properties: {
-          page: {
-            margin: { top: 1700, right: 1133, bottom: 1133, left: 1700 } // 3-2-2-3 cm em twips
-          }
-        },
-        children: paragrafos
-      }]
-    });
-    const blob = await Packer.toBlob(doc);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `despacho_${es.numero.replace('/', '-')}_${t.id}.docx`;
-    document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(url);
-    mostrarFlash('Word baixado.');
-  } catch (err) {
-    console.error(err);
-    mostrarMsg('Falha ao gerar Word.', true);
-  }
-}
-
-/* ---------- Despacho em lote (J) ---------- */
-
-function abrirDespachoLote() {
-  const ids = Array.from(selecaoTarefasIds);
-  if (!ids.length) { mostrarMsg('Selecione ao menos uma tarefa.', true); return; }
-  const lista = ids.map(id => tarefas.find(t => t.id === id)).filter(Boolean);
-  if (!lista.length) return;
-
-  // Calcula um destinatário primário: responsável mais frequente da seleção
-  const cont = {};
-  for (const t of lista) {
-    const r = (t.responsavel || '').trim();
-    if (!r) continue;
-    cont[r] = (cont[r] || 0) + 1;
-  }
-  const destinatariosOrdenados = Object.entries(cont).sort((a, b) => b[1] - a[1]).map(e => e[0]);
-  const principal = destinatariosOrdenados[0] || null;
-  const todosMesmo = destinatariosOrdenados.length === 1;
-
-  const dataExt = fmtDataExtenso(hojeISO());
-  const numeroPauta = `PAUTA-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(lista.length).padStart(2,'0')}`;
-
-  // Renderizar HTML da pauta
-  const refs = [];
-  refs.push({ rotulo: 'Assunto', valor: `Pauta de despachos — ${lista.length} item(ns)` });
-  if (principal && todosMesmo) refs.push({ rotulo: 'Para', valor: principal });
-  else if (destinatariosOrdenados.length > 1) refs.push({ rotulo: 'Para', valor: destinatariosOrdenados.join(', ') });
-  refs.push({ rotulo: 'De', valor: `${config.meuNome || ''}${config.meuCargo ? ' — ' + config.meuCargo : ''}`.trim() || '—' });
-
-  const refsHtml = refs.map(r => `<div class="bilhete-papel__ref"><span class="bilhete-papel__ref-rot">${escapeHTML(r.rotulo)}:</span> <span class="bilhete-papel__ref-val">${escapeHTML(r.valor)}</span></div>`).join('');
-
-  // Para cada tarefa, gera entrada resumida
-  const itensHtml = lista.map((t, i) => {
-    const es = despachoEstrutura(t, { tom: 'institucional', destino: 'envio' });
-    const oe = t.oeId ? OBJETIVOS.find(o => o.id === t.oeId) : null;
-    const meta = [];
-    if (oe) meta.push(`OE ${oe.id}`);
-    if (t.prazo) meta.push(`prazo ${fmtDataExtenso(t.prazo)}`);
-    if (t.prioridade === 'alta') meta.push('prioritária');
-    if (isAtrasada(t)) meta.push('em atraso');
-    if (t.status === 'bloqueada') meta.push('bloqueada');
-    if (t.responsavel && !todosMesmo) meta.push(`a ${t.responsavel}`);
-    return `
-      <div class="lote-item">
-        <div class="lote-item__num">${i + 1}.</div>
-        <div class="lote-item__corpo">
-          <div class="lote-item__titulo"><strong>Despacho nº ${escapeHTML(es.numero)}</strong> — ${escapeHTML(_trimPunct(t.titulo))}</div>
-          ${meta.length ? `<div class="lote-item__meta">${escapeHTML(meta.join(' · '))}</div>` : ''}
-          <p class="lote-item__paragrafo">${escapeHTML(es.paragrafos[0])}</p>
-        </div>
-      </div>`;
-  }).join('');
-
-  // Texto puro (para copiar)
-  const linhasTxt = [];
-  linhasTxt.push(`PAUTA DE DESPACHOS — ${dataExt}`);
-  linhasTxt.push('');
-  for (const r of refs) linhasTxt.push(`${r.rotulo}: ${r.valor}`);
-  linhasTxt.push('');
-  if (principal && todosMesmo) {
-    const g = inferirGenero(principal);
-    linhasTxt.push(g === 'f' ? 'Prezada Senhora,' : 'Prezado Senhor,');
-  } else {
-    linhasTxt.push('Prezado(a) Senhor(a),');
-  }
-  linhasTxt.push('');
-  linhasTxt.push(`Submeto a Vossa apreciação a pauta com ${lista.length} item(ns) abaixo relacionados.`);
-  linhasTxt.push('');
-  lista.forEach((t, i) => {
-    const es = despachoEstrutura(t, { tom: 'institucional', destino: 'envio' });
-    const oe = t.oeId ? OBJETIVOS.find(o => o.id === t.oeId) : null;
-    const meta = [];
-    if (oe) meta.push(`OE ${oe.id}`);
-    if (t.prazo) meta.push(`prazo ${fmtDataExtenso(t.prazo)}`);
-    if (t.prioridade === 'alta') meta.push('prioritária');
-    if (isAtrasada(t)) meta.push('em atraso');
-    if (t.status === 'bloqueada') meta.push('bloqueada');
-    if (t.responsavel && !todosMesmo) meta.push(`a ${t.responsavel}`);
-    linhasTxt.push(`${i + 1}. Despacho nº ${es.numero} — ${_trimPunct(t.titulo)}`);
-    if (meta.length) linhasTxt.push(`   (${meta.join(' · ')})`);
-    linhasTxt.push(`   ${es.paragrafos[0]}`);
-    linhasTxt.push('');
-  });
-  linhasTxt.push('Permaneço à disposição para esclarecimentos.');
-  linhasTxt.push('');
-  linhasTxt.push('Atenciosamente,');
-  linhasTxt.push('');
-  if (config.meuNome) linhasTxt.push(config.meuNome);
-  if (config.meuCargo) linhasTxt.push(config.meuCargo);
-
-  const vocativoHtml = (principal && todosMesmo)
-    ? `<p class="bilhete-papel__vocativo">${escapeHTML(inferirGenero(principal) === 'f' ? 'Prezada Senhora,' : 'Prezado Senhor,')}</p>`
-    : `<p class="bilhete-papel__vocativo">Prezado(a) Senhor(a),</p>`;
-
-  const html = `
-    <div class="bilhete-papel__cabecalho">
-      <span class="bilhete-papel__rotulo">PAUTA DE DESPACHOS</span>
-      <span class="bilhete-papel__data">${escapeHTML(dataExt)}</span>
-    </div>
-    <div class="bilhete-papel__refs">${refsHtml}</div>
-    <div class="bilhete-papel__corpo">
-      ${vocativoHtml}
-      <p class="bilhete-papel__paragrafo">Submeto a Vossa apreciação a pauta com ${lista.length} item(ns) abaixo relacionados.</p>
-      <div class="lote-itens">${itensHtml}</div>
-      <p class="bilhete-papel__paragrafo">Permaneço à disposição para esclarecimentos.</p>
-      <p class="bilhete-papel__fecho">Atenciosamente,</p>
-      <div class="bilhete-papel__assinatura">
-        ${config.meuNome ? `<div class="bilhete-papel__assinante">${escapeHTML(config.meuNome)}</div>` : ''}
-        ${config.meuCargo ? `<div class="bilhete-papel__cargo">${escapeHTML(config.meuCargo)}</div>` : ''}
-      </div>
-    </div>`;
-
-  const papelEl = $('#lote-papel');
-  papelEl.innerHTML = html;
-  papelEl.dataset.texto = linhasTxt.join('\n');
-  papelEl.dataset.numeroPauta = numeroPauta;
-  papelEl.dataset.dataExt = dataExt;
-  papelEl.dataset.principal = principal || '';
-  papelEl.dataset.todosMesmo = todosMesmo ? '1' : '0';
-  papelEl.dataset.qtd = String(lista.length);
-  papelEl.dataset.ids = ids.join(',');
-
-  $('#lote-resumo').innerHTML = `${lista.length} tarefa(s) selecionada(s)${principal && todosMesmo ? ` para ${escapeHTML(principal)}` : ''}.`;
-
-  $('#dlg-despacho-lote').showModal();
-}
-
-async function exportarLotePDF() {
-  try {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-    const pageW = doc.internal.pageSize.getWidth();
-    const pageH = doc.internal.pageSize.getHeight();
-    const cm = 28.3464567;
-    const marginTop = 3 * cm;
-    const marginBottom = 2 * cm;
-    const marginLeft = 3 * cm;
-    const marginRight = 2 * cm;
-    const fontSize = 12; const lineHeight = 16;
-    const maxWidth = pageW - marginLeft - marginRight;
-
-    const papelEl = $('#lote-papel');
-    const texto = papelEl.dataset.texto || '';
-    const linhas = texto.split('\n');
-    let y = marginTop;
-    doc.setFont('times', 'normal'); doc.setFontSize(fontSize);
-    for (const ln of linhas) {
-      const wrapped = doc.splitTextToSize(ln || ' ', maxWidth);
-      for (const w of wrapped) {
-        if (y > pageH - marginBottom) { doc.addPage(); y = marginTop; }
-        // Negrito para título da pauta e cabeçalho de itens
-        if (/^PAUTA DE DESPACHOS/i.test(w) || /^\d+\. Despacho nº/i.test(w)) {
-          doc.setFont('times', 'bold');
-          doc.text(w, marginLeft, y);
-          doc.setFont('times', 'normal');
-        } else {
-          doc.text(w, marginLeft, y);
-        }
-        y += lineHeight;
-      }
-    }
-    doc.save(`pauta_${papelEl.dataset.numeroPauta || 'despachos'}.pdf`);
-    mostrarFlash('Pauta exportada em PDF.');
-  } catch (err) {
-    console.error(err);
-    mostrarMsg('Falha ao gerar PDF.', true);
-  }
-}
-
-async function exportarLoteDocx() {
-  try {
-    mostrarFlash('Gerando Word…');
-    const docxLib = await carregarLibDocx();
-    const { Document, Packer, Paragraph, TextRun, AlignmentType, BorderStyle } = docxLib;
-    const papelEl = $('#lote-papel');
-    const dataExt = papelEl.dataset.dataExt || fmtDataExtenso(hojeISO());
-    const principal = papelEl.dataset.principal;
-    const todosMesmo = papelEl.dataset.todosMesmo === '1';
-    const ids = (papelEl.dataset.ids || '').split(',').filter(Boolean);
-    const lista = ids.map(id => tarefas.find(t => t.id === id)).filter(Boolean);
-
-    const ps = [];
-    ps.push(new Paragraph({
-      children: [
-        new TextRun({ text: 'PAUTA DE DESPACHOS', bold: true, size: 26 }),
-        new TextRun({ text: '\t' + dataExt, size: 22 })
-      ],
-      tabStops: [{ type: 'right', position: 9000 }],
-      spacing: { after: 200 },
-      border: { bottom: { color: '888888', size: 6, style: BorderStyle.SINGLE } }
-    }));
-    ps.push(new Paragraph({
-      children: [
-        new TextRun({ text: 'Assunto: ', bold: true, size: 22 }),
-        new TextRun({ text: `Pauta de despachos — ${lista.length} item(ns)`, size: 22 })
-      ], spacing: { after: 80 }
-    }));
-    if (principal && todosMesmo) {
-      ps.push(new Paragraph({
-        children: [
-          new TextRun({ text: 'Para: ', bold: true, size: 22 }),
-          new TextRun({ text: principal, size: 22 })
-        ], spacing: { after: 80 }
-      }));
-    }
-    ps.push(new Paragraph({
-      children: [
-        new TextRun({ text: 'De: ', bold: true, size: 22 }),
-        new TextRun({ text: `${config.meuNome || ''}${config.meuCargo ? ' — ' + config.meuCargo : ''}`.trim(), size: 22 })
-      ], spacing: { after: 200 }
-    }));
-    const voc = (principal && todosMesmo) ? (inferirGenero(principal) === 'f' ? 'Prezada Senhora,' : 'Prezado Senhor,') : 'Prezado(a) Senhor(a),';
-    ps.push(new Paragraph({
-      children: [new TextRun({ text: voc, size: 22 })], spacing: { after: 200 }
-    }));
-    ps.push(new Paragraph({
-      children: [new TextRun({ text: `Submeto a Vossa apreciação a pauta com ${lista.length} item(ns) abaixo relacionados.`, size: 22 })],
-      alignment: AlignmentType.JUSTIFIED, indent: { firstLine: 720 }, spacing: { after: 200 }
-    }));
-    lista.forEach((t, i) => {
-      const es = despachoEstrutura(t, { tom: 'institucional', destino: 'envio' });
-      const oe = t.oeId ? OBJETIVOS.find(o => o.id === t.oeId) : null;
-      const meta = [];
-      if (oe) meta.push(`OE ${oe.id}`);
-      if (t.prazo) meta.push(`prazo ${fmtDataExtenso(t.prazo)}`);
-      if (t.prioridade === 'alta') meta.push('prioritária');
-      if (isAtrasada(t)) meta.push('em atraso');
-      if (t.status === 'bloqueada') meta.push('bloqueada');
-      if (t.responsavel && !todosMesmo) meta.push(`a ${t.responsavel}`);
-      ps.push(new Paragraph({
-        children: [
-          new TextRun({ text: `${i + 1}. Despacho nº ${es.numero} — `, bold: true, size: 22 }),
-          new TextRun({ text: _trimPunct(t.titulo), bold: true, size: 22 })
-        ], spacing: { before: 160, after: 60 }
-      }));
-      if (meta.length) ps.push(new Paragraph({
-        children: [new TextRun({ text: `(${meta.join(' · ')})`, italics: false, size: 20, color: '555555' })],
-        indent: { left: 360 }, spacing: { after: 60 }
-      }));
-      ps.push(new Paragraph({
-        children: [new TextRun({ text: es.paragrafos[0], size: 22 })],
-        alignment: AlignmentType.JUSTIFIED,
-        indent: { left: 360, firstLine: 360 },
-        spacing: { after: 100 }
-      }));
-    });
-    ps.push(new Paragraph({
-      children: [new TextRun({ text: 'Permaneço à disposição para esclarecimentos.', size: 22 })],
-      alignment: AlignmentType.JUSTIFIED, indent: { firstLine: 720 }, spacing: { before: 200, after: 200 }
-    }));
-    ps.push(new Paragraph({
-      children: [new TextRun({ text: 'Atenciosamente,', size: 22 })],
-      spacing: { before: 100, after: 600 }
-    }));
-    ps.push(new Paragraph({
-      children: [new TextRun({ text: '_________________________________', size: 22 })],
-      alignment: AlignmentType.CENTER, spacing: { after: 60 }
-    }));
-    if (config.meuNome) ps.push(new Paragraph({
-      children: [new TextRun({ text: config.meuNome, bold: true, size: 22 })],
-      alignment: AlignmentType.CENTER
-    }));
-    if (config.meuCargo) ps.push(new Paragraph({
-      children: [new TextRun({ text: config.meuCargo, size: 22 })],
-      alignment: AlignmentType.CENTER
-    }));
-
-    const doc = new Document({
-      styles: { default: { document: { run: { font: 'Times New Roman', size: 22 } } } },
-      sections: [{
-        properties: { page: { margin: { top: 1700, right: 1133, bottom: 1133, left: 1700 } } },
-        children: ps
-      }]
-    });
-    const blob = await Packer.toBlob(doc);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `pauta_${papelEl.dataset.numeroPauta || 'despachos'}.docx`;
-    document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(url);
-    mostrarFlash('Word baixado.');
-  } catch (err) {
-    console.error(err);
-    mostrarMsg('Falha ao gerar Word do lote.', true);
-  }
-}
-
-function mostrarFlash(txt) {
-  // pequeno feedback temporário
-  const el = $('#msg');
-  el.textContent = txt; el.classList.remove('error');
-  setTimeout(() => { el.textContent = ''; }, 1800);
-}
-
-// Renderiza um parágrafo com trechos em *negrito* usando jsPDF.
-// Quebra linhas dentro do parágrafo e troca de página automaticamente quando estoura.
-// Retorna o novo y.
-function _pdfDesenharParagrafo(doc, texto, opts) {
-  const { x, maxWidth, lineHeight, pageH, marginBottom, fontSize } = opts;
-  let y = opts.y;
-
-  // 1) Tokeniza o texto preservando *trechos em negrito*.
-  const tokens = []; // { text, bold }
-  const re = /\*([^*]+)\*/g;
-  let last = 0; let m;
-  while ((m = re.exec(texto)) !== null) {
-    if (m.index > last) tokens.push({ text: texto.slice(last, m.index), bold: false });
-    tokens.push({ text: m[1], bold: true });
-    last = re.lastIndex;
-  }
-  if (last < texto.length) tokens.push({ text: texto.slice(last), bold: false });
-  if (tokens.length === 0) tokens.push({ text: texto, bold: false });
-
-  // 2) Quebra cada token em palavras (mantendo o estilo) e monta as linhas.
-  const words = []; // { text, bold, isSpace }
-  tokens.forEach(tok => {
-    const partes = tok.text.split(/(\s+)/);
-    partes.forEach(p => {
-      if (p === '') return;
-      words.push({ text: p, bold: tok.bold, isSpace: /^\s+$/.test(p) });
-    });
-  });
-
-  // 3) Desenha quebrando ao chegar em maxWidth.
-  const setStyle = bold => doc.setFont('helvetica', bold ? 'bold' : 'normal');
-  doc.setFontSize(fontSize);
-  let linhaAtual = []; // { text, bold }
-  let larguraLinha = 0;
-
-  const flushLinha = () => {
-    // Verifica espaço vertical antes de escrever
-    if (y + lineHeight > pageH - marginBottom) {
-      doc.addPage();
-      y = opts.marginTop;
-    }
-    let cx = x;
-    linhaAtual.forEach(seg => {
-      setStyle(seg.bold);
-      doc.text(seg.text, cx, y);
-      cx += doc.getTextWidth(seg.text);
-    });
-    y += lineHeight;
-    linhaAtual = [];
-    larguraLinha = 0;
-  };
-
-  words.forEach(w => {
-    setStyle(w.bold);
-    let largura = doc.getTextWidth(w.text);
-
-    // Se for espaço no início da linha, ignora
-    if (w.isSpace && larguraLinha === 0) return;
-
-    // Se a palavra (não-espaço) cabe na linha
-    if (larguraLinha + largura <= maxWidth) {
-      linhaAtual.push({ text: w.text, bold: w.bold });
-      larguraLinha += largura;
-      return;
-    }
-
-    // Não cabe — fecha a linha atual
-    if (linhaAtual.length > 0) flushLinha();
-
-    // Se a palavra sozinha for maior que maxWidth, quebra por caractere
-    if (largura > maxWidth && !w.isSpace) {
-      let buf = '';
-      for (const ch of w.text) {
-        setStyle(w.bold);
-        const candidato = buf + ch;
-        if (doc.getTextWidth(candidato) > maxWidth && buf) {
-          linhaAtual.push({ text: buf, bold: w.bold });
-          flushLinha();
-          buf = ch;
-        } else {
-          buf = candidato;
-        }
-      }
-      if (buf) {
-        linhaAtual.push({ text: buf, bold: w.bold });
-        larguraLinha = doc.getTextWidth(buf);
-      }
-    } else if (!w.isSpace) {
-      linhaAtual.push({ text: w.text, bold: w.bold });
-      larguraLinha = largura;
-    }
-  });
-
-  if (linhaAtual.length > 0) flushLinha();
-  return y;
-}
-
-async function exportarBilheteIndividualPDF() {
-  const t = tarefas.find(x => x.id === _bilheteAtualId);
-  if (!t) return;
-
-  try {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-    const pageW = doc.internal.pageSize.getWidth();
-    const pageH = doc.internal.pageSize.getHeight();
-    // Margens A4 ABNT (3-2-3-2 cm) em pt
-    const cm = 28.3464567;
-    const marginTop = 3 * cm;
-    const marginBottom = 2 * cm;
-    const marginLeft = 3 * cm;
-    const marginRight = 2 * cm;
-    const fontSize = 12;
-    const lineHeight = 16;
-    const maxWidth = pageW - marginLeft - marginRight;
-
-    const es = despachoEstrutura(t, _despachoOpts);
-
-    let y = marginTop;
-
-    // Cabeçalho institucional: Despacho nº ____ — data (Times serif)
-    doc.setTextColor(20, 20, 20);
-    doc.setFont('times', 'bold');
-    doc.setFontSize(13);
-    doc.text(`DESPACHO Nº ${es.numero}`, marginLeft, y);
-    doc.setFont('times', 'normal');
-    doc.setFontSize(11);
-    doc.text(es.dataExt, pageW - marginRight, y, { align: 'right' });
-    y += 8;
-    doc.setDrawColor(120, 120, 120);
-    doc.setLineWidth(0.5);
-    doc.line(marginLeft, y, pageW - marginRight, y);
-    y += 16;
-
-    // Referências (Assunto, Referência OE, Prazo, Para, De)
-    doc.setFont('times', 'normal');
-    doc.setFontSize(fontSize);
-    for (const r of es.refs) {
-      const linha = `${r.rotulo}: ${r.valor}`;
-      const wrapped = doc.splitTextToSize(linha, maxWidth);
-      for (const ln of wrapped) {
-        if (y > pageH - marginBottom) { doc.addPage(); y = marginTop; }
-        // rótulo em negrito
-        const idx = ln.indexOf(':');
-        if (idx > 0) {
-          doc.setFont('times', 'bold');
-          doc.text(ln.slice(0, idx + 1), marginLeft, y);
-          const labelW = doc.getTextWidth(ln.slice(0, idx + 1) + ' ');
-          doc.setFont('times', 'normal');
-          doc.text(ln.slice(idx + 1).trimStart(), marginLeft + labelW, y);
-        } else {
-          doc.text(ln, marginLeft, y);
-        }
-        y += lineHeight;
-      }
-    }
-    y += lineHeight * 0.5;
-
-    // Vocativo
-    if (es.vocativo) {
-      if (y > pageH - marginBottom) { doc.addPage(); y = marginTop; }
-      doc.setFont('times', 'normal');
-      doc.text(es.vocativo, marginLeft, y);
-      y += lineHeight * 1.6;
-    }
-
-    // Parágrafos justificados com indentação
-    const indent = 1 * cm;
-    for (const p of es.paragrafos) {
-      const wrapped = doc.splitTextToSize(p, maxWidth - indent);
-      let isFirst = true;
-      for (const ln of wrapped) {
-        if (y > pageH - marginBottom) { doc.addPage(); y = marginTop; }
-        doc.text(ln, isFirst ? marginLeft + indent : marginLeft, y);
-        isFirst = false;
-        y += lineHeight;
-      }
-      y += lineHeight * 0.4;
-    }
-
-    // Próximos passos
-    if (es.proximosPassos && es.proximosPassos.length) {
-      y += lineHeight * 0.3;
-      if (y > pageH - marginBottom) { doc.addPage(); y = marginTop; }
-      doc.setFont('times', 'bold');
-      doc.text('Próximos passos:', marginLeft, y);
-      y += lineHeight;
-      doc.setFont('times', 'normal');
-      es.proximosPassos.forEach((p, i) => {
-        const wrapped = doc.splitTextToSize(`${i + 1}. ${p}`, maxWidth - indent);
-        for (const ln of wrapped) {
-          if (y > pageH - marginBottom) { doc.addPage(); y = marginTop; }
-          doc.text(ln, marginLeft + indent, y);
-          y += lineHeight;
-        }
-      });
-      y += lineHeight * 0.4;
-    }
-
-    // Fecho
-    if (y > pageH - marginBottom) { doc.addPage(); y = marginTop; }
-    const fechoLines = doc.splitTextToSize(es.fecho, maxWidth - indent);
-    let fechoFirst = true;
-    for (const ln of fechoLines) {
-      if (y > pageH - marginBottom) { doc.addPage(); y = marginTop; }
-      doc.text(ln, fechoFirst ? marginLeft + indent : marginLeft, y);
-      fechoFirst = false;
-      y += lineHeight;
-    }
-    y += lineHeight * 1.2;
-
-    // Assinatura (só em modo envio)
-    if (es.destino === 'envio') {
-      if (y + lineHeight * 4 > pageH - marginBottom) { doc.addPage(); y = marginTop; }
-      doc.text('Atenciosamente,', marginLeft, y);
-      y += lineHeight * 3;
-      // linha de assinatura centralizada
-      const lineW = 220;
-      const lineX = (pageW - lineW) / 2;
-      doc.line(lineX, y, lineX + lineW, y);
-      y += lineHeight;
-      doc.setFont('times', 'bold');
-      doc.text(es.assinatura.nome || '', pageW / 2, y, { align: 'center' });
-      y += lineHeight;
-      doc.setFont('times', 'normal');
-      doc.text(es.assinatura.cargo || '', pageW / 2, y, { align: 'center' });
-    }
-
-    doc.save(`despacho_${es.numero.replace('/', '-')}_${t.id}.pdf`);
-    mostrarMsg('Despacho exportado em PDF.');
-  } catch (err) {
-    console.error(err);
-    mostrarMsg('Falha ao gerar PDF do despacho.', true);
-  }
-}
-
-/* ===================================================================
    12-B. PLANNER (via Microsoft Forms pré-preenchido + Power Automate)
    =================================================================== */
 
@@ -4074,6 +2846,16 @@ function enviarParaPlanner(id) {
    13. E-MAIL — Manual de Redação da Presidência
    =================================================================== */
 
+// Helper de categoria para e-mail (Leva 20: bloco de despacho removido)
+function _categoriaDeTask(t) {
+  if (t.status === 'concluida') return 'concluida';
+  if (isAtrasada(t)) return 'atrasada';
+  if (t.status === 'bloqueada') return 'bloqueada';
+  if (t.prioridade === 'alta') return 'alta';
+  if (t.status === 'em-andamento') return 'andamento';
+  return 'rotina';
+}
+
 let _emailTarefaId = null;
 
 // Tom do e-mail (institucional|pessoal). Persiste durante a sessão do modal.
@@ -4124,7 +2906,7 @@ function inferirTemplate(t) {
 }
 
 // Estado do modal de e-mail: assunto (curto/completo) e corpo (normal/compacto)
-let _emailModoAssunto = 'curto';   // 'curto' (rotulo + titulo truncado) | 'completo' (Despacho + rotulo + titulo)
+let _emailModoAssunto = 'curto';   // 'curto' (rotulo + titulo truncado) | 'completo' (rotulo + titulo completo)
 let _emailModoCorpo = 'normal';    // 'normal' | 'compacto' (apenas para lembrete/cobranca)
 
 // Trunca string a max chars preservando palavra inteira sempre que possível
@@ -4167,7 +2949,7 @@ function _passosContextuaisPorTitulo(titulo) {
   return matches.slice(0, 2);
 }
 
-// Mapeia template manual -> categoria do despacho (compartilha variações)
+// Mapeia template manual -> categoria de e-mail
 function _emailTplToCategoria(tpl, t) {
   if (tpl === 'conclusao') return 'concluida';
   if (tpl === 'cobranca') return 'atrasada';
@@ -4176,7 +2958,7 @@ function _emailTplToCategoria(tpl, t) {
   if (tpl === 'solicitacao') {
     return (t && t.prioridade === 'alta') ? 'alta' : 'rotina';
   }
-  // 'auto' — deixa despachoEstrutura decidir
+  // 'auto' — categoria inferida pela tarefa
   return null;
 }
 
@@ -4231,20 +3013,15 @@ function atualizarCorpoEmail() {
   const oe = t.oeId ? OBJETIVOS.find(o => o.id === t.oeId) : null;
   const oeTrecho = oe ? ` (vinculada ao Objetivo Estratégico ${oe.id} — ${oe.curto})` : '';
 
-  // Pega numeração e categoria via despachoEstrutura.
-  // (E-mail não "consome" novo número — aproveita o já atribuído à tarefa, se houver,
-  //  ou gera um. Mesma lógica de despacho, garante consistência número↔assunto.)
-  const es = despachoEstrutura(t, { tom: 'institucional', destino: 'envio' });
-
-  // Categoria efetiva: override manual se o usuário escolheu, senão a do despacho
+  // Categoria efetiva: override manual se o usuário escolheu, senão pela tarefa
   const catManual = _emailTplToCategoria(tplManual, t);
-  const categoria = catManual || es.categoria;
+  const categoria = catManual || _categoriaDeTask(t);
   const rotuloAss = (tplManual !== 'auto' ? _EMAIL_LABELS_MANUAL[tplManual] : _EMAIL_LABELS[categoria]) || 'Comunicação';
 
-  // Variação estável compartilhada com o despacho
-  const seed = `${t.id}-${es.numero}-email`;
+  // Variação estável por tarefa
+  const seed = `${t.id}-email`;
 
-  // Frases de abertura específicas para e-mail (mais coloquiais que despacho)
+  // Frases de abertura específicas para e-mail
   const VAR_EMAIL = {
     concluida: [
       `comunico a conclusão da demanda ${tituloLimpo}${oeTrecho}`,
@@ -4347,11 +3124,9 @@ function atualizarCorpoEmail() {
 
   // Assunto: dois modos
   //  - 'curto'    : "<Rótulo> — <título truncado a ~50 chars>"
-  //  - 'completo' : "Despacho nº 0042/2026 — <Rótulo> — <título>"
+  //  - 'completo' : "<Rótulo> — <título completo>"
   const tituloAssunto = _emailModoAssunto === 'curto' ? _truncSmart(tituloLimpo, 50) : tituloLimpo;
-  const assunto = _emailModoAssunto === 'curto'
-    ? `${rotuloAss} — ${tituloAssunto}`
-    : `Despacho nº ${es.numero} — ${rotuloAss} — ${tituloAssunto}`;
+  const assunto = `${rotuloAss} — ${tituloAssunto}`;
 
   // Modo compacto disponível apenas para lembrete e cobrança (categoria andamento ou atrasada)
   const podeCompacto = (categoria === 'andamento' || categoria === 'atrasada');
@@ -4408,11 +3183,10 @@ function _montarEmailParaTarefa(t, opts) {
   const oe = t.oeId ? OBJETIVOS.find(o => o.id === t.oeId) : null;
   const oeTrecho = oe ? ` (vinculada ao Objetivo Estratégico ${oe.id} — ${oe.curto})` : '';
 
-  const es = despachoEstrutura(t, { tom: 'institucional', destino: 'envio' });
   const catManual = _emailTplToCategoria(tplManual, t);
-  const categoria = catManual || es.categoria;
+  const categoria = catManual || _categoriaDeTask(t);
   const rotuloAss = (tplManual !== 'auto' ? _EMAIL_LABELS_MANUAL[tplManual] : _EMAIL_LABELS[categoria]) || 'Comunicação';
-  const seed = `${t.id}-${es.numero}-email`;
+  const seed = `${t.id}-email`;
 
   // Vocativo
   const respPrim = (t.responsavel || '').split(/\s+/)[0];
@@ -4513,9 +3287,7 @@ function _montarEmailParaTarefa(t, opts) {
 
   // Assunto
   const tituloAssunto = assuntoMode === 'curto' ? _truncSmart(tituloLimpo, 50) : tituloLimpo;
-  const assunto = assuntoMode === 'curto'
-    ? `${rotuloAss} — ${tituloAssunto}`
-    : `Despacho nº ${es.numero} — ${rotuloAss} — ${tituloAssunto}`;
+  const assunto = `${rotuloAss} — ${tituloAssunto}`;
 
   const podeCompacto = (categoria === 'andamento' || categoria === 'atrasada');
   const compacto = podeCompacto && corpoMode === 'compacto';
@@ -4542,7 +3314,7 @@ function _montarEmailParaTarefa(t, opts) {
     destinatario: t.responsavel || '—',
     categoria,
     rotulo: rotuloAss,
-    numero: es.numero,
+    numero: '',
     titulo: tituloLimpo
   };
 }
@@ -4586,8 +3358,7 @@ function _montarEmailConsolidado(tarefasDoDest, opts) {
     const prazoExt = t.prazo ? fmtDataExtenso(t.prazo) : null;
     const oe = t.oeId ? OBJETIVOS.find(o => o.id === t.oeId) : null;
     const oeTrecho = oe ? ` (Objetivo Estratégico ${oe.id} — ${oe.curto})` : '';
-    const es = despachoEstrutura(t, { tom: 'institucional', destino: 'envio' });
-    const categoria = es.categoria;
+    const categoria = _categoriaDeTask(t);
     const rotuloAss = _EMAIL_LABELS[categoria] || 'Comunicação';
     // linha de status amigável
     let statusFrase = '';
@@ -4608,24 +3379,20 @@ function _montarEmailConsolidado(tarefasDoDest, opts) {
     // Próximos passos — desativados a pedido do usuário (Leva 6.3): nunca incluir.
     let bloco = `${i+1}. ${tituloLimpo}${oeTrecho} — ${rotuloAss}.${statusFrase}${resultadoFrase}`;
     blocos.push(bloco);
-    itensInternos.push({ id: t.id, titulo: tituloLimpo, categoria, rotulo: rotuloAss, numero: es.numero });
+    itensInternos.push({ id: t.id, titulo: tituloLimpo, categoria, rotulo: rotuloAss, numero: '' });
   });
   // Fecho único, neutro
   const fecho = 'Permaneço à disposição para esclarecimentos e ajustes que se fizerem necessários.';
   // Assunto consolidado
-  const numerosDespacho = itensInternos.map(x => x.numero).filter(Boolean);
   let assunto;
   if (assuntoMode === 'curto') {
     assunto = n === 1
       ? `Comunicação — ${_truncSmart(itensInternos[0].titulo, 50)}`
       : `Comunicação consolidada — ${n} demandas`;
   } else {
-    if (n === 1) {
-      assunto = `Despacho nº ${itensInternos[0].numero} — ${itensInternos[0].rotulo} — ${itensInternos[0].titulo}`;
-    } else {
-      const lista = numerosDespacho.length ? ` (Despachos ${numerosDespacho.join(', ')})` : '';
-      assunto = `Comunicação consolidada — ${n} demandas${lista}`;
-    }
+    assunto = n === 1
+      ? `${itensInternos[0].rotulo} — ${itensInternos[0].titulo}`
+      : `Comunicação consolidada — ${n} demandas`;
   }
   // Corpo final
   let corpo = `${voc},\n\n`;
@@ -4641,7 +3408,7 @@ function _montarEmailConsolidado(tarefasDoDest, opts) {
     destinatario,
     categoria: 'consolidado',
     rotulo: 'Consolidado',
-    numero: numerosDespacho.join(', '),
+    numero: '',
     titulo: `${n} demandas`,
     consolidado: true,
     qtdTarefas: n,
@@ -4998,8 +3765,6 @@ function bindDrucker() {
     const tplPre = tipoBanner === 'cobranca' ? 'cobranca' : (tipoBanner === 'lembrete' ? 'lembrete' : 'auto');
     if (act === 'email') {
       abrirIAEmailDireto(tid);
-    } else {
-      abrirIADespachoDireto(tid);
     }
   });
   // Fechar modal Drucker
@@ -6815,7 +5580,7 @@ function abrirIAModal({ titulo, subtitulo, modo, contexto, contextoLista, textoO
       tgt.appendChild(host);
     }
     const txt = () => taSaida.value || '';
-    const nomeBase = (tipoStr === 'despacho' ? 'despacho' : 'email');
+    const nomeBase = 'email';
     host.innerHTML = '';
     const mk = (rotulo, fn) => {
       const b = document.createElement('button');
@@ -6893,7 +5658,7 @@ function _ctxDeTarefa(t, extras) {
   }, extras || {});
 }
 
-// ----- Atalhos diretos: botões E-mail / Despacho dos cards vão direto ao modal IA -----
+// ----- Atalho direto: botão E-mail dos cards vai direto ao modal IA -----
 function abrirIAEmailDireto(id) {
   const t = tarefas.find(x => x.id === id);
   if (!t) { mostrarMsg('Tarefa não encontrada.', true); return; }
@@ -6903,18 +5668,6 @@ function abrirIAEmailDireto(id) {
     tipo: 'e-mail',
     contexto: ctx,
     onAceitar: () => {} // cópia/exportação feita pelas ações do próprio modal
-  });
-}
-
-function abrirIADespachoDireto(id) {
-  const t = tarefas.find(x => x.id === id);
-  if (!t) { mostrarMsg('Tarefa não encontrada.', true); return; }
-  const ctx = _ctxDeTarefa(t, { destinatario: t.responsavel || '' });
-  abrirIAModal({
-    modo: 'gerar',
-    tipo: 'despacho',
-    contexto: ctx,
-    onAceitar: () => {}
   });
 }
 
@@ -7083,66 +5836,7 @@ function bindBotoesIA() {
     });
   }
 
-  // 3) Despacho individual (#dlg-bilhete)
-  const btnBil = $('#btn-bilhete-gerar-ia');
-  if (btnBil) {
-    btnBil.addEventListener('click', () => {
-      const t = tarefas.find(x => x.id === _bilheteAtualId);
-      if (!t) { mostrarMsg('Tarefa não encontrada.', true); return; }
-      const ctx = _ctxDeTarefa(t, {
-        destinatario: t.responsavel || '',
-        tom: (_despachoOpts && _despachoOpts.tom) || 'institucional',
-        destino: (_despachoOpts && _despachoOpts.destino) || 'envio'
-      });
-      abrirIAModal({
-        modo: 'gerar',
-        tipo: 'despacho',
-        contexto: ctx,
-        onAceitar: (texto) => {
-          // Substitui o conteúdo do bilhete-digital pelo texto gerado, preservando a estrutura visual
-          const dig = $('#bilhete-digital');
-          if (dig) {
-            dig.innerHTML = '<pre style="white-space:pre-wrap;font-family:Times,serif;font-size:14px;line-height:1.55;">' + escHtml(texto) + '</pre>';
-            dig.dataset.texto = texto;
-          }
-          // Também atualiza papel/par com o mesmo texto puro
-          const pap = $('#bilhete-papel');
-          if (pap) {
-            pap.innerHTML = '<pre style="white-space:pre-wrap;font-family:Times,serif;font-size:14px;line-height:1.6;padding:1em;">' + escHtml(texto) + '</pre>';
-            pap.dataset.texto = texto;
-          }
-          const par = $('#bilhete-par');
-          if (par) { par.innerHTML = '<pre style="white-space:pre-wrap;font-family:Times,serif;font-size:14px;line-height:1.55;">' + escHtml(texto) + '</pre>'; par.dataset.texto = texto; }
-          mostrarFlash('Despacho gerado pela IA.');
-        }
-      });
-    });
-  }
-
-  // 4) Despacho em lote (#dlg-despacho-lote)
-  const btnLoteIA = $('#btn-lote-gerar-ia');
-  if (btnLoteIA) {
-    btnLoteIA.addEventListener('click', () => {
-      const papelEl = $('#lote-papel');
-      const ids = (papelEl.dataset.ids || '').split(',').filter(Boolean);
-      if (!ids.length) { mostrarMsg('Sem tarefas no lote.', true); return; }
-      const lista = ids.map(id => {
-        const t = tarefas.find(x => x.id === id);
-        return t ? _ctxDeTarefa(t, { destinatario: t.responsavel || '' }) : null;
-      }).filter(Boolean);
-      abrirIAModal({
-        modo: 'gerar',
-        tipo: 'despacho',
-        contextoLista: lista,
-        onAceitar: (textoTudo) => {
-          // Substitui o conteúdo do papel do lote por texto gerado
-          papelEl.innerHTML = '<pre style="white-space:pre-wrap;font-family:Times,serif;font-size:14px;line-height:1.6;padding:1em;">' + escHtml(textoTudo) + '</pre>';
-          papelEl.dataset.texto = textoTudo;
-          mostrarFlash(`${lista.length} despacho(s) gerados pela IA.`);
-        }
-      });
-    });
-  }
+  // (despacho individual e despacho em lote removidos na Leva 20)
 }
 
 /* ===================================================================
