@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260506p" />
+  <link rel="stylesheet" href="styles.css?v=20260506q" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a3d7a'/%3E%3Cpath d='M9 11h14M9 16h14M9 21h9' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='25.5' cy='21' r='2' fill='%23f08000'/%3E%3C/svg%3E" />
 
   <!-- Bibliotecas: jsPDF, html2canvas, SheetJS, Chart.js -->
@@ -175,17 +175,6 @@
             <option value="Q3">Q3 — Deliberação Estratégica Operacional</option>
             <option value="Q4">Q4 — Sustentação Operacional</option>
             <option value="NC">Não classificada</option>
-          </select>
-          <!-- Filtros Importante/Urgente ocultos (redundantes com Filtro por quadrante) -->
-          <select id="filtro-importante" aria-label="Filtrar por importante" hidden>
-            <option value="">Importante: todos</option>
-            <option value="sim">Importante: sim</option>
-            <option value="nao">Importante: não</option>
-          </select>
-          <select id="filtro-urgente" aria-label="Filtrar por urgente" hidden>
-            <option value="">Urgente: todos</option>
-            <option value="sim">Urgente: sim</option>
-            <option value="nao">Urgente: não</option>
           </select>
           <select id="ordenacao" aria-label="Ordenar">
             <option value="quad-prazo">Quadrante e prazo</option>
@@ -610,11 +599,12 @@
       <div class="card config-section">
         <h2>Sobre o app</h2>
         <ul class="muted-list">
-          <li><strong>Versão:</strong> v3</li>
-          <li><strong>Persistência:</strong> armazenamento do navegador (com fallback em memória quando o sandbox bloqueia)</li>
-          <li><strong>Plano Diretor 2023–2026:</strong> 8 Objetivos Estratégicos do Cebraspe — agora opcionais por tarefa.</li>
+          <li><strong>Build:</strong> Leva 22 (cache <code>v=20260506q</code>)</li>
+          <li><strong>Persistência:</strong> Firebase Firestore (Google Cloud) com criptografia AES-GCM 256 aplicada localmente antes do upload — o servidor só vê <em>blobs</em> cifrados.</li>
+          <li><strong>Plano Diretor 2023–2026:</strong> 8 Objetivos Estratégicos do Cebraspe — opcionais por tarefa.</li>
           <li><strong>Quadrantes (taxonomia da Camila):</strong> Q1 — Crise e Contenção · Q2 — Estratégia Direcional · Q3 — Deliberação Estratégica Operacional · Q4 — Sustentação Operacional.</li>
-          <li><strong>Bilhetes e e-mails:</strong> registro corporativo cordial, ancorado no Manual de Redação da Presidência da República (3ª ed.).</li>
+          <li><strong>Reuniões e histórico de decisões:</strong> cada tarefa registra automaticamente as reuniões em que foi discutida, com decisões e encaminhamentos.</li>
+          <li><strong>E-mails:</strong> redação corporativa cordial, ancorada no Manual de Redação da Presidência da República (3ª ed.).</li>
         </ul>
       </div>
     </section>
@@ -975,16 +965,16 @@
       <div id="lock-setup" hidden>
         <h3>Proteger este aplicativo com senha</h3>
         <p class="muted">
-          Antes de cadastrar tarefas, defina uma senha para criptografar os dados deste navegador.
+          Antes de cadastrar tarefas, defina uma senha para criptografar os dados antes de qualquer sincronização.
         </p>
         <div class="privacy-note">
           <strong>Aviso de privacidade</strong>
           <ul>
-            <li>Os dados ficam <strong>apenas neste navegador</strong>, em armazenamento local. Não há servidor, login externo nem nuvem.</li>
-            <li>Tudo é cifrado com a sua senha (AES-GCM 256, derivada via PBKDF2 com 200 mil iterações).</li>
-            <li><strong>Não há recuperação de senha.</strong> Se você esquecer, não tem como recuperar — só apagar tudo e começar de novo.</li>
-            <li>Faça backup periódico em <em>Exportar JSON</em> para não perder os dados.</li>
-            <li>Cada navegador tem sua base própria — quem abrir o link em outro dispositivo começa do zero, com sua própria senha.</li>
+            <li>Os dados são cifrados <strong>localmente</strong> com a sua senha (AES-GCM 256, derivada via PBKDF2 com 200 mil iterações) <strong>antes</strong> de qualquer envio.</li>
+            <li>O conteúdo cifrado é sincronizado em tempo real no Firebase Firestore (Google Cloud), permitindo acesso em outros navegadores e dispositivos com a mesma senha.</li>
+            <li>O Google só vê <em>blobs</em> opacos — sem a senha, nada pode ser lido. A chave nunca sai do navegador.</li>
+            <li><strong>Não há recuperação de senha.</strong> Se você esquecer, não há como recuperar — só apagar tudo e começar de novo.</li>
+            <li>Faça backup periódico em <em>Exportar JSON</em> para não depender só do servidor.</li>
           </ul>
         </div>
         <form id="lock-setup-form" class="form form--modal">
@@ -1044,11 +1034,11 @@
   </dialog>
 
   <!-- Firebase: config + sync compartilhado (equipe) -->
-  <script src="firebase-config.js?v=20260506p"></script>
-  <script src="firebase-sync.js?v=20260506p"></script>
-  <script src="ia-gemini.js?v=20260506p"></script>
-  <script src="app.js?v=20260506p"></script>
+  <script src="firebase-config.js?v=20260506q"></script>
+  <script src="firebase-sync.js?v=20260506q"></script>
+  <script src="ia-gemini.js?v=20260506q"></script>
+  <script src="app.js?v=20260506q"></script>
   <!-- Captura rápida em linguagem natural + voz -->
-  <script src="quick-capture.js?v=20260506p"></script>
+  <script src="quick-capture.js?v=20260506q"></script>
 </body>
 </html>

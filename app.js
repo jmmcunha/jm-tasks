@@ -927,7 +927,7 @@ function confirmar(titulo, msg) {
    =================================================================== */
 
 function bindFiltros() {
-  ['#busca','#filtro-objetivo','#filtro-status','#filtro-quadrante','#filtro-importante','#filtro-urgente','#ordenacao'].forEach(s => {
+  ['#busca','#filtro-objetivo','#filtro-status','#filtro-quadrante','#ordenacao'].forEach(s => {
     $(s).addEventListener('input', renderTudo);
     $(s).addEventListener('change', renderTudo);
   });
@@ -949,17 +949,11 @@ function aplicarFiltros() {
   const fObj = $('#filtro-objetivo').value;
   const fStatus = $('#filtro-status').value;
   const fQuad = $('#filtro-quadrante').value;
-  const fImp = $('#filtro-importante').value;
-  const fUrg = $('#filtro-urgente').value;
 
   let lista = tarefas.filter(t => {
     if (fObj && String(t.oeId) !== fObj) return false;
     if (fStatus && t.status !== fStatus) return false;
     if (fQuad && quadranteDe(t) !== fQuad) return false;
-    if (fImp === 'sim' && t.importante !== true) return false;
-    if (fImp === 'nao' && t.importante !== false) return false;
-    if (fUrg === 'sim' && t.urgente !== true) return false;
-    if (fUrg === 'nao' && t.urgente !== false) return false;
     if (q) {
       const obj = OBJETIVOS.find(o => o.id === t.oeId);
       const blob = `${t.titulo} ${t.responsavel || ''} ${t.resultado || ''} ${obj?.curto || ''}`.toLowerCase();
