@@ -5740,24 +5740,34 @@ function _montarDeepLinkTeams(r) {
 
   if (Array.isArray(r.tarefasIds) && r.tarefasIds.length) {
     blocos.push('<p><strong>Tarefas tratadas</strong></p>');
-    blocos.push('<ol>');
+    // Lista plana com supressão de meta repetida (OE/responsável/prazo)
+    // O Teams quebra <ol>/<li> com <br>, então usamos <p> com numeração manual.
+    let ultimoOe = null, ultimoResp = null, ultimoPrazo = null;
+    let idx = 0;
     r.tarefasIds.forEach((tid) => {
       const t = (typeof tarefas !== 'undefined') ? tarefas.find(x => x.id === tid) : null;
       if (!t) return;
+      idx += 1;
       const obj = t.oeId && typeof OBJETIVOS !== 'undefined' ? OBJETIVOS.find(o => o.id === t.oeId) : null;
       const e = enc[tid] || {};
-      let item = `<li><strong>${_escTeamsHtml(t.titulo)}</strong>`;
+      const oeKey = obj ? `OE ${obj.id}` : null;
+      const respKey = t.responsavel || null;
+      const prazoKey = t.prazo || null;
       const meta = [];
-      if (obj) meta.push(`OE ${obj.id}`);
-      if (t.responsavel) meta.push(`Resp.: ${_escTeamsHtml(t.responsavel)}`);
-      if (t.prazo) meta.push(`Prazo: ${_escTeamsHtml(t.prazo)}`);
-      if (meta.length) item += `<br><span>${meta.join(' &middot; ')}</span>`;
-      if (e.decisao) item += `<br><em>Decisão prévia:</em> ${_escTeamsHtml(e.decisao)}`;
-      if (e.proximoPasso) item += `<br><em>Próximo passo:</em> ${_escTeamsHtml(e.proximoPasso)}`;
-      item += '</li>';
-      blocos.push(item);
+      if (oeKey && oeKey !== ultimoOe) meta.push(oeKey);
+      if (respKey && respKey !== ultimoResp) meta.push(`Resp.: ${_escTeamsHtml(respKey)}`);
+      if (prazoKey && prazoKey !== ultimoPrazo) meta.push(`Prazo: ${_escTeamsHtml(prazoKey)}`);
+      ultimoOe = oeKey;
+      ultimoResp = respKey;
+      ultimoPrazo = prazoKey;
+
+      let p = `<p>${idx}. <strong>${_escTeamsHtml(t.titulo)}</strong>`;
+      if (meta.length) p += ` &mdash; <span>${meta.join(' &middot; ')}</span>`;
+      p += '</p>';
+      blocos.push(p);
+      if (e.decisao) blocos.push(`<p style="margin-left:18px"><em>Decisão prévia:</em> ${_escTeamsHtml(e.decisao)}</p>`);
+      if (e.proximoPasso) blocos.push(`<p style="margin-left:18px"><em>Próximo passo:</em> ${_escTeamsHtml(e.proximoPasso)}</p>`);
     });
-    blocos.push('</ol>');
   }
 
   if (r.resumoExecutivo) {
