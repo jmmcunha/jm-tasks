@@ -882,6 +882,8 @@ function bindModaisGlobais() {
     dlg.close();
   });
   $('#email-close').addEventListener('click', () => $('#dlg-email').close());
+  const btnHistClose = $('#historico-close');
+  if (btnHistClose) btnHistClose.addEventListener('click', () => $('#dlg-historico').close());
   $('#rev-detail-close').addEventListener('click', () => $('#dlg-rev').close());
 }
 
@@ -1585,6 +1587,8 @@ function renderGrupos(lista) {
     el.querySelector('[data-edit]').addEventListener('click', () => abrirEdicao(id));
     el.querySelector('[data-del]').addEventListener('click', () => excluirTarefa(id));
     el.querySelector('[data-email]').addEventListener('click', () => abrirIAEmailDireto(id));
+    const btnHist = el.querySelector('[data-historico]');
+    if (btnHist) btnHist.addEventListener('click', () => abrirHistoricoTarefa(id));
     const btnPlanner = el.querySelector('[data-planner]');
     if (btnPlanner) btnPlanner.addEventListener('click', () => enviarParaPlanner(id));
     el.querySelector('.tarefa__status-sel').addEventListener('change', e => alterarStatus(id, e.target.value));
@@ -1635,6 +1639,7 @@ function renderTarefa(t) {
           ${Object.entries(STATUS_ROTULOS).map(([v, r]) => `<option value="${v}" ${t.status === v ? 'selected' : ''}>${r}</option>`).join('')}
         </select>
         <button class="btn btn--ghost btn--sm" data-email title="Gerar e-mail">E-mail</button>
+        <button class="btn btn--ghost btn--sm" data-historico title="Histórico de decisões das reuniões">Histórico${reunioesQueTrataramTarefa(t.id).length ? ` (${reunioesQueTrataramTarefa(t.id).length})` : ''}</button>
         <button class="btn btn--ghost btn--sm" data-planner title="Abrir Microsoft Forms pré-preenchido para criar tarefa no Planner">Planner</button>
         <button class="icon-btn" data-edit title="Editar"><svg viewBox="0 0 16 16"><path d="M11 1l4 4-9 9H2v-4l9-9z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></button>
         <button class="icon-btn danger" data-del title="Excluir"><svg viewBox="0 0 16 16"><path d="M3 4h10M5 4v9h6V4M6 4V2h4v2M6 7v4M10 7v4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
@@ -5669,6 +5674,77 @@ function abrirIAEmailDireto(id) {
     contexto: ctx,
     onAceitar: () => {} // cópia/exportação feita pelas ações do próprio modal
   });
+}
+
+/* ===================================================================
+   HISTÓRICO DE DECISÕES POR TAREFA (Leva 21)
+   Lê reunioes[] e filtra as que têm encaminhamento sobre a tarefa.
+   Sem digitação adicional: alimenta-se do que já é registrado nas reuniões.
+   =================================================================== */
+
+function reunioesQueTrataramTarefa(taskId) {
+  if (!Array.isArray(reunioes)) return [];
+  return reunioes
+    .filter(r => r && r.encaminhamentos && r.encaminhamentos[taskId])
+    .filter(r => {
+      const e = r.encaminhamentos[taskId] || {};
+      return (e.decisao && e.decisao.trim()) || (e.proximoPasso && e.proximoPasso.trim());
+    })
+    .sort((a, b) => {
+      const da = (a.data || '') + 'T' + (a.hora || '00:00');
+      const db = (b.data || '') + 'T' + (b.hora || '00:00');
+      return db.localeCompare(da); // mais recente primeiro
+    });
+}
+
+function abrirHistoricoTarefa(id) {
+  const t = tarefas.find(x => x.id === id);
+  if (!t) { mostrarMsg('Tarefa não encontrada.', true); return; }
+  const dlg = $('#dlg-historico');
+  if (!dlg) return;
+  const tituloEl = $('#historico-tarefa-titulo');
+  if (tituloEl) tituloEl.textContent = t.titulo || '';
+  const cont = $('#historico-timeline');
+  if (!cont) return;
+  const lista = reunioesQueTrataramTarefa(id);
+  if (!lista.length) {
+    cont.innerHTML = '<p style="color:var(--muted);padding:24px 0;text-align:center">Esta tarefa ainda não foi tema de reuniões registradas com decisão ou próximo passo.</p>';
+  } else {
+    cont.innerHTML = lista.map(r => {
+      const e = (r.encaminhamentos || {})[id] || {};
+      const dataFmt = r.data ? fmtData(r.data) : 'sem data';
+      const horaFmt = r.hora ? ' · ' + r.hora : '';
+      const parts = Array.isArray(r.participantes) ? r.participantes : [];
+      const partsLabel = parts.length
+        ? parts.map(p => {
+            if (typeof p === 'string') return p;
+            return p.nome || p.email || '';
+          }).filter(Boolean).join(', ')
+        : '';
+      const decisao = (e.decisao || '').trim();
+      const proximo = (e.proximoPasso || '').trim();
+      return `
+        <article class="hist-entry" style="border-left:3px solid var(--accent);padding:10px 14px;margin-bottom:14px;background:var(--bg-soft);border-radius:6px">
+          <header style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:6px">
+            <button class="btn btn--ghost btn--sm" data-hist-reuniao="${escapeHTML(r.id)}" style="font-weight:600;text-align:left">${escapeHTML(r.titulo || 'Reunião sem título')}</button>
+            <span style="font-size:12px;color:var(--muted);white-space:nowrap">${dataFmt}${horaFmt}</span>
+          </header>
+          ${decisao ? `<div style="margin-top:6px"><strong style="font-size:12px;text-transform:uppercase;color:var(--muted)">Decisão</strong><br>${escapeHTML(decisao)}</div>` : ''}
+          ${proximo ? `<div style="margin-top:6px"><strong style="font-size:12px;text-transform:uppercase;color:var(--muted)">Próximo passo</strong><br>${escapeHTML(proximo)}</div>` : ''}
+          ${partsLabel ? `<div style="margin-top:8px;font-size:12px;color:var(--muted)">Participantes: ${escapeHTML(partsLabel)}</div>` : ''}
+        </article>
+      `;
+    }).join('');
+    // bind de cliques nos títulos das reuniões
+    cont.querySelectorAll('[data-hist-reuniao]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const rid = btn.dataset.histReuniao;
+        dlg.close();
+        if (typeof abrirModalReuniaoEditar === 'function') abrirModalReuniaoEditar(rid);
+      });
+    });
+  }
+  if (!dlg.open) dlg.showModal();
 }
 
 // ----- Ações de exportação do modal IA -----

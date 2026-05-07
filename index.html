@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260506o" />
+  <link rel="stylesheet" href="styles.css?v=20260506p" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a3d7a'/%3E%3Cpath d='M9 11h14M9 16h14M9 21h9' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='25.5' cy='21' r='2' fill='%23f08000'/%3E%3C/svg%3E" />
 
   <!-- Bibliotecas: jsPDF, html2canvas, SheetJS, Chart.js -->
@@ -943,6 +943,20 @@
     </div>
   </dialog>
 
+  <!-- Modal de histórico de decisões da tarefa -->
+  <dialog id="dlg-historico" class="modal modal--lg">
+    <div class="modal__inner">
+      <header class="modal__head">
+        <h3 id="historico-title">Histórico de decisões</h3>
+        <button class="btn btn--ghost btn--sm" id="historico-close" type="button">Fechar</button>
+      </header>
+      <div class="modal__body">
+        <p id="historico-tarefa-titulo" style="font-size:13px;color:var(--muted);margin:0 0 12px"></p>
+        <div id="historico-timeline"></div>
+      </div>
+    </div>
+  </dialog>
+
   <dialog id="dlg-oe-guia" class="modal modal--lg">
     <div class="modal__inner">
       <h3>Objetivos Estratégicos — Plano Diretor 2023–2026</h3>
@@ -1030,11 +1044,11 @@
   </dialog>
 
   <!-- Firebase: config + sync compartilhado (equipe) -->
-  <script src="firebase-config.js?v=20260506o"></script>
-  <script src="firebase-sync.js?v=20260506o"></script>
-  <script src="ia-gemini.js?v=20260506o"></script>
-  <script src="app.js?v=20260506o"></script>
+  <script src="firebase-config.js?v=20260506p"></script>
+  <script src="firebase-sync.js?v=20260506p"></script>
+  <script src="ia-gemini.js?v=20260506p"></script>
+  <script src="app.js?v=20260506p"></script>
   <!-- Captura rápida em linguagem natural + voz -->
-  <script src="quick-capture.js?v=20260506o"></script>
+  <script src="quick-capture.js?v=20260506p"></script>
 </body>
 </html>
