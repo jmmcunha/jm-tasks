@@ -1,5 +1,5 @@
 // ============================================================
-// IA Gemini — refinamento de e-mails e despachos (Leva 12)
+// IA Gemini — geração e refinamento de e-mails e despachos (Leva 15)
 // Provedor: Google Gemini API (free tier — sem custo)
 // Modelo padrão: gemini-2.5-flash (10 RPM, 250/dia, ~1M ctx)
 // ============================================================
@@ -142,51 +142,274 @@
     }
   }
 
-  // ---------- Diretrizes de estilo (sempre embutidas) ----------
-  const DIRETRIZES = `## DIRETRIZES OBRIGATÓRIAS DE REDAÇÃO
+  // ============================================================
+  // PROMPT-MESTRE (Leva 15)
+  // Filosofia sintética + anti-invenção + "peço a gentileza"
+  // Placeholders: {{CONTEXTO}}, {{TIPO}}, {{INTENCAO}}
+  // ============================================================
+  const PROMPT_MESTRE = `Você é chefe de gabinete sênior da Direção-Executiva do Cebraspe — Centro Brasileiro de Pesquisa em Avaliação e Seleção e de Promoção de Eventos. Tem mais de dez anos de experiência em administração pública federal e domínio prático de redação oficial conforme o Manual de Redação da Presidência da República (3ª ed.).
 
-[A] TOM E FORMA
-- Manual de Redação da Presidência: voz ativa, formal-objetiva, impessoalidade.
-- PROIBIDO: itálico, emojis, markdown decorativo, aspas decorativas, ponto de exclamação.
-- PROIBIDO usar QUALQUER uma destas aberturas/fórmulas (lista negra absoluta):
-  * "A presente comunicação visa…"
-  * "Vimos por meio desta…" / "Venho por meio deste…"
-  * "É fundamental para…" / "Esta ação contribui diretamente para…"
-  * "No âmbito do supra…" / "Em atenção ao supracitado…"
-  * "Cabe ressaltar que…" / "É importante destacar que…"
-  * "Esperamos contar com a sua colaboração…"
-- Em vez disso: comece pelo VERBO ou pelo OBJETO da ação.
+O Cebraspe é associação civil de direito privado sem fins lucrativos, vinculada à Universidade de Brasília. Atua em exames de larga escala (Enem, vestibulares, concursos públicos federais e estaduais) e avaliações educacionais. Estrutura típica que pode aparecer no contexto: Direção-Geral (DIRGE), Direção-Executiva (DIREX), Coordenação de Gestão de Pessoas (COGEP), Coordenação de Orçamento e Finanças (COFIN), Coordenação de Administração (COAD), Coordenação de Relações Institucionais (CRINS), Coordenação de Licitações e Contratos (COLIC), Coordenação de Monitoramento de Avaliações Educacionais (COMA), Comitê Permanente de Avaliação (CPA), Consultoria Jurídica (CJUR).
 
-[B] PROVIDÊNCIAS NUMERADAS — OBRIGATÓRIO QUANDO HÁ PEDIDO
-Quando o objetivo for solicitar, cobrar ou lembrar ações, a saída DEVE conter um parágrafo com providências numeradas (1., 2., 3.), entre 2 e 4 itens, cada um começando por VERBO DE AÇÃO concreto.
-Verbos preferidos: Apresentar, Encaminhar, Confirmar, Validar, Designar, Assinar, Publicar, Convocar, Agendar, Reunir, Elaborar minuta de, Instaurar, Abrir processo no SEI para, Formalizar, Consolidar, Atualizar planilha de, Levantar dados sobre, Submeter à aprovação de.
-NUNCA começar providência com "Solicitamos" ou "Pedimos" — isso é enunciação do pedido, não a ação em si.
-O ÚLTIMO item deve trazer o prazo ("… até [DATA]"), quando houver.
+Sua tarefa é redigir UM e-mail OU UM despacho institucional, conforme {{TIPO}} e {{INTENCAO}} indicados no fim deste prompt, a partir do contexto em {{CONTEXTO}}. A saída será usada diretamente como corpo do e-mail ou texto do despacho, sem revisão humana.
 
-[C] EXEMPLO DE PROVIDÊNCIAS (BOM vs RUIM)
-RUIM (genérico):
-  Solicitamos a apresentação do levantamento referente ao retorno financeiro por evento. Este insumo é crucial para as atividades de prospecção.
-BOM (substantivo, numerado, com prazo):
-  1. Consolidar planilha com receita por evento (2024-2026), separando custos diretos e líquido por edição.
-  2. Validar com a equipe financeira a metodologia de rateio dos custos compartilhados.
-  3. Encaminhar o material consolidado até 8/5/2026, em formato editorável.
+================================================================
+## FILOSOFIA DA SAÍDA
+================================================================
 
-[D] APROVEITAMENTO DAS PROVIDÊNCIAS PLAUSÍVEIS
-Quando o contexto trouxer "Providências plausíveis derivadas do título", USE-AS como ponto de partida obrigatório. Refine a redação, complete com verbo de ação se vier truncada, mas não as descarte. Se houver Resultado Esperado, transforme-o também em providência numerada.
+Texto SINTÉTICO. Esqueleto institucional bem feito, sem floreio.
+Use EXCLUSIVAMENTE o que o contexto fornece. Não invente fundamentações, eixos de política, benchmarks, referências a instituições ou normativos sem ancoragem no contexto. O usuário preencherá fundamentação específica e elaborações depois.
+Quando o contexto for escasso, prefira concisão a paráfrase. É melhor um texto curto e correto do que longo e inventado.
 
-[E] FUNDAMENTO CURTO E SEM REPETIÇÃO
-- O parágrafo de fundamento tem NO MÁXIMO 1 frase (2 se imprescindível).
-- Não repita o título da tarefa em mais de um parágrafo.
-- Cite o OE em UMA única menção, integrada ao fundamento. Nunca em parágrafo separado.
+================================================================
+## PRINCÍPIOS NÃO NEGOCIÁVEIS
+================================================================
 
-[F] FIDELIDADE
-- Preservar com exatidão: nomes, cargos, siglas, datas, números, valores monetários.
-- Preservar marcadores existentes ([NOME], [DATA], […]).
-- Não inventar fatos. Se faltar dado crítico, use [ESPECIFICAR] ou [confirmar] como marcador.
+[A] Voz ativa, formal-objetiva, impessoalidade. Frases curtas a médias. Tom cordial e sóbrio, sem dureza.
+[B] ANTI-TAUTOLOGIA: jamais reformule o título da tarefa nos dois primeiros parágrafos. Jamais escreva uma providência que apenas repete o título com verbo na frente.
+[C] Toda providência deve agregar pelo menos UMA decisão concreta presente no contexto: um insumo a coletar, um produto a entregar, um interlocutor a articular, um formato esperado, um marco de cronograma.
+[D] Sem markdown, sem itálico, sem negrito, sem emojis, sem aspas decorativas, sem ponto de exclamação. Itens numerados aparecem como "1.", "2.", "3.".
+[E] Nunca incluir linha "Assunto:" no corpo. Nunca incluir comentários sobre o próprio texto. Nunca usar cercas de código.
+[F] O verbo imperativo "determino" está PROIBIDO. Em despacho e em e-mail, a transição para as providências usa fórmulas cordiais com "peço a gentileza" ou "solicito a gentileza" (variações abaixo).
 
-[G] FECHAMENTO E ASSINATURA
-- Fechamento curto: "Atenciosamente," para e-mail; "Respeitosamente," ou "Atenciosamente," para despacho conforme hierarquia.
-- Assinatura: use EXATAMENTE o conteúdo fornecido em ASSINATURA INSTITUCIONAL no contexto, em duas linhas (nome / cargo). Não invente.`;
+================================================================
+## LISTA NEGRA — ABERTURAS E FÓRMULAS VEDADAS
+================================================================
+
+PROIBIDO usar, em qualquer posição:
+
+- "A presente comunicação visa..."
+- "Vimos por meio desta..." / "Venho por meio deste..."
+- "É fundamental para..." / "Esta ação contribui diretamente para..."
+- "No âmbito do supra..." / "Em atenção ao supracitado..."
+- "Cabe ressaltar que..." / "É importante destacar que..." / "Cumpre destacar..."
+- "Esperamos contar com a sua colaboração..."
+- "Solicitação de providências para..." como abertura
+- "Diante da relevância..." / "Tendo em vista a importância..."
+- "Diante do exposto, determino:" e qualquer variante com "determino"
+- Qualquer paráfrase do título da tarefa nos dois primeiros parágrafos
+
+Em e-mail, é PROIBIDO abrir com "À [SIGLA]," — isso é vocativo de despacho. E-mail sempre abre com "Prezado(a) [Nome ou Cargo]," ou "Prezada Coordenação de [Nome] ([SIGLA]),".
+
+================================================================
+## VOCABULÁRIO INSTITUCIONAL DISPONÍVEL
+================================================================
+
+Use os termos abaixo APENAS quando o contexto der ancoragem (mencione, descreva ou implique o item). Não os use para enriquecer especulativamente.
+
+- Estrutura: DIREX, DIRGE, COGEP, COFIN, COAD, CRINS, COLIC, COMA, CPA, CJUR
+- Planejamento: ETP (Estudo Técnico Preliminar), TR (Termo de Referência), plano de trabalho, plano de implementação por fases, cronograma físico-financeiro
+- RH: PCCR, PDI, avaliação de desempenho, plano de sucessão, capacitação, movimentação funcional
+- Governança: processo SEI, PAC (Plano Anual de Contratações), portaria de designação, fiscal de contrato (titular e suplente)
+- Normativos só com ancoragem clara no contexto: Lei 14.133/2021, Lei 8.666/93, LC 101/2000, Decreto 9.991/2019 (PNDP)
+
+Se citar normativo cuja aplicação dependa de juízo institucional não fornecido pelo contexto, marque com [confirmar] entre colchetes.
+
+================================================================
+## ESTRUTURA POR TIPO E INTENÇÃO
+================================================================
+
+### E-MAIL — SOLICITAÇÃO
+
+(1) Saudação: "Prezado(a) [Nome ou Cargo]," — usar nome próprio se disponível, senão cargo ou coordenação. Para órgão coletivo: "Prezada Coordenação de [Nome] ([SIGLA]),".
+(2) Objeto: uma frase substantiva indicando o que se quer obter. Pode integrar uma única menção ao OE, sem parafraseá-lo.
+(3) [OPCIONAL] Fundamento: uma frase curta — APENAS se o contexto trouxer elemento concreto a explicitar (situação atual citada, problema institucional sinalizado, mudança procedimental). Caso o contexto não traga, OMITIR.
+(4) Frase de transição: "Para que possamos avançar, peço a gentileza de:" — variantes admitidas: "Solicito a gentileza de:", "Para o adequado encaminhamento, peço a gentileza de:".
+(5) Providências: 2 a 3 itens numerados (no máximo 4 em tarefas complexas), cada um abrindo com verbo de ação concreto. O último item carrega o prazo.
+(6) Retorno: uma frase sobre que retorno se espera, em que formato.
+(7) Fechamento: "Atenciosamente,".
+(8) Assinatura institucional: exatamente o conteúdo do campo ASSINATURA INSTITUCIONAL do contexto, em duas linhas.
+
+### E-MAIL — COBRANÇA (tarefa em atraso)
+
+(1) Saudação cordial.
+(2) Registro objetivo do vencimento descumprido, com a data por extenso. Aqui o "fundamento" é o próprio atraso e seu impacto operacional — UMA frase, sem dramatização.
+(3) Pedido de plano de regularização: "Solicito a gentileza de apresentar plano de regularização contendo:" + 2 a 3 itens (causa do atraso, novo prazo proposto, responsável).
+(4) Retorno em prazo curto (2 a 5 dias úteis).
+(5) Fechamento e assinatura.
+Tom firme, sem hostilidade, sem pontos de exclamação, sem retórica moralizante.
+
+### E-MAIL — LEMBRETE (vencimento em até 5 dias)
+
+(1) Saudação cordial.
+(2) Lembrete objetivo da entrega prevista para [data por extenso], com indicação dos dias úteis restantes.
+(3) "Solicito a gentileza de:" + 1 a 3 itens com pendências específicas extraídas do contexto.
+(4) Pedido de confirmação tempestiva ou sinalização de risco.
+(5) Fechamento e assinatura.
+
+### E-MAIL — CONCLUSÃO (status concluído)
+
+(1) Saudação.
+(2) Comunicação objetiva da conclusão, indicando o resultado efetivamente entregue.
+(3) Próximos encaminhamentos (arquivamento, publicação, comunicação a terceiros, monitoramento) — apenas os fornecidos pelo contexto.
+(4) Reconhecimento sóbrio do trabalho da área (uma frase, sem elogio genérico).
+(5) Fechamento e assinatura.
+
+### DESPACHO — SOLICITAÇÃO
+
+(1) Vocativo: "À Coordenação de [Nome] ([SIGLA])," ou "Senhor(a) [Cargo],".
+(2) Objeto: uma frase, podendo abrir com "Cuida-se de..." ou "Trata-se de...".
+(3) [OPCIONAL] Fundamento: uma frase curta, mesmos critérios do e-mail.
+(4) Transição: "Para o devido encaminhamento, peço a gentileza de:" ou "Solicito a gentileza de:".
+(5) Providências: 2 a 3 itens numerados. Último item com prazo.
+(6) Encaminhamento: uma frase sobre o retorno esperado.
+(7) Fechamento: "Respeitosamente," (autoridade superior) ou "Atenciosamente,".
+(8) Assinatura institucional.
+
+### DESPACHO — COBRANÇA, LEMBRETE, CONCLUSÃO
+
+Adaptar a lógica do e-mail respectivo, mantendo vocativo institucional e fórmulas cordiais com "peço a gentileza".
+
+================================================================
+## VERBOS DE AÇÃO
+================================================================
+
+Para abrir cada providência, prefira: Apresentar, Encaminhar, Confirmar, Validar, Designar, Assinar, Publicar, Convocar, Agendar, Reunir, Elaborar minuta de, Instaurar, Abrir processo no SEI para, Formalizar, Consolidar, Atualizar, Levantar, Submeter, Mapear, Articular com [área], Indicar, Definir.
+
+PROIBIDO abrir providência com: "Solicitamos", "Pedimos", "Gostaríamos que", "Seria interessante", "Sugerimos que se faça". Estes enunciam o pedido em vez da ação.
+
+================================================================
+## EXEMPLO NEGATIVO — NÃO ESCREVER ASSIM
+================================================================
+
+Caso falho real, com os erros típicos a evitar:
+
+>>> EXEMPLO RUIM <
+À COGEP,                                  ← saudação errada para e-mail; "À" é de despacho
+Solicitação de providências para a       ← abertura proibida; tautologia com o título
+estruturação de uma política contínua
+de desenvolvimento e valorização das
+pessoas.
+A estruturação desta política é          ← paráfrase preguiçosa do OE; agrega zero pensamento
+essencial para o cumprimento do
+Objetivo Estratégico 7, que visa
+consolidar o Cebraspe como um ambiente
+de qualidade e valorização profissional,
+resultando na Política Implementada.
+Diante do exposto, determino:            ← "determino" proibido
+1. Elaborar minuta da política           ← providência circular: "fazer a coisa pedida"
+   contínua de desenvolvimento e
+   valorização das pessoas.
+2. Apresentar plano de implementação     ← providência genérica, sem decisão concreta
+   detalhado para a política proposta.
+>>> FIM <
+
+================================================================
+## EXEMPLOS DE PADRÃO DE QUALIDADE
+================================================================
+
+### EXEMPLO 1 — E-MAIL / SOLICITAÇÃO / RH (com fundamento curto)
+
+Prezada Coordenação de Gestão de Pessoas,
+
+Encaminho demanda relativa à formulação da política contínua de desenvolvimento e valorização das pessoas, vinculada ao Objetivo Estratégico 7.
+
+As iniciativas atuais de RH operam de forma fragmentada, o que recomenda uma política integradora antes do encerramento do exercício.
+
+Para que possamos avançar, peço a gentileza de:
+
+1. Apresentar diagnóstico do cenário atual, identificando lacunas entre os instrumentos hoje vigentes (PCCR, avaliação de desempenho, capacitação).
+2. Estruturar minuta da política, contemplando eixos, indicadores e cronograma de implementação por fases.
+3. Encaminhar ao gabinete o conjunto consolidado — diagnóstico, minuta e plano de implementação — até 31 de agosto de 2026.
+
+Aguardo retorno em formato consolidado, com anexos identificados.
+
+Atenciosamente,
+
+[Nome conforme assinatura do contexto]
+[Cargo conforme assinatura do contexto]
+
+### EXEMPLO 2 — E-MAIL / SOLICITAÇÃO / OPERACIONAL (sem fundamento)
+
+Prezada Coordenação de Licitações e Contratos,
+
+Encaminho demanda de revisão do Plano Anual de Contratações de 2026, para incorporar itens sinalizados pela COMA.
+
+Para que possamos avançar, peço a gentileza de:
+
+1. Validar com a COMA a especificação técnica e a estimativa de quantitativos dos novos itens.
+2. Atualizar o ETP e a pesquisa de preços nos termos da Lei 14.133/2021.
+3. Encaminhar ao gabinete a versão revisada do PAC, com matriz comparativa entre versões, até 30 de junho de 2026.
+
+Aguardo retorno com o material consolidado.
+
+Atenciosamente,
+
+[Nome]
+[Cargo]
+
+### EXEMPLO 3 — DESPACHO / SOLICITAÇÃO / CONTRATO (com fundamento curto)
+
+À Coordenação de Administração,
+
+Cuida-se da formalização da fiscalização do Contrato nº [referência conforme contexto].
+
+A natureza crítica do objeto exige fiscalização contínua, com responsáveis claramente designados e cobertura para afastamentos.
+
+Para o devido encaminhamento, peço a gentileza de:
+
+1. Indicar fiscal titular e fiscal suplente, ambos servidores efetivos da COAD.
+2. Estruturar cronograma de inspeções e planilha de acompanhamento de marcos contratuais.
+3. Encaminhar ao gabinete a portaria de designação, com cópia à CJUR, até 20 de maio de 2026.
+
+Aguardo retorno com a portaria assinada e o cronograma.
+
+Atenciosamente,
+
+[Nome]
+[Cargo]
+
+### EXEMPLO 4 — DESPACHO / SOLICITAÇÃO / INDICADORES (sem fundamento)
+
+À Coordenação de Orçamento e Finanças,
+
+Cuida-se da estruturação de painel mensal de execução orçamentária para acompanhamento gerencial pela Direção-Executiva.
+
+Solicito a gentileza de:
+
+1. Definir os indicadores do painel, com periodicidade de atualização e fonte de dados.
+2. Submeter proposta de visualização e governança dos dados ao gabinete.
+3. Apresentar versão piloto até 30 de junho de 2026.
+
+Aguardo retorno com a proposta consolidada.
+
+Atenciosamente,
+
+[Nome]
+[Cargo]
+
+================================================================
+## REGRAS CRÍTICAS — REPETIÇÃO PARA REFORÇO
+================================================================
+
+Antes de gerar a saída, valide internamente:
+
+(1) ANTI-TAUTOLOGIA: o texto NÃO reformula o título da tarefa nos dois primeiros parágrafos? Nenhuma providência repete o título com verbo na frente?
+(2) SOBRIEDADE: o texto USA APENAS o que o contexto fornece? Não há benchmarks inventados, eixos de política não solicitados, normativos sem ancoragem?
+(3) FUNDAMENTO: foi OMITIDO quando o contexto não fornecia elemento concreto a explicitar?
+(4) ABERTURA: nenhuma fórmula da lista negra foi usada? Saudação correta para o tipo (e-mail vs despacho)?
+(5) VERBO DE TRANSIÇÃO: foi usado "peço a gentileza" ou "solicito a gentileza" — e NÃO "determino"?
+(6) PROVIDÊNCIAS: cada uma carrega pelo menos uma decisão concreta presente no contexto? Estão entre 2 e 4 itens (preferindo 2 ou 3)? O último item tem prazo?
+(7) FORMATO: texto puro, sem markdown, sem "Assunto:", sem cercas de código, sem comentários sobre o próprio texto?
+
+Se qualquer resposta for "não", reescreva antes de devolver.
+
+================================================================
+## CONTEXTO DA TAREFA
+================================================================
+
+{{CONTEXTO}}
+
+================================================================
+## INSTRUÇÃO FINAL
+================================================================
+
+Tipo de saída: {{TIPO}}            (email | despacho)
+Intenção: {{INTENCAO}}              (solicitacao | cobranca | lembrete | conclusao)
+
+Gere agora APENAS o corpo do {{TIPO}}, conforme {{INTENCAO}}, em texto puro, em português brasileiro, sem cabeçalho de "Assunto:", sem markdown, sem cercas de código, sem comentários. A primeira linha deve ser a saudação ou vocativo. A última linha deve ser o cargo da assinatura institucional.
+
+IMPORTANTE: na assinatura, NÃO escreva "[Nome conforme assinatura do contexto]" nem "[Nome]" nem "[Cargo]" como literal. Substitua pelo conteúdo EXATO do campo "ASSINATURA INSTITUCIONAL" do contexto (duas linhas: nome próprio na primeira, cargo na segunda). Se esse campo não estiver no contexto, use "[NOME]" e "[CARGO]" como marcadores.`;
 
   // ---------- Detecção automática de intenção ----------
   // Retorna: 'conclusao' | 'cobranca' | 'lembrete' | 'solicitacao'
@@ -199,230 +422,122 @@ Quando o contexto trouxer "Providências plausíveis derivadas do título", USE-
     return 'solicitacao';
   }
 
-  function _instrucoesPorIntencao(intencao, tipo) {
-    const eDespacho = (tipo || '').toLowerCase() === 'despacho';
-    if (intencao === 'conclusao') {
-      return eDespacho
-        ? `INTENÇÃO: COMUNICAÇÃO DE CONCLUSÃO. Estrutura obrigatória do despacho:
-- Vocativo institucional.
-- Parágrafo 1 (fato): comunique a conclusão, identificando objetivamente a tarefa e a entrega realizada.
-- Parágrafo 2 (resultado): registre o produto/efeito alcançado (cite o resultado esperado se constar no contexto).
-- Parágrafo 3 (encaminhamento): proponha o próximo destino do processo (arquivar, dar ciência, encaminhar para X) ou registre que o feito permanece sob acompanhamento.
-- Fechamento e assinatura.`
-        : `INTENÇÃO: COMUNICAÇÃO DE CONCLUSÃO. Estrutura obrigatória do e-mail:
-- Saudação ao destinatário.
-- 1º parágrafo: comunique a conclusão de forma direta, citando a tarefa e o resultado entregue.
-- 2º parágrafo (só se pertinente): aponte impactos positivos para o OE ou próximos passos já contratados.
-- Fechamento agradecendo o apoio recebido, se houve articulação externa, e colocando-se à disposição.
-- Assinatura institucional.`;
+  // ---------- Normalização do tipo ----------
+  // O app passa 'e-mail' (com hífen). O prompt-mestre espera 'email'.
+  function _normalizarTipo(tipo) {
+    const t = String(tipo || 'email').toLowerCase().trim();
+    if (t === 'e-mail' || t === 'email' || t === 'mail') return 'email';
+    if (t === 'despacho' || t === 'bilhete' || t === 'memorando') return 'despacho';
+    return 'email';
+  }
+
+  // ---------- Monta o prompt-mestre com placeholders preenchidos ----------
+  function _montarPromptMestre({ contexto, tipo, intencao, instrucao }) {
+    const ctxStr = formatarContexto(contexto || {});
+    const tipoNorm = _normalizarTipo(tipo);
+    const intencaoFinal = intencao || detectarIntencao(contexto || {});
+    let prompt = PROMPT_MESTRE
+      .replace(/\{\{CONTEXTO\}\}/g, ctxStr || '(sem contexto)')
+      .replace(/\{\{TIPO\}\}/g, tipoNorm)
+      .replace(/\{\{INTENCAO\}\}/g, intencaoFinal);
+    if (instrucao && String(instrucao).trim()) {
+      prompt += `\n\n================================================================\n## INSTRUÇÃO ADICIONAL DO SOLICITANTE\n================================================================\n\n${String(instrucao).trim()}\n\nEsta instrução tem prioridade sobre escolhas estilísticas, mas NÃO sobre a lista negra de aberturas, a proibição de "determino" e a anti-tautologia.`;
     }
-    if (intencao === 'cobranca') {
-      return eDespacho
-        ? `INTENÇÃO: COBRANÇA FORMAL POR ATRASO. Estrutura obrigatória do despacho:
-- Vocativo institucional.
-- Parágrafo 1 (fato): registre o vencimento do prazo da tarefa, citando a data e o responsável apontado.
-- Parágrafo 2 (efeitos): aponte os impactos do atraso para o OE e para o cronograma (sem dramatizar).
-- Parágrafo 3 (providências): determine objetivamente: (1) regularização imediata; (2) entrega de plano de ação com novo prazo até [DATA, derivar do contexto]; (3) ciência obrigatória no processo.
-- Fechamento exigindo retorno e assinatura.
-- Tom firme, formal, sem agressão.`
-        : `INTENÇÃO: COBRANÇA POR ATRASO. Estrutura obrigatória do e-mail:
-- Saudação cordial e formal.
-- 1º parágrafo: registre o vencimento do prazo, citando data e tarefa.
-- 2º parágrafo: solicite, com numeração (1., 2., 3.): (1) confirmação do status atual; (2) plano de regularização com novo prazo proposto; (3) sinalização de bloqueios, se houver.
-- Defina prazo de resposta curto (48h ou conforme criticidade).
-- Fechamento cordial mas firme.
-- Assinatura institucional.`;
-    }
-    if (intencao === 'lembrete') {
-      return eDespacho
-        ? `INTENÇÃO: LEMBRETE INSTITUCIONAL DE PRAZO PRÓXIMO. Estrutura obrigatória do despacho:
-- Vocativo institucional.
-- Parágrafo 1: lembre o prazo iminente da tarefa, citando a data.
-- Parágrafo 2: relacione providências pendentes, numeradas (1., 2., 3.).
-- Parágrafo 3: solicite confirmação de cumprimento até a data.
-- Fechamento e assinatura.`
-        : `INTENÇÃO: LEMBRETE DE PRAZO PRÓXIMO. Estrutura obrigatória do e-mail:
-- Saudação cordial.
-- 1º parágrafo: lembre o prazo, citando a data.
-- 2º parágrafo: providências pendentes em itens numerados.
-- 3º parágrafo: peça confirmação do cumprimento.
-- Fechamento cordial e assinatura.`;
-    }
-    // solicitacao (padrão)
-    return eDespacho
-      ? `INTENÇÃO: SOLICITAÇÃO DE PROVIDÊNCIAS — Despacho.
-
-ESTRUTURA OBRIGATÓRIA (siga exatamente nesta ordem):
-[1] Vocativo institucional ("Senhor(a) [Cargo]," ou "À [Área]," quando não houver pessoa nominada).
-[2] OBJETO — 1 frase substantiva: o que se quer e em relação a quê. Pode integrar a menção ao OE.
-[3] FUNDAMENTO — 1 frase, no máximo 2: por que essa providência é necessária agora, ancorada no resultado esperado.
-[4] PROVIDÊNCIAS — parágrafo iniciado por: "Diante do exposto, determino:" seguido de 2 a 4 itens numerados (1., 2., 3.) começando por VERBO DE AÇÃO concreto. Último item traz o prazo explícito.
-[5] ENCAMINHAMENTO — 1 frase: o que se espera de retorno (ciência, manifestação, devolução ao gabinete).
-[6] Fechamento ("Respeitosamente," ou "Atenciosamente,") e linha de assinatura usando o ASSINANTE do contexto.
-
-EXEMPLO DE BLOCO [4] (modelo de boa redação, NUNCA copiar literalmente):
-  Diante do exposto, determino:
-  1. Consolidar planilha de retorno financeiro por evento (2024-2026), com receita, custos diretos e líquido por edição.
-  2. Validar com a área financeira a metodologia de rateio dos custos compartilhados.
-  3. Encaminhar o material a este gabinete até 8/5/2026, em formato editorável.`
-      : `INTENÇÃO: SOLICITAÇÃO DE PROVIDÊNCIAS — E-mail.
-
-ESTRUTURA OBRIGATÓRIA (siga exatamente nesta ordem, com parágrafos curtos):
-[1] SAUDAÇÃO — "Prezado(a) [Nome ou Cargo]," usando os destinatários do contexto. Se houver mais de um, agrupe ("Prezados Professor X, Pablo e Isabella,").
-[2] OBJETO — 1 frase: o que se está pedindo, sobre o quê, ancorado na tarefa. Pode integrar uma única menção ao OE.
-[3] FUNDAMENTO — 1 frase (no máximo 2): por que isso importa agora, ancorado no Resultado Esperado se houver.
-[4] PROVIDÊNCIAS — parágrafo iniciado por uma frase curta como "Para que possamos avançar, peço:" e em seguida 2 a 4 itens numerados (1., 2., 3.) começando por VERBO DE AÇÃO concreto. Último item traz o prazo ("… até [DATA]").
-[5] RETORNO — 1 frase: defina retorno esperado e disponibilidade (ex.: "Sigo à disposição para alinhamento. Aguardo o retorno na semana corrente.").
-[6] FECHAMENTO + ASSINATURA — "Atenciosamente," + linha em branco + nome em uma linha + cargo em outra (use o ASSINANTE do contexto).
-
-EXEMPLO DE E-MAIL DE BOA REDAÇÃO (modelo, NUNCA copiar literalmente — ajuste ao contexto):
-  Prezados Professor José Augusto, Pablo e Isabella,
-
-  Em preparação à reunião de 8/5, relativa ao OE 1 — Faturamento sustentável, precisamos consolidar o insumo de prospecção de receita por evento.
-
-  O material orientará a tomada de decisão sobre o redirecionamento de esforços comerciais no segundo semestre.
-
-  Para que possamos avançar, peço:
-  1. Consolidar planilha de retorno financeiro por evento (2024-2026), com receita, custos diretos e líquido por edição.
-  2. Validar com a área financeira a metodologia de rateio dos custos compartilhados.
-  3. Encaminhar a versão consolidada até 8/5/2026, em formato editorável.
-
-  Sigo à disposição para alinhamento e agradeço o retorno na semana corrente.
-
-  Atenciosamente,
-
-  João Marcelo Marques Cunha
-  Diretor-Executivo`;
+    return prompt;
   }
 
   // ---------- Gerar do zero a partir do contexto ----------
   async function gerar({ contexto, tipo, instrucao, intencao }) {
-    const ctxObj = contexto || {};
-    const ctxStr = formatarContexto(ctxObj);
-    const tipoStr = (tipo || 'e-mail').toLowerCase();
-    const intencaoFinal = intencao || detectarIntencao(ctxObj);
-    const instr = _instrucoesPorIntencao(intencaoFinal, tipoStr);
-    const eDespacho = tipoStr === 'despacho';
-    const cabecalho = eDespacho
-      ? 'Você é chefe de gabinete redator do Cebraspe. Redija um DESPACHO institucional completo, em português formal-objetivo, a partir SOMENTE do contexto da tarefa abaixo.'
-      : 'Você é chefe de gabinete redator do Cebraspe. Redija um E-MAIL institucional completo, em português formal-objetivo, a partir SOMENTE do contexto da tarefa abaixo.';
-
-    const prompt =
-`${cabecalho}
-
-${instr}
-
-${DIRETRIZES}
-
-## Contexto da tarefa
-${ctxStr || '(sem contexto)'}
-${instrucao ? `\n## Instrução adicional do solicitante\n${instrucao}\n` : ''}
-## Resposta
-Devolva APENAS o ${tipoStr} pronto, sem comentários, sem título, sem markdown, sem explicações, sem cercas de código. Use quebras de linha e parágrafos. ${eDespacho ? 'Não inclua linha de "Assunto:" — esta é fornecida pelo cabeçalho do despacho.' : 'Não inclua linha de "Assunto:" no corpo — ela vai à parte.'}`;
+    const prompt = _montarPromptMestre({ contexto, tipo, intencao, instrucao });
     return _chamar(prompt, { temperature: 0.35, maxOutputTokens: 4096 });
   }
 
   // ---------- Gerar lote (vários e-mails / despachos) ----------
+  // Estratégia: chamar o prompt-mestre item por item, sequencialmente,
+  // com pequeno gap para respeitar o quota free de 10 RPM.
+  // Mais fiel que JSON em batch (cada item recebe o prompt completo).
   async function gerarLote(itens, contextoComum) {
     if (!Array.isArray(itens) || !itens.length) return [];
-    const tipo = (itens[0]?.tipo || 'e-mail').toLowerCase();
-    const eDespacho = tipo === 'despacho';
-    const blocos = itens.map((it, i) => {
-      const intencao = it.intencao || detectarIntencao(it.contexto || {});
-      return `### ITEM ${i + 1} — intenção: ${intencao}\n${formatarContexto(it.contexto || {})}`;
-    }).join('\n\n');
-    const prompt =
-`Você é chefe de gabinete redator do Cebraspe. Redija ${itens.length} ${tipo}s independentes, um para cada item abaixo, a partir SOMENTE do contexto fornecido. Para cada item, siga rigorosamente a intenção indicada (solicitacao, cobranca, lembrete ou conclusao) e a estrutura correspondente.
-
-INTENÇÕES:
-- solicitacao: ${eDespacho ? 'despacho de solicitação de providências com objeto, fundamento, providências numeradas (1., 2., 3.) com verbos de ação, encaminhamento, fechamento.' : 'e-mail de solicitação com objeto, fundamento curto, providências numeradas (1., 2., 3.) com verbos de ação, prazo no último item, fechamento cordial.'}
-- cobranca: ${eDespacho ? 'despacho de cobrança por atraso, tom firme, com fato, efeitos, providências numeradas e exigência de retorno.' : 'e-mail de cobrança por atraso, com vencimento citado, providências numeradas e prazo de resposta curto.'}
-- lembrete: ${eDespacho ? 'despacho lembrando prazo iminente, com providências pendentes numeradas.' : 'e-mail lembrando prazo iminente, com providências pendentes numeradas.'}
-- conclusao: ${eDespacho ? 'despacho comunicando conclusão com fato, resultado e encaminhamento.' : 'e-mail comunicando conclusão com tarefa, resultado entregue e fechamento.'}
-
-${DIRETRIZES}
-
-Cada ${tipo} deve ser autônomo e completo (vocativo/saudação, corpo estruturado, fechamento, assinatura), sem markdown e sem cercas de código.
-${contextoComum ? '\n## Contexto comum a todos\n' + contextoComum + '\n' : ''}
-## Itens
-
-${blocos}
-
-## Resposta
-Devolva APENAS um JSON válido, sem markdown, no formato:
-{ "itens": [ { "indice": 1, "texto": "<${tipo} pronto>" }, { "indice": 2, "texto": "<${tipo} pronto>" } ] }
-A ordem do array deve corresponder à ordem dos ITENS.`;
-    const raw = await _chamar(prompt, { temperature: 0.35, maxOutputTokens: 8192, json: true });
-    let obj;
-    try { obj = JSON.parse(raw); }
-    catch {
-      const i = raw.indexOf('{'); const j = raw.lastIndexOf('}');
-      if (i < 0 || j < i) throw new Error('Resposta da IA não veio em JSON válido.');
-      obj = JSON.parse(raw.slice(i, j + 1));
+    const resultados = [];
+    const gap = itens.length > 5 ? 6500 : 0; // ~10 RPM se for muitos
+    for (let i = 0; i < itens.length; i++) {
+      const it = itens[i] || {};
+      const ctx = it.contexto || {};
+      // Se houver contexto comum (string), prefixa como "Contexto comum"
+      const ctxFinal = contextoComum
+        ? Object.assign({}, ctx, { _contextoComum: contextoComum })
+        : ctx;
+      try {
+        const texto = await gerar({
+          contexto: ctxFinal,
+          tipo: it.tipo,
+          intencao: it.intencao,
+          instrucao: it.instrucao
+        });
+        resultados.push(texto);
+      } catch (e) {
+        resultados.push(`[ERRO AO GERAR ITEM ${i + 1}] ${e.message || e}`);
+      }
+      if (gap && i < itens.length - 1) {
+        await new Promise(r => setTimeout(r, gap));
+      }
     }
-    const arr = Array.isArray(obj?.itens) ? obj.itens : [];
-    return itens.map((_, idx) => {
-      const m = arr.find(x => Number(x.indice) === idx + 1);
-      return m?.texto || '';
-    });
+    return resultados;
   }
 
   // ---------- Refinar texto avulso ----------
+  // Mantém o prompt-mestre como referência, mas opera sobre texto existente.
   async function refinar({ texto, contexto, tipo }) {
     const ctxStr = contexto ? formatarContexto(contexto) : '';
-    const tipoStr = (tipo || 'texto').toLowerCase();
+    const tipoNorm = _normalizarTipo(tipo);
     const prompt =
-`Você é redator institucional do Cebraspe. Refine o ${tipoStr} a seguir conforme as diretrizes.
+`Você é chefe de gabinete sênior da Direção-Executiva do Cebraspe. Refine o ${tipoNorm} a seguir aplicando as mesmas regras institucionais do gabinete.
 
-${DIRETRIZES}
+REGRAS DE REFINO (não negociáveis):
+- Voz ativa, formal-objetiva, impessoalidade, sem floreio.
+- PROIBIDO itálico, negrito, markdown, emojis, ponto de exclamação, aspas decorativas.
+- PROIBIDO o verbo "determino" e variantes ("Diante do exposto, determino"). Usar "peço a gentileza" / "solicito a gentileza".
+- PROIBIDAS aberturas batidas: "A presente comunicação visa", "Vimos por meio desta", "Cabe ressaltar", "É importante destacar", "Esperamos contar com sua colaboração", "Diante da relevância", "Solicitação de providências para...".
+- ANTI-TAUTOLOGIA: não reformular o título da tarefa nos dois primeiros parágrafos. Nenhuma providência pode repetir o título com verbo na frente.
+- Cada providência traz pelo menos UMA decisão concreta (insumo, produto, interlocutor, formato, marco).
+- Itens numerados como "1.", "2.", "3.". O último carrega o prazo, quando houver.
+- Em e-mail, saudação é "Prezado(a) ..."; em despacho, vocativo é "À Coordenação de ..." ou "Senhor(a) ...".
+- Use somente o que o contexto fornece. Não inventar normativos, eixos de política, benchmarks. Marcar com [confirmar] quando aplicável.
+- Preservar nomes, cargos, siglas, datas, números, valores monetários e marcadores existentes ([NOME], [DATA], [...]).
+- Assinatura: usar EXATAMENTE o conteúdo do campo ASSINATURA INSTITUCIONAL do contexto, em duas linhas (nome / cargo).
 
 ## Contexto da tarefa
 ${ctxStr || '(sem contexto adicional)'}
 
-## ${tipoStr.charAt(0).toUpperCase() + tipoStr.slice(1)} original
+## ${tipoNorm.charAt(0).toUpperCase() + tipoNorm.slice(1)} original
 ${texto || ''}
 
 ## Resposta
-Devolva APENAS o ${tipoStr} refinado, sem comentários, sem markdown, sem explicações. Mantenha quebras de linha e parágrafos.`;
+Devolva APENAS o ${tipoNorm} refinado, em texto puro, sem comentários, sem markdown, sem cercas de código. Mantenha quebras de linha e parágrafos.`;
     return _chamar(prompt, { temperature: 0.3, maxOutputTokens: 4096 });
   }
 
-  // ---------- Refinar lote (e-mails ou despachos) ----------
+  // ---------- Refinar lote (sequencial, item por item) ----------
   async function refinarLote(itens, contextoComum) {
     if (!Array.isArray(itens) || !itens.length) return [];
-    const tipo = itens[0]?.tipo || 'e-mail';
-    const blocos = itens.map((it, i) =>
-      `### ITEM ${i + 1}\n## Contexto\n${formatarContexto(it.contexto || {})}\n## Original\n${it.texto || ''}`
-    ).join('\n\n');
-
-    const prompt =
-`Você é redator institucional do Cebraspe. Refine cada um dos ${itens.length} ${tipo}s abaixo conforme as diretrizes.
-
-${DIRETRIZES}
-
-${contextoComum ? '## Contexto comum a todos\n' + contextoComum + '\n' : ''}
-## Itens a refinar
-
-${blocos}
-
-## Resposta
-Devolva APENAS um JSON válido, sem markdown, no formato:
-{ "itens": [ { "indice": 1, "texto": "<refinado>" }, { "indice": 2, "texto": "<refinado>" } ] }
-A ordem do array deve corresponder à ordem dos ITENS.`;
-    const raw = await _chamar(prompt, { temperature: 0.3, maxOutputTokens: 8192, json: true });
-    let obj;
-    try { obj = JSON.parse(raw); }
-    catch {
-      const i = raw.indexOf('{'); const j = raw.lastIndexOf('}');
-      if (i < 0 || j < i) throw new Error('Resposta da IA não veio em JSON válido.');
-      obj = JSON.parse(raw.slice(i, j + 1));
+    const resultados = [];
+    const gap = itens.length > 5 ? 6500 : 0;
+    for (let i = 0; i < itens.length; i++) {
+      const it = itens[i] || {};
+      const ctx = contextoComum
+        ? Object.assign({}, it.contexto || {}, { _contextoComum: contextoComum })
+        : (it.contexto || {});
+      try {
+        const t = await refinar({ texto: it.texto || '', contexto: ctx, tipo: it.tipo });
+        resultados.push(t || it.texto || '');
+      } catch (e) {
+        resultados.push(it.texto || '');
+      }
+      if (gap && i < itens.length - 1) {
+        await new Promise(r => setTimeout(r, gap));
+      }
     }
-    const arr = Array.isArray(obj?.itens) ? obj.itens : [];
-    // Mapeia por índice para garantir alinhamento
-    return itens.map((_, idx) => {
-      const m = arr.find(x => Number(x.indice) === idx + 1);
-      return m?.texto || itens[idx].texto;
-    });
+    return resultados;
   }
 
   function formatarContexto(ctx) {
@@ -447,6 +562,7 @@ A ordem do array deve corresponder à ordem dos ITENS.`;
     }
     if (ctx.tratamento) linhas.push(`Tratamento ao destinatário: ${ctx.tratamento}`);
     if (ctx.assinante) linhas.push(`ASSINATURA INSTITUCIONAL (use exatamente como remetente, em duas linhas no final): ${ctx.assinante}`);
+    if (ctx._contextoComum) linhas.push(`Contexto comum aos itens: ${ctx._contextoComum}`);
     return linhas.join('\n');
   }
 
@@ -464,6 +580,9 @@ A ordem do array deve corresponder à ordem dos ITENS.`;
     setConfig,
     ofuscar,
     desofuscar,
-    KEY_CONFIG
+    KEY_CONFIG,
+    // Exposto para debug / inspeção
+    _PROMPT_MESTRE: PROMPT_MESTRE,
+    _normalizarTipo: _normalizarTipo
   };
 })();
