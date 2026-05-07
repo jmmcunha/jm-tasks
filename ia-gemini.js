@@ -147,63 +147,134 @@
 
 1. Tom institucional Cebraspe — Manual de Redação da Presidência da República:
    - Voz ativa, formal-objetiva, impessoalidade.
-   - Sem jargão, sem coloquialismo, sem itálico, sem emojis, sem markdown decorativo.
-   - Cabeçalho e fechamento adequados ao destinatário.
+   - Sem jargão, sem coloquialismo, sem itálico, sem emojis, sem markdown decorativo, sem aspas decorativas.
+   - Saudação e fechamento adequados à hierarquia do destinatário.
 
 2. Concisão e clareza:
    - Frases curtas, uma ideia por frase.
-   - Sem redundância, sem qualificadores vazios, sem fórmulas burocráticas ("vimos por meio desta", "em atenção ao supra").
-   - Use tópicos quando houver enumeração natural.
+   - Sem redundância, sem qualificadores vazios, sem fórmulas burocráticas ("vimos por meio desta", "em atenção ao supra", "venho por meio deste").
+   - Enumere as providências com 1., 2., 3. quando houver mais de uma.
 
-3. Contexto estratégico:
-   - Cite o Objetivo Estratégico quando houver e for pertinente.
-   - Mencione o prazo se for crítico.
-   - Aponte dependências apenas se descritas no contexto.
+3. Substantivo, não genérico:
+   - Nomeie a providência esperada com verbos de ação concretos: elaborar, validar, encaminhar, formalizar, assinar, publicar, reunir, proceder à vistoria, instaurar, abrir processo no SEI, designar, agendar, etc.
+   - Quando o contexto permitir, cite o produto/entregável esperado (ex.: minuta de portaria, nota técnica, ofício assinado, planilha consolidada).
+   - Se houver prazo, cite-o de forma explícita.
 
-4. Preservar com fidelidade:
+4. Contexto estratégico (sem encher linguiça):
+   - Cite o Objetivo Estratégico apenas se houver e em uma única menção, no parágrafo de fundamento.
+   - Não repita o título da tarefa em mais de um parágrafo.
+
+5. Preservar com fidelidade:
    - Nomes próprios, cargos, siglas, datas, números, valores monetários conforme o contexto.
-   - Citações textuais de regulamentos, portarias, leis e decisões.
    - Marcadores de placeholder existentes (ex.: [NOME], [DATA]).
 
-5. Não inventar:
+6. Não inventar:
    - Não crie fatos, números, datas, nomes ou cargos que não estejam no contexto.
-   - Se faltar informação crítica, deixe [ESPECIFICAR] como marcador.`;
+   - Se faltar informação crítica, deixe [ESPECIFICAR] como marcador.
+   - Quando não houver descrição substantiva da tarefa, derive providências plausíveis a partir do título da tarefa, marcando como provisórias com [confirmar].`;
+
+  // ---------- Detecção automática de intenção ----------
+  // Retorna: 'conclusao' | 'cobranca' | 'lembrete' | 'solicitacao'
+  function detectarIntencao(ctx) {
+    if (!ctx) return 'solicitacao';
+    const status = String(ctx.status || '').toLowerCase();
+    if (status === 'concluida' || status === 'concluída') return 'conclusao';
+    if (ctx._atrasada === true) return 'cobranca';
+    if (ctx._diasAteVenc != null && ctx._diasAteVenc >= 0 && ctx._diasAteVenc <= 5) return 'lembrete';
+    return 'solicitacao';
+  }
+
+  function _instrucoesPorIntencao(intencao, tipo) {
+    const eDespacho = (tipo || '').toLowerCase() === 'despacho';
+    if (intencao === 'conclusao') {
+      return eDespacho
+        ? `INTENÇÃO: COMUNICAÇÃO DE CONCLUSÃO. Estrutura obrigatória do despacho:
+- Vocativo institucional.
+- Parágrafo 1 (fato): comunique a conclusão, identificando objetivamente a tarefa e a entrega realizada.
+- Parágrafo 2 (resultado): registre o produto/efeito alcançado (cite o resultado esperado se constar no contexto).
+- Parágrafo 3 (encaminhamento): proponha o próximo destino do processo (arquivar, dar ciência, encaminhar para X) ou registre que o feito permanece sob acompanhamento.
+- Fechamento e assinatura.`
+        : `INTENÇÃO: COMUNICAÇÃO DE CONCLUSÃO. Estrutura obrigatória do e-mail:
+- Saudação ao destinatário.
+- 1º parágrafo: comunique a conclusão de forma direta, citando a tarefa e o resultado entregue.
+- 2º parágrafo (só se pertinente): aponte impactos positivos para o OE ou próximos passos já contratados.
+- Fechamento agradecendo o apoio recebido, se houve articulação externa, e colocando-se à disposição.
+- Assinatura institucional.`;
+    }
+    if (intencao === 'cobranca') {
+      return eDespacho
+        ? `INTENÇÃO: COBRANÇA FORMAL POR ATRASO. Estrutura obrigatória do despacho:
+- Vocativo institucional.
+- Parágrafo 1 (fato): registre o vencimento do prazo da tarefa, citando a data e o responsável apontado.
+- Parágrafo 2 (efeitos): aponte os impactos do atraso para o OE e para o cronograma (sem dramatizar).
+- Parágrafo 3 (providências): determine objetivamente: (1) regularização imediata; (2) entrega de plano de ação com novo prazo até [DATA, derivar do contexto]; (3) ciência obrigatória no processo.
+- Fechamento exigindo retorno e assinatura.
+- Tom firme, formal, sem agressão.`
+        : `INTENÇÃO: COBRANÇA POR ATRASO. Estrutura obrigatória do e-mail:
+- Saudação cordial e formal.
+- 1º parágrafo: registre o vencimento do prazo, citando data e tarefa.
+- 2º parágrafo: solicite, com numeração (1., 2., 3.): (1) confirmação do status atual; (2) plano de regularização com novo prazo proposto; (3) sinalização de bloqueios, se houver.
+- Defina prazo de resposta curto (48h ou conforme criticidade).
+- Fechamento cordial mas firme.
+- Assinatura institucional.`;
+    }
+    if (intencao === 'lembrete') {
+      return eDespacho
+        ? `INTENÇÃO: LEMBRETE INSTITUCIONAL DE PRAZO PRÓXIMO. Estrutura obrigatória do despacho:
+- Vocativo institucional.
+- Parágrafo 1: lembre o prazo iminente da tarefa, citando a data.
+- Parágrafo 2: relacione providências pendentes, numeradas (1., 2., 3.).
+- Parágrafo 3: solicite confirmação de cumprimento até a data.
+- Fechamento e assinatura.`
+        : `INTENÇÃO: LEMBRETE DE PRAZO PRÓXIMO. Estrutura obrigatória do e-mail:
+- Saudação cordial.
+- 1º parágrafo: lembre o prazo, citando a data.
+- 2º parágrafo: providências pendentes em itens numerados.
+- 3º parágrafo: peça confirmação do cumprimento.
+- Fechamento cordial e assinatura.`;
+    }
+    // solicitacao (padrão)
+    return eDespacho
+      ? `INTENÇÃO: SOLICITAÇÃO DE PROVIDÊNCIAS. Estrutura obrigatória do despacho:
+- Vocativo institucional ao destinatário (ou "À [Área]" se não houver pessoa nominada).
+- Parágrafo 1 (objeto): identifique o assunto e a finalidade da solicitação em uma única frase substantiva. Cite o OE em uma única menção.
+- Parágrafo 2 (fundamento): explique brevemente por que a providência é necessária, ancorando no resultado esperado quando houver.
+- Parágrafo 3 (providências): solicite as providências com numeração (1., 2., 3.), com verbos de ação concretos. Inclua entre 2 e 4 itens, derivados do título, da descrição e do resultado esperado. Se houver prazo, cite-o no último item.
+- Parágrafo 4 (encaminhamento): defina retorno esperado (ciência, manifestação, devolução).
+- Fechamento institucional e assinatura.`
+      : `INTENÇÃO: SOLICITAÇÃO DE PROVIDÊNCIAS. Estrutura obrigatória do e-mail:
+- Saudação adequada ("Prezado(a) [Nome/Cargo],").
+- 1º parágrafo (contexto + objeto): apresente em uma frase a tarefa e o que se busca obter; cite o OE em uma única menção.
+- 2º parágrafo (fundamento curto): explique a relevância ou o resultado esperado.
+- 3º parágrafo (providências solicitadas): liste com numeração (1., 2., 3.) entre 2 e 4 providências concretas, com verbos de ação. Mencione o prazo no item final, se houver.
+- 4º parágrafo: defina retorno esperado e disponibilidade para esclarecimentos.
+- Fechamento cordial ("Atenciosamente,") e linha de assinatura.`;
+  }
 
   // ---------- Gerar do zero a partir do contexto ----------
-  async function gerar({ contexto, tipo, instrucao }) {
-    const ctxStr = formatarContexto(contexto || {});
+  async function gerar({ contexto, tipo, instrucao, intencao }) {
+    const ctxObj = contexto || {};
+    const ctxStr = formatarContexto(ctxObj);
     const tipoStr = (tipo || 'e-mail').toLowerCase();
-    const especificacao = tipoStr === 'despacho'
-      ? `Você é assessor de redação institucional do Cebraspe. Redija um DESPACHO oficial completo a partir SOMENTE do contexto abaixo.
-
-O despacho deve conter, na ordem:
-- Identificação da tarefa (título e, se houver, OE).
-- Análise sucinta da situação (o que é, por que importa).
-- Encaminhamentos objetivos (o que deve ser feito, por quem, até quando).
-- Fechamento institucional padrão.
-
-Não use saudação de e-mail. É documento interno de despacho.`
-      : `Você é assessor de redação institucional do Cebraspe. Redija um E-MAIL profissional completo a partir SOMENTE do contexto abaixo.
-
-O e-mail deve conter, na ordem:
-- Saudação adequada ao destinatário (se informado).
-- Parágrafo de contextualização (o que motiva a comunicação).
-- Solicitação ou informação principal, com clareza sobre o que se espera.
-- Prazo, se houver.
-- Fechamento cordial e assinatura institucional genérica ("Atenciosamente," + linha em branco).
-
-Não inclua linha de "Assunto:" no corpo.`;
+    const intencaoFinal = intencao || detectarIntencao(ctxObj);
+    const instr = _instrucoesPorIntencao(intencaoFinal, tipoStr);
+    const eDespacho = tipoStr === 'despacho';
+    const cabecalho = eDespacho
+      ? 'Você é chefe de gabinete redator do Cebraspe. Redija um DESPACHO institucional completo, em português formal-objetivo, a partir SOMENTE do contexto da tarefa abaixo.'
+      : 'Você é chefe de gabinete redator do Cebraspe. Redija um E-MAIL institucional completo, em português formal-objetivo, a partir SOMENTE do contexto da tarefa abaixo.';
 
     const prompt =
-`${especificacao}
+`${cabecalho}
+
+${instr}
 
 ${DIRETRIZES}
 
 ## Contexto da tarefa
 ${ctxStr || '(sem contexto)'}
-${instrucao ? `\n## Instrução adicional\n${instrucao}\n` : ''}
+${instrucao ? `\n## Instrução adicional do solicitante\n${instrucao}\n` : ''}
 ## Resposta
-Devolva APENAS o ${tipoStr} pronto, sem comentários, sem markdown, sem explicações. Mantenha quebras de linha e parágrafos.`;
+Devolva APENAS o ${tipoStr} pronto, sem comentários, sem título, sem markdown, sem explicações, sem cercas de código. Use quebras de linha e parágrafos. ${eDespacho ? 'Não inclua linha de "Assunto:" — esta é fornecida pelo cabeçalho do despacho.' : 'Não inclua linha de "Assunto:" no corpo — ela vai à parte.'}`;
     return _chamar(prompt, { temperature: 0.5, maxOutputTokens: 4096 });
   }
 
@@ -211,15 +282,23 @@ Devolva APENAS o ${tipoStr} pronto, sem comentários, sem markdown, sem explica�
   async function gerarLote(itens, contextoComum) {
     if (!Array.isArray(itens) || !itens.length) return [];
     const tipo = (itens[0]?.tipo || 'e-mail').toLowerCase();
-    const blocos = itens.map((it, i) =>
-      `### ITEM ${i + 1}\n${formatarContexto(it.contexto || {})}`
-    ).join('\n\n');
+    const eDespacho = tipo === 'despacho';
+    const blocos = itens.map((it, i) => {
+      const intencao = it.intencao || detectarIntencao(it.contexto || {});
+      return `### ITEM ${i + 1} — intenção: ${intencao}\n${formatarContexto(it.contexto || {})}`;
+    }).join('\n\n');
     const prompt =
-`Você é assessor de redação institucional do Cebraspe. Redija ${itens.length} ${tipo}s independentes, um para cada item abaixo, a partir SOMENTE do contexto fornecido.
+`Você é chefe de gabinete redator do Cebraspe. Redija ${itens.length} ${tipo}s independentes, um para cada item abaixo, a partir SOMENTE do contexto fornecido. Para cada item, siga rigorosamente a intenção indicada (solicitacao, cobranca, lembrete ou conclusao) e a estrutura correspondente.
+
+INTENÇÕES:
+- solicitacao: ${eDespacho ? 'despacho de solicitação de providências com objeto, fundamento, providências numeradas (1., 2., 3.) com verbos de ação, encaminhamento, fechamento.' : 'e-mail de solicitação com objeto, fundamento curto, providências numeradas (1., 2., 3.) com verbos de ação, prazo no último item, fechamento cordial.'}
+- cobranca: ${eDespacho ? 'despacho de cobrança por atraso, tom firme, com fato, efeitos, providências numeradas e exigência de retorno.' : 'e-mail de cobrança por atraso, com vencimento citado, providências numeradas e prazo de resposta curto.'}
+- lembrete: ${eDespacho ? 'despacho lembrando prazo iminente, com providências pendentes numeradas.' : 'e-mail lembrando prazo iminente, com providências pendentes numeradas.'}
+- conclusao: ${eDespacho ? 'despacho comunicando conclusão com fato, resultado e encaminhamento.' : 'e-mail comunicando conclusão com tarefa, resultado entregue e fechamento.'}
 
 ${DIRETRIZES}
 
-Cada ${tipo} deve ser autônomo e completo (saudação/identificação, corpo, fechamento), sem markdown.
+Cada ${tipo} deve ser autônomo e completo (vocativo/saudação, corpo estruturado, fechamento, assinatura), sem markdown e sem cercas de código.
 ${contextoComum ? '\n## Contexto comum a todos\n' + contextoComum + '\n' : ''}
 ## Itens
 
@@ -308,14 +387,22 @@ A ordem do array deve corresponder à ordem dos ITENS.`;
     if (ctx.titulo) linhas.push(`Tarefa: ${ctx.titulo}`);
     if (ctx.quadrante) linhas.push(`Quadrante: ${ctx.quadrante}`);
     if (ctx.oe) linhas.push(`Objetivo Estratégico: ${ctx.oe}`);
-    if (ctx.responsavel) linhas.push(`Responsável: ${ctx.responsavel}`);
+    if (ctx.destinatario) linhas.push(`Destinatário: ${ctx.destinatario}`);
+    if (ctx.responsavel && ctx.responsavel !== ctx.destinatario) linhas.push(`Responsável apontado: ${ctx.responsavel}`);
     if (ctx.prazo) linhas.push(`Prazo: ${ctx.prazo}`);
+    if (ctx._diasAteVenc != null) linhas.push(`Dias até o vencimento: ${ctx._diasAteVenc}`);
+    if (ctx._atrasada) linhas.push(`Situação: tarefa em atraso`);
     if (ctx.status) linhas.push(`Status: ${ctx.status}`);
     if (ctx.prioridade) linhas.push(`Prioridade: ${ctx.prioridade}`);
     if (ctx.resultado) linhas.push(`Resultado esperado: ${ctx.resultado}`);
-    if (ctx.descricao) linhas.push(`Descrição: ${ctx.descricao}`);
-    if (ctx.destinatario) linhas.push(`Destinatário: ${ctx.destinatario}`);
-    if (ctx.assunto) linhas.push(`Assunto: ${ctx.assunto}`);
+    if (ctx.descricao) linhas.push(`Descrição/observações: ${ctx.descricao}`);
+    if (ctx.assunto) linhas.push(`Assunto sugerido: ${ctx.assunto}`);
+    if (Array.isArray(ctx.providenciasSugeridas) && ctx.providenciasSugeridas.length) {
+      linhas.push('Providências plausíveis derivadas do título (use, descarte ou ajuste):');
+      ctx.providenciasSugeridas.forEach((p, i) => linhas.push(`  ${i+1}. ${p}`));
+    }
+    if (ctx.tratamento) linhas.push(`Tratamento ao destinatário: ${ctx.tratamento}`);
+    if (ctx.assinante) linhas.push(`ASSINATURA INSTITUCIONAL (use exatamente como remetente, em duas linhas no final): ${ctx.assinante}`);
     return linhas.join('\n');
   }
 
@@ -326,6 +413,7 @@ A ordem do array deve corresponder à ordem dos ITENS.`;
     refinar,
     refinarLote,
     testarChave,
+    detectarIntencao,
     getChave,
     temChave,
     getConfig,

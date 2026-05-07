@@ -1592,8 +1592,8 @@ function renderGrupos(lista) {
     el.querySelector('.tarefa__titulo').addEventListener('click', () => abrirEdicao(id));
     el.querySelector('[data-edit]').addEventListener('click', () => abrirEdicao(id));
     el.querySelector('[data-del]').addEventListener('click', () => excluirTarefa(id));
-    el.querySelector('[data-bilhete]').addEventListener('click', () => abrirBilheteModal(id));
-    el.querySelector('[data-email]').addEventListener('click', () => abrirEmailModal(id));
+    el.querySelector('[data-bilhete]').addEventListener('click', () => abrirIADespachoDireto(id));
+    el.querySelector('[data-email]').addEventListener('click', () => abrirIAEmailDireto(id));
     const btnPlanner = el.querySelector('[data-planner]');
     if (btnPlanner) btnPlanner.addEventListener('click', () => enviarParaPlanner(id));
     el.querySelector('.tarefa__status-sel').addEventListener('change', e => alterarStatus(id, e.target.value));
@@ -6508,6 +6508,55 @@ function abrirIAModal({ titulo, subtitulo, modo, contexto, contextoLista, textoO
       ? 'A IA escreve do zero a partir do contexto da tarefa, com tom institucional Cebraspe.'
       : 'A IA reescreve o texto atual aplicando tom institucional, concisão e contexto estratégico.');
 
+  // Chip de intenção detectada (cabeçalho)
+  let chipHost = $('#ria12-chip-intencao');
+  if (!chipHost) {
+    const sub = $('#ria12-subtitulo');
+    if (sub && sub.parentElement) {
+      chipHost = document.createElement('div');
+      chipHost.id = 'ria12-chip-intencao';
+      chipHost.style.cssText = 'margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;';
+      sub.parentElement.insertBefore(chipHost, sub.nextSibling);
+    }
+  }
+  function _intencaoLabel(it) {
+    return it === 'cobranca' ? 'Cobrança (atrasada)' :
+           it === 'lembrete' ? 'Lembrete (prazo iminente)' :
+           it === 'conclusao' ? 'Comunicação de conclusão' :
+           'Solicitação de providências';
+  }
+  function _intencaoCor(it) {
+    return it === 'cobranca' ? '#b91c1c' :
+           it === 'lembrete' ? '#b45309' :
+           it === 'conclusao' ? '#15803d' :
+           '#1d4ed8';
+  }
+  let _intencaoAtual = null;
+  let _intencaoMistaInfo = null;
+  function _detectarIntencaoAtual() {
+    if (!window.IAGemini || !window.IAGemini.detectarIntencao) return 'solicitacao';
+    if (Array.isArray(contextoLista) && contextoLista.length) {
+      const ints = contextoLista.map(c => window.IAGemini.detectarIntencao(c || {}));
+      const cnt = {}; ints.forEach(i => cnt[i] = (cnt[i] || 0) + 1);
+      const distintas = Object.keys(cnt);
+      _intencaoMistaInfo = (distintas.length > 1) ? cnt : null;
+      const ordem = ['cobranca','lembrete','solicitacao','conclusao'];
+      for (const k of ordem) if (cnt[k]) return k;
+      return 'solicitacao';
+    }
+    return window.IAGemini.detectarIntencao(contexto || {});
+  }
+  if (chipHost) {
+    _intencaoAtual = _detectarIntencaoAtual();
+    const cor = _intencaoCor(_intencaoAtual);
+    let detalhe = '';
+    if (_intencaoMistaInfo) {
+      const partes = Object.entries(_intencaoMistaInfo).map(([k,v]) => `${v} ${_intencaoLabel(k).toLowerCase()}`);
+      detalhe = ` <span style="font-weight:400;color:#6b7280;">(lote: ${escHtml(partes.join(', '))})</span>`;
+    }
+    chipHost.innerHTML = `<span style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:${cor}15;color:${cor};border:1px solid ${cor}55;font-size:12px;font-weight:600;">Intenção detectada: ${escHtml(_intencaoLabel(_intencaoAtual))}</span>` + detalhe;
+  }
+
   // Contexto visível (uma tarefa ou várias)
   const ctxBox = $('#ria12-contexto-box');
   const ctxPre = $('#ria12-contexto');
@@ -6564,13 +6613,14 @@ function abrirIAModal({ titulo, subtitulo, modo, contexto, contextoLista, textoO
           `=== ${tipoStr.charAt(0).toUpperCase()+tipoStr.slice(1)} ${i+1} — Para: ${contextoLista[i].destinatario || contextoLista[i].responsavel || '—'} ===\n${tx}`
         ).join('\n\n' + '─'.repeat(60) + '\n\n');
       } else if (mModo === 'gerar') {
-        resultado = await window.IAGemini.gerar({ contexto: contexto || {}, tipo: tipoStr, instrucao: instrucao || null });
+        resultado = await window.IAGemini.gerar({ contexto: contexto || {}, tipo: tipoStr, instrucao: instrucao || null, intencao: _intencaoAtual });
       } else {
         resultado = await window.IAGemini.refinar({ texto: textoOriginal || '', contexto: contexto || {}, tipo: tipoStr });
       }
       taSaida.value = resultado;
       btnAceitar.disabled = false;
       btnTentar.textContent = 'Gerar de novo';
+      _renderAcoesIA();
     } catch (e) {
       $('#ria12-erro').textContent = e.message || String(e);
       $('#ria12-erro').style.display = 'block';
@@ -6579,6 +6629,40 @@ function abrirIAModal({ titulo, subtitulo, modo, contexto, contextoLista, textoO
       btnTentar.disabled = false;
     }
   }
+
+  // Ações de exportação aparecem após geração
+  function _renderAcoesIA() {
+    let host = $('#ria12-acoes-export');
+    if (!host) {
+      const saidaCol = $('#ria12-col-saida-h');
+      const tgt = saidaCol && saidaCol.parentElement;
+      if (!tgt) return;
+      host = document.createElement('div');
+      host.id = 'ria12-acoes-export';
+      host.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;';
+      tgt.appendChild(host);
+    }
+    const txt = () => taSaida.value || '';
+    const nomeBase = (tipoStr === 'despacho' ? 'despacho' : 'email');
+    host.innerHTML = '';
+    const mk = (rotulo, fn) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn btn--ghost btn--sm';
+      b.textContent = rotulo;
+      b.addEventListener('click', fn);
+      host.appendChild(b);
+    };
+    mk('Copiar', () => _iaCopiarTexto(txt()));
+    mk('Baixar Word', () => _iaBaixarWord(txt(), nomeBase));
+    mk('Baixar PDF', () => _iaBaixarPdf(txt(), nomeBase));
+    mk('Imprimir', () => _iaImprimir(txt()));
+    if (tipoStr === 'e-mail') mk('Abrir no e-mail', () => _iaAbrirMailto(txt(), contexto || {}));
+  }
+
+  // Limpa ações de exportação de gerações anteriores
+  const hostExportPrev = $('#ria12-acoes-export');
+  if (hostExportPrev) hostExportPrev.innerHTML = '';
 
   btnTentar.onclick = executar;
   btnCancelar.onclick = () => dlg.close();
@@ -6614,6 +6698,11 @@ function _ctxStrCurto(c) {
 // Monta contexto rico de uma tarefa (objeto base) para a IA
 function _ctxDeTarefa(t, extras) {
   const oe = t && t.oeId ? OBJETIVOS.find(o => o.id === t.oeId) : null;
+  const atrasada = isAtrasada(t);
+  let dias = null;
+  try { dias = (t && t.prazo) ? diasEntre(hojeISO(), t.prazo) : null; } catch(_) {}
+  const passos = _passosContextuaisPorTitulo(t.titulo || '');
+  const assinante = ((config && config.meuNome) || '') + (config && config.meuCargo ? '\n' + config.meuCargo : '');
   return Object.assign({
     titulo: t.titulo || '',
     oe: oe ? `OE ${oe.id} — ${oe.curto}: ${oe.texto}` : '',
@@ -6623,8 +6712,116 @@ function _ctxDeTarefa(t, extras) {
     status: t.status || '',
     prioridade: t.prioridade || '',
     resultado: t.resultadoEsperado || t.resultado || '',
-    descricao: t.descricao || t.observacoes || ''
+    descricao: t.descricao || t.observacoes || '',
+    _atrasada: atrasada,
+    _diasAteVenc: dias,
+    providenciasSugeridas: passos,
+    assinante: assinante.trim(),
+    tratamento: 'você'
   }, extras || {});
+}
+
+// ----- Atalhos diretos: botões E-mail / Despacho dos cards vão direto ao modal IA -----
+function abrirIAEmailDireto(id) {
+  const t = tarefas.find(x => x.id === id);
+  if (!t) { mostrarMsg('Tarefa não encontrada.', true); return; }
+  const ctx = _ctxDeTarefa(t, { destinatario: t.responsavel || '' });
+  abrirIAModal({
+    modo: 'gerar',
+    tipo: 'e-mail',
+    contexto: ctx,
+    onAceitar: () => {} // cópia/exportação feita pelas ações do próprio modal
+  });
+}
+
+function abrirIADespachoDireto(id) {
+  const t = tarefas.find(x => x.id === id);
+  if (!t) { mostrarMsg('Tarefa não encontrada.', true); return; }
+  const ctx = _ctxDeTarefa(t, { destinatario: t.responsavel || '' });
+  abrirIAModal({
+    modo: 'gerar',
+    tipo: 'despacho',
+    contexto: ctx,
+    onAceitar: () => {}
+  });
+}
+
+// ----- Ações de exportação do modal IA -----
+function _iaCopiarTexto(texto) {
+  if (!texto) return;
+  navigator.clipboard.writeText(texto).then(
+    () => mostrarFlash('Texto copiado.'),
+    () => { try { const ta = document.createElement('textarea'); ta.value = texto; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); mostrarFlash('Texto copiado.'); } catch(_) { mostrarMsg('Falha ao copiar.', true); } }
+  );
+}
+
+function _iaBaixarTxt(texto, nomeBase) {
+  if (!texto) return;
+  const blob = new Blob([texto], { type: 'text/plain;charset=utf-8' });
+  baixar(blob, (nomeBase || 'texto') + '_' + hojeISO() + '.txt');
+}
+
+async function _iaBaixarWord(texto, nomeBase) {
+  if (!texto) return;
+  try {
+    const D = await (typeof carregarLibDocx === 'function' ? carregarLibDocx() : Promise.resolve(window.docx));
+    if (!D) throw new Error('docx');
+    const { Document, Packer, Paragraph, TextRun } = D;
+    const paragrafos = (texto || '').split(/\n/).map(linha => new Paragraph({ children: [new TextRun({ text: linha, italics: false, font: 'Times New Roman', size: 24 })] }));
+    const doc = new Document({ sections: [{ properties: {}, children: paragrafos }] });
+    const blob = await Packer.toBlob(doc);
+    baixar(blob, (nomeBase || 'texto') + '_' + hojeISO() + '.docx');
+    mostrarFlash('Word baixado.');
+  } catch(e) {
+    _iaBaixarTxt(texto, nomeBase);
+    mostrarFlash('Word indisponível; baixado como texto.');
+  }
+}
+
+function _iaBaixarPdf(texto, nomeBase) {
+  if (!texto) return;
+  try {
+    const J = (typeof window !== 'undefined') ? (window.jspdf || null) : null;
+    if (!J || !J.jsPDF) { _iaBaixarTxt(texto, nomeBase); mostrarFlash('PDF indisponível; baixado como texto.'); return; }
+    const { jsPDF } = J;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    doc.setFont('times', 'normal');
+    doc.setFontSize(12);
+    const margem = 20;
+    const larg = 210 - margem*2;
+    const linhas = doc.splitTextToSize(texto, larg);
+    let y = margem;
+    const altLinha = 6;
+    for (const ln of linhas) {
+      if (y > 297 - margem) { doc.addPage(); y = margem; }
+      doc.text(ln, margem, y);
+      y += altLinha;
+    }
+    doc.save((nomeBase || 'texto') + '_' + hojeISO() + '.pdf');
+  } catch(e) {
+    _iaBaixarTxt(texto, nomeBase);
+    mostrarFlash('PDF indisponível; baixado como texto.');
+  }
+}
+
+function _iaAbrirMailto(texto, contexto) {
+  if (!texto) return;
+  const ass = (contexto && contexto.assunto) || '';
+  const url = 'mailto:?subject=' + encodeURIComponent(ass) + '&body=' + encodeURIComponent(texto);
+  // mailto: tem limite ~2000 chars em alguns clientes; trunca aviso
+  if (url.length > 6000) { mostrarMsg('Texto muito longo para mailto. Copie o conteúdo.', true); return; }
+  window.location.href = url;
+}
+
+function _iaImprimir(texto) {
+  if (!texto) return;
+  const w = window.open('', '_blank');
+  if (!w) { mostrarMsg('Bloqueio de pop-up impediu a impressão.', true); return; }
+  const html = '<!doctype html><html><head><meta charset="utf-8"><title>Impressão</title>' +
+    '<style>body{font-family:Times,serif;font-size:14px;line-height:1.6;padding:24px;white-space:pre-wrap;}</style>' +
+    '</head><body>' + escHtml(texto) + '</body></html>';
+  w.document.open(); w.document.write(html); w.document.close();
+  setTimeout(() => { try { w.focus(); w.print(); } catch(_) {} }, 200);
 }
 
 // ----- Bind dos 4 botões de IA -----
