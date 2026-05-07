@@ -5671,6 +5671,84 @@ function salvarReuniaoDoModal() {
   if (reuniaoAtivaId) renderDetalheReuniao(reuniaoAtivaId);
 }
 
+// ---- Deep link: agendar no Teams ----
+// Monta URL https://teams.microsoft.com/l/meeting/new com campos
+// pré-preenchidos a partir do objeto reunião. O Teams abre o
+// formulário de Nova reunião; usuário revisa e clica Salvar.
+function _montarDeepLinkTeams(r) {
+  if (!r) return '';
+  const subject = (r.titulo || 'Reunião').trim();
+
+  // Monta startTime/endTime em ISO local (sem timezone)
+  // Se não houver hora, default 09:00-10:00
+  const dataBase = r.data || new Date().toISOString().slice(0, 10);
+  const horaIni = (r.hora && /^\d{2}:\d{2}/.test(r.hora)) ? r.hora.slice(0, 5) : '09:00';
+  const startTime = `${dataBase}T${horaIni}:00`;
+  // Hora fim: +1h sobre o início
+  const [hh, mm] = horaIni.split(':').map(Number);
+  const fimDt = new Date(`${dataBase}T${horaIni}:00`);
+  fimDt.setHours(fimDt.getHours() + 1);
+  const endHora = String(fimDt.getHours()).padStart(2, '0') + ':' + String(fimDt.getMinutes()).padStart(2, '0');
+  const endData = fimDt.toISOString().slice(0, 10);
+  const endTime = `${endData}T${endHora}:00`;
+
+  // Pauta (content): tarefas vinculadas + observações
+  const linhasPauta = [];
+  linhasPauta.push('Pauta gerada pelo Cebraspe Tasks.');
+  linhasPauta.push('');
+  if (Array.isArray(r.tarefasIds) && r.tarefasIds.length) {
+    linhasPauta.push('Tarefas tratadas:');
+    r.tarefasIds.forEach((tid, idx) => {
+      const t = (typeof tarefas !== 'undefined') ? tarefas.find(x => x.id === tid) : null;
+      if (!t) return;
+      const obj = t.oeId && typeof OBJETIVOS !== 'undefined' ? OBJETIVOS.find(o => o.id === t.oeId) : null;
+      let linha = `${idx + 1}. ${t.titulo}`;
+      if (obj) linha += ` (OE ${obj.id})`;
+      if (t.responsavel) linha += ` — Resp.: ${t.responsavel}`;
+      if (t.prazo) linha += ` — Prazo: ${t.prazo}`;
+      linhasPauta.push(linha);
+    });
+    linhasPauta.push('');
+  }
+  if (r.observacoes) {
+    linhasPauta.push('Observações:');
+    linhasPauta.push(r.observacoes);
+    linhasPauta.push('');
+  }
+  if (r.local) {
+    linhasPauta.push(`Local de referência: ${r.local}`);
+  }
+  const content = linhasPauta.join('\n').trim();
+
+  // Attendees: aproveita apenas participantes que parecem e-mail
+  const emails = (r.participantes || [])
+    .filter(p => typeof p === 'string' && /@/.test(p))
+    .map(p => p.trim())
+    .filter(Boolean);
+
+  const params = new URLSearchParams();
+  params.set('subject', subject);
+  params.set('startTime', startTime);
+  params.set('endTime', endTime);
+  if (content) params.set('content', content);
+  if (emails.length) params.set('attendees', emails.join(','));
+
+  return `https://teams.microsoft.com/l/meeting/new?${params.toString()}`;
+}
+
+function agendarReuniaoNoTeams(id) {
+  const r = reunioes.find(x => x.id === id);
+  if (!r) return;
+  const url = _montarDeepLinkTeams(r);
+  if (!url) return;
+  // Avisa se houver participantes não-email (vão precisar ser adicionados manualmente no Teams)
+  const naoEmails = (r.participantes || []).filter(p => typeof p === 'string' && !/@/.test(p));
+  if (naoEmails.length) {
+    mostrarFlash(`Teams aberto. Adicione manualmente: ${naoEmails.slice(0, 3).join(', ')}${naoEmails.length > 3 ? ' (+' + (naoEmails.length - 3) + ')' : ''}`);
+  }
+  window.open(url, '_blank', 'noopener');
+}
+
 // ---- Render lista de reuniões ----
 function renderReunioes() {
   const filtro = $('#filtro-reuniao-status');
@@ -5776,6 +5854,7 @@ function renderDetalheReuniao(id) {
         </div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn--primary btn--sm" data-teams-reuniao="${r.id}" title="Abrir o Teams com a reunião pré-preenchida">Agendar no Teams</button>
         <button class="btn btn--ghost btn--sm" data-editar-reuniao="${r.id}">Editar</button>
         <button class="btn btn--danger btn--sm" data-excluir-reuniao="${r.id}">Excluir</button>
       </div>
@@ -5833,6 +5912,10 @@ function bindDetalheReuniaoEventos(id) {
       renderDetalheReuniao(id);
     });
   }
+
+  // Agendar no Teams (deep link)
+  const btnTeams = $(`[data-teams-reuniao="${id}"]`);
+  if (btnTeams) btnTeams.addEventListener('click', () => agendarReuniaoNoTeams(id));
 
   // Editar
   const btnEditar = $(`[data-editar-reuniao="${id}"]`);
