@@ -1510,3 +1510,11 @@ select {
   max-height: 8em;
   overflow-y: auto;
 }
+
+/* ===================================================================
+   Leva 14: modais antigos dlg-email e dlg-bilhete descontinuados.
+   Defesa em profundidade: ainda que algum caminho legado tente abri-los,
+   ficam invisíveis. Os botões de cards e Drucker já redirecionam ao
+   modal de IA via abrirIAEmailDireto / abrirIADespachoDireto.
+   =================================================================== */
+#dlg-email, #dlg-bilhete { display: none !important; }

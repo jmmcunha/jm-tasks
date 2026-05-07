@@ -3163,6 +3163,11 @@ let _bilheteAtualId = null;
 let _bilheteModo = 'digital';
 
 function abrirBilheteModal(id) {
+  // Leva 14: o modal antigo dlg-bilhete (Modo digital/papel/par+resposta) foi descontinuado.
+  // Qualquer chamada externa é redirecionada ao modal de IA.
+  return abrirIADespachoDireto(id);
+  // código legado abaixo mantido apenas como referência, nunca executado.
+  /* eslint-disable no-unreachable */
   const t = tarefas.find(x => x.id === id);
   if (!t) return;
   _bilheteAtualId = id;
@@ -4075,6 +4080,11 @@ let _emailTarefaId = null;
 let _emailTom = 'pessoal';
 
 function abrirEmailModal(id, opts) {
+  // Leva 14: o modal antigo dlg-email (Tom/Assunto/templates) foi descontinuado.
+  // Qualquer chamada externa é redirecionada ao modal de IA.
+  return abrirIAEmailDireto(id);
+  // código legado abaixo mantido apenas como referência, nunca executado.
+  /* eslint-disable no-unreachable */
   const t = tarefas.find(x => x.id === id);
   if (!t) return;
   _emailTarefaId = id;
@@ -4834,7 +4844,7 @@ function bindEmailLote() {
         const tid = actBtn.dataset.tid;
         if (!tid) return;
         fecharEmailLote();
-        abrirEmailModal(tid);
+        abrirIAEmailDireto(tid);
         return;
       }
       const key = actBtn.dataset.key;
@@ -4987,9 +4997,9 @@ function bindDrucker() {
     const tipoBanner = (dlg && dlg.dataset && dlg.dataset.druktipo) || '';
     const tplPre = tipoBanner === 'cobranca' ? 'cobranca' : (tipoBanner === 'lembrete' ? 'lembrete' : 'auto');
     if (act === 'email') {
-      abrirEmailModal(tid, { template: tplPre });
+      abrirIAEmailDireto(tid);
     } else {
-      abrirBilheteModal(tid);
+      abrirIADespachoDireto(tid);
     }
   });
   // Fechar modal Drucker

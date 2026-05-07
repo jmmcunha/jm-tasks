@@ -143,35 +143,50 @@
   }
 
   // ---------- Diretrizes de estilo (sempre embutidas) ----------
-  const DIRETRIZES = `Diretrizes obrigatórias:
+  const DIRETRIZES = `## DIRETRIZES OBRIGATÓRIAS DE REDAÇÃO
 
-1. Tom institucional Cebraspe — Manual de Redação da Presidência da República:
-   - Voz ativa, formal-objetiva, impessoalidade.
-   - Sem jargão, sem coloquialismo, sem itálico, sem emojis, sem markdown decorativo, sem aspas decorativas.
-   - Saudação e fechamento adequados à hierarquia do destinatário.
+[A] TOM E FORMA
+- Manual de Redação da Presidência: voz ativa, formal-objetiva, impessoalidade.
+- PROIBIDO: itálico, emojis, markdown decorativo, aspas decorativas, ponto de exclamação.
+- PROIBIDO usar QUALQUER uma destas aberturas/fórmulas (lista negra absoluta):
+  * "A presente comunicação visa…"
+  * "Vimos por meio desta…" / "Venho por meio deste…"
+  * "É fundamental para…" / "Esta ação contribui diretamente para…"
+  * "No âmbito do supra…" / "Em atenção ao supracitado…"
+  * "Cabe ressaltar que…" / "É importante destacar que…"
+  * "Esperamos contar com a sua colaboração…"
+- Em vez disso: comece pelo VERBO ou pelo OBJETO da ação.
 
-2. Concisão e clareza:
-   - Frases curtas, uma ideia por frase.
-   - Sem redundância, sem qualificadores vazios, sem fórmulas burocráticas ("vimos por meio desta", "em atenção ao supra", "venho por meio deste").
-   - Enumere as providências com 1., 2., 3. quando houver mais de uma.
+[B] PROVIDÊNCIAS NUMERADAS — OBRIGATÓRIO QUANDO HÁ PEDIDO
+Quando o objetivo for solicitar, cobrar ou lembrar ações, a saída DEVE conter um parágrafo com providências numeradas (1., 2., 3.), entre 2 e 4 itens, cada um começando por VERBO DE AÇÃO concreto.
+Verbos preferidos: Apresentar, Encaminhar, Confirmar, Validar, Designar, Assinar, Publicar, Convocar, Agendar, Reunir, Elaborar minuta de, Instaurar, Abrir processo no SEI para, Formalizar, Consolidar, Atualizar planilha de, Levantar dados sobre, Submeter à aprovação de.
+NUNCA começar providência com "Solicitamos" ou "Pedimos" — isso é enunciação do pedido, não a ação em si.
+O ÚLTIMO item deve trazer o prazo ("… até [DATA]"), quando houver.
 
-3. Substantivo, não genérico:
-   - Nomeie a providência esperada com verbos de ação concretos: elaborar, validar, encaminhar, formalizar, assinar, publicar, reunir, proceder à vistoria, instaurar, abrir processo no SEI, designar, agendar, etc.
-   - Quando o contexto permitir, cite o produto/entregável esperado (ex.: minuta de portaria, nota técnica, ofício assinado, planilha consolidada).
-   - Se houver prazo, cite-o de forma explícita.
+[C] EXEMPLO DE PROVIDÊNCIAS (BOM vs RUIM)
+RUIM (genérico):
+  Solicitamos a apresentação do levantamento referente ao retorno financeiro por evento. Este insumo é crucial para as atividades de prospecção.
+BOM (substantivo, numerado, com prazo):
+  1. Consolidar planilha com receita por evento (2024-2026), separando custos diretos e líquido por edição.
+  2. Validar com a equipe financeira a metodologia de rateio dos custos compartilhados.
+  3. Encaminhar o material consolidado até 8/5/2026, em formato editorável.
 
-4. Contexto estratégico (sem encher linguiça):
-   - Cite o Objetivo Estratégico apenas se houver e em uma única menção, no parágrafo de fundamento.
-   - Não repita o título da tarefa em mais de um parágrafo.
+[D] APROVEITAMENTO DAS PROVIDÊNCIAS PLAUSÍVEIS
+Quando o contexto trouxer "Providências plausíveis derivadas do título", USE-AS como ponto de partida obrigatório. Refine a redação, complete com verbo de ação se vier truncada, mas não as descarte. Se houver Resultado Esperado, transforme-o também em providência numerada.
 
-5. Preservar com fidelidade:
-   - Nomes próprios, cargos, siglas, datas, números, valores monetários conforme o contexto.
-   - Marcadores de placeholder existentes (ex.: [NOME], [DATA]).
+[E] FUNDAMENTO CURTO E SEM REPETIÇÃO
+- O parágrafo de fundamento tem NO MÁXIMO 1 frase (2 se imprescindível).
+- Não repita o título da tarefa em mais de um parágrafo.
+- Cite o OE em UMA única menção, integrada ao fundamento. Nunca em parágrafo separado.
 
-6. Não inventar:
-   - Não crie fatos, números, datas, nomes ou cargos que não estejam no contexto.
-   - Se faltar informação crítica, deixe [ESPECIFICAR] como marcador.
-   - Quando não houver descrição substantiva da tarefa, derive providências plausíveis a partir do título da tarefa, marcando como provisórias com [confirmar].`;
+[F] FIDELIDADE
+- Preservar com exatidão: nomes, cargos, siglas, datas, números, valores monetários.
+- Preservar marcadores existentes ([NOME], [DATA], […]).
+- Não inventar fatos. Se faltar dado crítico, use [ESPECIFICAR] ou [confirmar] como marcador.
+
+[G] FECHAMENTO E ASSINATURA
+- Fechamento curto: "Atenciosamente," para e-mail; "Respeitosamente," ou "Atenciosamente," para despacho conforme hierarquia.
+- Assinatura: use EXATAMENTE o conteúdo fornecido em ASSINATURA INSTITUCIONAL no contexto, em duas linhas (nome / cargo). Não invente.`;
 
   // ---------- Detecção automática de intenção ----------
   // Retorna: 'conclusao' | 'cobranca' | 'lembrete' | 'solicitacao'
@@ -235,20 +250,49 @@
     }
     // solicitacao (padrão)
     return eDespacho
-      ? `INTENÇÃO: SOLICITAÇÃO DE PROVIDÊNCIAS. Estrutura obrigatória do despacho:
-- Vocativo institucional ao destinatário (ou "À [Área]" se não houver pessoa nominada).
-- Parágrafo 1 (objeto): identifique o assunto e a finalidade da solicitação em uma única frase substantiva. Cite o OE em uma única menção.
-- Parágrafo 2 (fundamento): explique brevemente por que a providência é necessária, ancorando no resultado esperado quando houver.
-- Parágrafo 3 (providências): solicite as providências com numeração (1., 2., 3.), com verbos de ação concretos. Inclua entre 2 e 4 itens, derivados do título, da descrição e do resultado esperado. Se houver prazo, cite-o no último item.
-- Parágrafo 4 (encaminhamento): defina retorno esperado (ciência, manifestação, devolução).
-- Fechamento institucional e assinatura.`
-      : `INTENÇÃO: SOLICITAÇÃO DE PROVIDÊNCIAS. Estrutura obrigatória do e-mail:
-- Saudação adequada ("Prezado(a) [Nome/Cargo],").
-- 1º parágrafo (contexto + objeto): apresente em uma frase a tarefa e o que se busca obter; cite o OE em uma única menção.
-- 2º parágrafo (fundamento curto): explique a relevância ou o resultado esperado.
-- 3º parágrafo (providências solicitadas): liste com numeração (1., 2., 3.) entre 2 e 4 providências concretas, com verbos de ação. Mencione o prazo no item final, se houver.
-- 4º parágrafo: defina retorno esperado e disponibilidade para esclarecimentos.
-- Fechamento cordial ("Atenciosamente,") e linha de assinatura.`;
+      ? `INTENÇÃO: SOLICITAÇÃO DE PROVIDÊNCIAS — Despacho.
+
+ESTRUTURA OBRIGATÓRIA (siga exatamente nesta ordem):
+[1] Vocativo institucional ("Senhor(a) [Cargo]," ou "À [Área]," quando não houver pessoa nominada).
+[2] OBJETO — 1 frase substantiva: o que se quer e em relação a quê. Pode integrar a menção ao OE.
+[3] FUNDAMENTO — 1 frase, no máximo 2: por que essa providência é necessária agora, ancorada no resultado esperado.
+[4] PROVIDÊNCIAS — parágrafo iniciado por: "Diante do exposto, determino:" seguido de 2 a 4 itens numerados (1., 2., 3.) começando por VERBO DE AÇÃO concreto. Último item traz o prazo explícito.
+[5] ENCAMINHAMENTO — 1 frase: o que se espera de retorno (ciência, manifestação, devolução ao gabinete).
+[6] Fechamento ("Respeitosamente," ou "Atenciosamente,") e linha de assinatura usando o ASSINANTE do contexto.
+
+EXEMPLO DE BLOCO [4] (modelo de boa redação, NUNCA copiar literalmente):
+  Diante do exposto, determino:
+  1. Consolidar planilha de retorno financeiro por evento (2024-2026), com receita, custos diretos e líquido por edição.
+  2. Validar com a área financeira a metodologia de rateio dos custos compartilhados.
+  3. Encaminhar o material a este gabinete até 8/5/2026, em formato editorável.`
+      : `INTENÇÃO: SOLICITAÇÃO DE PROVIDÊNCIAS — E-mail.
+
+ESTRUTURA OBRIGATÓRIA (siga exatamente nesta ordem, com parágrafos curtos):
+[1] SAUDAÇÃO — "Prezado(a) [Nome ou Cargo]," usando os destinatários do contexto. Se houver mais de um, agrupe ("Prezados Professor X, Pablo e Isabella,").
+[2] OBJETO — 1 frase: o que se está pedindo, sobre o quê, ancorado na tarefa. Pode integrar uma única menção ao OE.
+[3] FUNDAMENTO — 1 frase (no máximo 2): por que isso importa agora, ancorado no Resultado Esperado se houver.
+[4] PROVIDÊNCIAS — parágrafo iniciado por uma frase curta como "Para que possamos avançar, peço:" e em seguida 2 a 4 itens numerados (1., 2., 3.) começando por VERBO DE AÇÃO concreto. Último item traz o prazo ("… até [DATA]").
+[5] RETORNO — 1 frase: defina retorno esperado e disponibilidade (ex.: "Sigo à disposição para alinhamento. Aguardo o retorno na semana corrente.").
+[6] FECHAMENTO + ASSINATURA — "Atenciosamente," + linha em branco + nome em uma linha + cargo em outra (use o ASSINANTE do contexto).
+
+EXEMPLO DE E-MAIL DE BOA REDAÇÃO (modelo, NUNCA copiar literalmente — ajuste ao contexto):
+  Prezados Professor José Augusto, Pablo e Isabella,
+
+  Em preparação à reunião de 8/5, relativa ao OE 1 — Faturamento sustentável, precisamos consolidar o insumo de prospecção de receita por evento.
+
+  O material orientará a tomada de decisão sobre o redirecionamento de esforços comerciais no segundo semestre.
+
+  Para que possamos avançar, peço:
+  1. Consolidar planilha de retorno financeiro por evento (2024-2026), com receita, custos diretos e líquido por edição.
+  2. Validar com a área financeira a metodologia de rateio dos custos compartilhados.
+  3. Encaminhar a versão consolidada até 8/5/2026, em formato editorável.
+
+  Sigo à disposição para alinhamento e agradeço o retorno na semana corrente.
+
+  Atenciosamente,
+
+  João Marcelo Marques Cunha
+  Diretor-Executivo`;
   }
 
   // ---------- Gerar do zero a partir do contexto ----------
@@ -275,7 +319,7 @@ ${ctxStr || '(sem contexto)'}
 ${instrucao ? `\n## Instrução adicional do solicitante\n${instrucao}\n` : ''}
 ## Resposta
 Devolva APENAS o ${tipoStr} pronto, sem comentários, sem título, sem markdown, sem explicações, sem cercas de código. Use quebras de linha e parágrafos. ${eDespacho ? 'Não inclua linha de "Assunto:" — esta é fornecida pelo cabeçalho do despacho.' : 'Não inclua linha de "Assunto:" no corpo — ela vai à parte.'}`;
-    return _chamar(prompt, { temperature: 0.5, maxOutputTokens: 4096 });
+    return _chamar(prompt, { temperature: 0.35, maxOutputTokens: 4096 });
   }
 
   // ---------- Gerar lote (vários e-mails / despachos) ----------
@@ -308,7 +352,7 @@ ${blocos}
 Devolva APENAS um JSON válido, sem markdown, no formato:
 { "itens": [ { "indice": 1, "texto": "<${tipo} pronto>" }, { "indice": 2, "texto": "<${tipo} pronto>" } ] }
 A ordem do array deve corresponder à ordem dos ITENS.`;
-    const raw = await _chamar(prompt, { temperature: 0.5, maxOutputTokens: 8192, json: true });
+    const raw = await _chamar(prompt, { temperature: 0.35, maxOutputTokens: 8192, json: true });
     let obj;
     try { obj = JSON.parse(raw); }
     catch {
