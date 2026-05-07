@@ -1422,3 +1422,91 @@ select {
 .diff-quad-chip--Q3 { background: #0e7c66; }
 .diff-quad-chip--Q4 { background: #7f8c8d; }
 .diff-quad-chip--NC { background: #94a3b8; }
+
+/* =================================================================
+   Leva 12 — Modal de geração/refinamento por IA
+   ================================================================= */
+.refinar-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin-top: 0.6rem;
+}
+.refinar-grid:has(.refinar-col[id="ria12-col-original"]:not([hidden])) {
+  grid-template-columns: 1fr 1fr;
+}
+.refinar-col h4 {
+  margin: 0 0 0.4rem 0;
+  font-size: 0.95em;
+  color: #334155;
+  font-style: normal !important;
+}
+.refinar-textarea {
+  width: 100%;
+  min-height: 280px;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.92em;
+  line-height: 1.45;
+  resize: vertical;
+  background: #f8fafc;
+  color: #0f172a;
+  font-style: normal !important;
+}
+.refinar-textarea--editavel {
+  background: #ffffff;
+  border-color: #94a3b8;
+}
+.refinar-textarea[readonly] {
+  background: #f1f5f9;
+  color: #475569;
+}
+.refinar-loader {
+  margin-top: 0.5rem;
+  font-size: 0.9em;
+  color: #2563eb;
+  font-weight: 600;
+  font-style: normal !important;
+}
+.refinar-loader::before {
+  content: "";
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  margin-right: 0.4em;
+  vertical-align: -0.1em;
+  border: 2px solid #93c5fd;
+  border-top-color: #1d4ed8;
+  border-radius: 50%;
+  animation: ria12-spin 0.7s linear infinite;
+}
+@keyframes ria12-spin {
+  to { transform: rotate(360deg); }
+}
+.refinar-ctx {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+  margin: 0.3rem 0 0.6rem;
+}
+.refinar-ctx__rot {
+  display: block;
+  font-size: 0.78em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  margin-bottom: 0.25rem;
+  font-style: normal !important;
+}
+.refinar-ctx__corpo {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  color: #1e293b;
+  max-height: 8em;
+  overflow-y: auto;
+}

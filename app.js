@@ -615,6 +615,8 @@ function initApp() {
   bindEmailLote();
   bindPainelExportar();
   bindPainelRevisaoIA();
+  bindConfigIA();
+  bindBotoesIA();
   bindSobreQuadrantes();
   bindDrucker();
   bindAgenda();
@@ -6396,6 +6398,382 @@ function atualizarStatusSeguranca() {
   if (btnTrocar) btnTrocar.hidden = false;
   if (btnBloquear) btnBloquear.hidden = false;
   if (btnApagar) btnApagar.hidden = false;
+}
+
+/* ===================================================================
+   18.B IA — Geração e refinamento (Leva 12)
+   =================================================================== */
+
+// ----- Configuração (aba Config → IA) -----
+function bindConfigIA() {
+  const inp = $('#f-ia-chave');
+  const sel = $('#f-ia-modelo');
+  const chkMostrar = $('#f-ia-mostrar');
+  const btnTestar = $('#btn-ia-testar');
+  const btnLimpar = $('#btn-ia-limpar');
+  const status = $('#ia-status');
+  if (!inp || !btnTestar || !window.IAGemini) return;
+
+  function refletirEstado() {
+    const cfg = window.IAGemini.getConfig();
+    if (cfg.modelo && sel) sel.value = cfg.modelo;
+    if (window.IAGemini.temChave()) {
+      const por = cfg.configuradoPor ? ` por ${cfg.configuradoPor}` : '';
+      const em = cfg.configuradoEm ? ` em ${cfg.configuradoEm}` : '';
+      status.textContent = `Chave configurada${por}${em}. Para trocar, cole uma nova e clique em Testar e salvar.`;
+      status.style.color = '#15803d';
+    } else {
+      status.textContent = 'Sem chave configurada. Cole a chave e clique em Testar e salvar.';
+      status.style.color = '#b91c1c';
+    }
+  }
+  refletirEstado();
+
+  if (chkMostrar) chkMostrar.addEventListener('change', () => {
+    inp.type = chkMostrar.checked ? 'text' : 'password';
+  });
+
+  if (sel) sel.addEventListener('change', () => {
+    window.IAGemini.setConfig({ modelo: sel.value });
+    refletirEstado();
+  });
+
+  btnTestar.addEventListener('click', async () => {
+    const chave = (inp.value || '').trim();
+    if (!chave && !window.IAGemini.temChave()) {
+      status.textContent = 'Cole a chave antes de testar.';
+      status.style.color = '#b91c1c';
+      return;
+    }
+    status.textContent = 'Testando chave…';
+    status.style.color = '#1d4ed8';
+    btnTestar.disabled = true;
+    try {
+      const chaveTestar = chave || window.IAGemini.getChave();
+      const r = await window.IAGemini.testarChave(chaveTestar);
+      if (r.ok) {
+        const usuario = (window.firebaseSync && window.firebaseSync.usuarioAtual && window.firebaseSync.usuarioAtual()) || (config && config.meuNome) || '';
+        const agora = new Date().toLocaleString('pt-BR');
+        window.IAGemini.setConfig({
+          chaveOfuscada: window.IAGemini.ofuscar(chaveTestar),
+          modelo: sel ? sel.value : 'flash',
+          configuradoPor: usuario,
+          configuradoEm: agora
+        });
+        inp.value = '';
+        if (chkMostrar) { chkMostrar.checked = false; inp.type = 'password'; }
+        refletirEstado();
+        mostrarFlash('Chave da IA validada e salva.');
+      } else {
+        status.textContent = `Falha: ${r.erro || 'erro desconhecido.'}`;
+        status.style.color = '#b91c1c';
+      }
+    } catch (e) {
+      status.textContent = `Erro: ${e.message || e}`;
+      status.style.color = '#b91c1c';
+    } finally {
+      btnTestar.disabled = false;
+    }
+  });
+
+  btnLimpar.addEventListener('click', () => {
+    if (!confirm('Remover a chave configurada? Sem chave, os botões Gerar com IA não funcionarão.')) return;
+    window.IAGemini.setConfig({ chaveOfuscada: '', configuradoPor: '', configuradoEm: '' });
+    inp.value = '';
+    refletirEstado();
+    mostrarFlash('Chave da IA removida.');
+  });
+}
+
+// ----- Orquestrador do modal #dlg-refinar-ia -----
+// modo: 'gerar' (sem original) | 'refinar' (com texto original).
+// onAceitar(textoFinal) substitui o destino.
+function abrirIAModal({ titulo, subtitulo, modo, contexto, contextoLista, textoOriginal, tipo, onAceitar }) {
+  if (!window.IAGemini) { alert('Módulo de IA indisponível.'); return; }
+  if (!window.IAGemini.temChave()) {
+    if (confirm('Nenhuma chave de IA configurada. Abrir as Configurações agora?')) {
+      trocarAba('config');
+      setTimeout(() => { const el = $('#sec-ia'); if (el) el.scrollIntoView({behavior:'smooth', block:'start'}); }, 50);
+    }
+    return;
+  }
+  const dlg = $('#dlg-refinar-ia');
+  if (!dlg) return;
+  const mModo = (modo === 'refinar') ? 'refinar' : 'gerar';
+  const tipoStr = (tipo || 'e-mail');
+
+  $('#ria12-titulo').textContent = titulo || (mModo === 'gerar' ? `Gerar ${tipoStr} com IA` : `Refinar ${tipoStr} com IA`);
+  $('#ria12-subtitulo').textContent = subtitulo ||
+    (mModo === 'gerar'
+      ? 'A IA escreve do zero a partir do contexto da tarefa, com tom institucional Cebraspe.'
+      : 'A IA reescreve o texto atual aplicando tom institucional, concisão e contexto estratégico.');
+
+  // Contexto visível (uma tarefa ou várias)
+  const ctxBox = $('#ria12-contexto-box');
+  const ctxPre = $('#ria12-contexto');
+  if (Array.isArray(contextoLista) && contextoLista.length) {
+    ctxBox.hidden = false;
+    ctxPre.textContent = contextoLista.map((c, i) => `[${i+1}] ` + _ctxStrCurto(c)).join('\n');
+  } else if (contexto && Object.keys(contexto).length) {
+    ctxBox.hidden = false;
+    ctxPre.textContent = _ctxStrCurto(contexto);
+  } else {
+    ctxBox.hidden = true;
+    ctxPre.textContent = '';
+  }
+
+  // Coluna original
+  const colOrig = $('#ria12-col-original');
+  const taOrig = $('#ria12-original');
+  if (mModo === 'refinar' && textoOriginal) {
+    colOrig.hidden = false;
+    taOrig.value = textoOriginal;
+  } else {
+    colOrig.hidden = true;
+    taOrig.value = '';
+  }
+
+  // Saída
+  const taSaida = $('#ria12-refinado');
+  const saidaH = $('#ria12-col-saida-h');
+  taSaida.value = '';
+  saidaH.textContent = mModo === 'gerar' ? 'Gerado pela IA' : 'Refinado pela IA';
+  $('#ria12-instrucao').value = '';
+  $('#ria12-erro').style.display = 'none';
+  $('#ria12-erro').textContent = '';
+  $('#ria12-loader').hidden = true;
+  const btnAceitar = $('#ria12-aceitar');
+  const btnTentar = $('#ria12-tentar');
+  const btnCancelar = $('#ria12-cancelar');
+  btnAceitar.disabled = true;
+  btnTentar.textContent = mModo === 'gerar' ? 'Gerar' : 'Refinar';
+
+  async function executar() {
+    btnAceitar.disabled = true;
+    btnTentar.disabled = true;
+    $('#ria12-loader').hidden = false;
+    $('#ria12-loader').textContent = mModo === 'gerar' ? 'Gerando…' : 'Refinando…';
+    $('#ria12-erro').style.display = 'none';
+    const instrucao = ($('#ria12-instrucao').value || '').trim();
+    try {
+      let resultado;
+      if (Array.isArray(contextoLista) && contextoLista.length) {
+        const itens = contextoLista.map(c => ({ contexto: c, tipo: tipoStr }));
+        const arr = await window.IAGemini.gerarLote(itens, instrucao || null);
+        resultado = arr.map((tx, i) =>
+          `=== ${tipoStr.charAt(0).toUpperCase()+tipoStr.slice(1)} ${i+1} — Para: ${contextoLista[i].destinatario || contextoLista[i].responsavel || '—'} ===\n${tx}`
+        ).join('\n\n' + '─'.repeat(60) + '\n\n');
+      } else if (mModo === 'gerar') {
+        resultado = await window.IAGemini.gerar({ contexto: contexto || {}, tipo: tipoStr, instrucao: instrucao || null });
+      } else {
+        resultado = await window.IAGemini.refinar({ texto: textoOriginal || '', contexto: contexto || {}, tipo: tipoStr });
+      }
+      taSaida.value = resultado;
+      btnAceitar.disabled = false;
+      btnTentar.textContent = 'Gerar de novo';
+    } catch (e) {
+      $('#ria12-erro').textContent = e.message || String(e);
+      $('#ria12-erro').style.display = 'block';
+    } finally {
+      $('#ria12-loader').hidden = true;
+      btnTentar.disabled = false;
+    }
+  }
+
+  btnTentar.onclick = executar;
+  btnCancelar.onclick = () => dlg.close();
+  btnAceitar.onclick = () => {
+    const txt = taSaida.value;
+    if (!txt) return;
+    if (typeof onAceitar === 'function') onAceitar(txt);
+    dlg.close();
+  };
+
+  dlg.showModal();
+  // Dispara automaticamente a primeira geração.
+  setTimeout(executar, 80);
+}
+
+function _ctxStrCurto(c) {
+  if (!c) return '';
+  const partes = [];
+  if (c.titulo) partes.push(`Tarefa: ${c.titulo}`);
+  if (c.oe) partes.push(`OE: ${c.oe}`);
+  if (c.quadrante) partes.push(`Q: ${c.quadrante}`);
+  if (c.responsavel) partes.push(`Resp.: ${c.responsavel}`);
+  if (c.destinatario) partes.push(`Para: ${c.destinatario}`);
+  if (c.assunto) partes.push(`Assunto: ${c.assunto}`);
+  if (c.prazo) partes.push(`Prazo: ${c.prazo}`);
+  if (c.status) partes.push(`Status: ${c.status}`);
+  if (c.prioridade) partes.push(`Prio.: ${c.prioridade}`);
+  if (c.resultado) partes.push(`Resultado esperado: ${c.resultado}`);
+  if (c.descricao) partes.push(`Descrição: ${c.descricao}`);
+  return partes.join(' · ');
+}
+
+// Monta contexto rico de uma tarefa (objeto base) para a IA
+function _ctxDeTarefa(t, extras) {
+  const oe = t && t.oeId ? OBJETIVOS.find(o => o.id === t.oeId) : null;
+  return Object.assign({
+    titulo: t.titulo || '',
+    oe: oe ? `OE ${oe.id} — ${oe.curto}: ${oe.texto}` : '',
+    quadrante: quadranteDe(t) || '',
+    responsavel: t.responsavel || '',
+    prazo: t.prazo ? fmtDataExtenso(t.prazo) : '',
+    status: t.status || '',
+    prioridade: t.prioridade || '',
+    resultado: t.resultadoEsperado || t.resultado || '',
+    descricao: t.descricao || t.observacoes || ''
+  }, extras || {});
+}
+
+// ----- Bind dos 4 botões de IA -----
+function bindBotoesIA() {
+  // 1) E-mail individual (modal #dlg-email)
+  const btnEmail = $('#btn-email-gerar-ia');
+  if (btnEmail) {
+    btnEmail.addEventListener('click', () => {
+      const id = _emailTarefaId;
+      const t = tarefas.find(x => x.id === id);
+      if (!t) { mostrarMsg('Tarefa não encontrada.', true); return; }
+      const trat = $('#email-tratamento') ? $('#email-tratamento').value : 'voce';
+      const nomeTrat = $('#email-nome') ? ($('#email-nome').value || '').trim() : '';
+      const destinatario = (t.responsavel || nomeTrat || '').trim();
+      const assuntoAtual = $('#email-assunto') ? $('#email-assunto').value : '';
+      const ctx = _ctxDeTarefa(t, {
+        destinatario,
+        assunto: assuntoAtual,
+        tratamento: trat === 'voce' ? 'você' : (trat === 'senhor' ? 'senhor(a)' : (trat === 'nome' ? `pelo nome (${nomeTrat})` : ''))
+      });
+      abrirIAModal({
+        modo: 'gerar',
+        tipo: 'e-mail',
+        contexto: ctx,
+        onAceitar: (texto) => {
+          const ta = $('#email-corpo');
+          if (ta) {
+            ta.value = texto;
+            // Atualiza prévia
+            const prev = $('#email-previa');
+            if (prev) {
+              const ass = $('#email-assunto') ? $('#email-assunto').value : '';
+              prev.textContent = (ass ? `Assunto: ${ass}\n\n` : '') + texto;
+            }
+            mostrarFlash('E-mail gerado pela IA.');
+          }
+        }
+      });
+    });
+  }
+
+  // 2) E-mail em lote (#panel-email-lote)
+  const btnEL = $('#btn-el-gerar-ia');
+  if (btnEL) {
+    btnEL.addEventListener('click', () => {
+      const itens = JSON.parse($('#panel-email-lote').dataset.itens || '[]');
+      if (!itens.length) { mostrarMsg('Não há e-mails para gerar.', true); return; }
+      // Recompor contexto a partir das tarefas selecionadas
+      const sel = _emailsLoteSelecionados();
+      const lista = [];
+      for (const it of sel) {
+        if (_emailLoteAgrup === 'destinatario') {
+          const ts = it.tarefasIds.map(id => tarefas.find(x => x.id === id)).filter(Boolean);
+          const titulosResumo = ts.map(t => `• ${t.titulo}${t.prazo ? ' (prazo ' + fmtDataExtenso(t.prazo) + ')' : ''}${t.responsavel ? ' — ' + t.responsavel : ''}`).join('\n');
+          lista.push({
+            titulo: `Pauta consolidada (${ts.length} tarefa${ts.length>1?'s':''})`,
+            destinatario: it.destinatario,
+            descricao: titulosResumo,
+            assunto: it.email && it.email.assunto || ''
+          });
+        } else {
+          const t = tarefas.find(x => x.id === it.tarefasIds[0]);
+          if (t) lista.push(_ctxDeTarefa(t, { destinatario: it.destinatario, assunto: it.email && it.email.assunto || '' }));
+        }
+      }
+      abrirIAModal({
+        modo: 'gerar',
+        tipo: 'e-mail',
+        contextoLista: lista,
+        onAceitar: (textoTudo) => {
+          // Reescreve cada bloco no painel: substitui corpos por novos textos
+          // Como o gerarLote retorna concatenado, faz parsing pelos separadores que incluímos.
+          const blocos = textoTudo.split(/\n+─{10,}\n+/).map(s => s.trim()).filter(Boolean);
+          // Para cada bloco, remove o cabeçalho "=== E-mail N — Para: X ==="
+          const corposNovos = blocos.map(b => b.replace(/^===\s*[^=\n]+===\s*\n?/, '').trim());
+          const novos = itens.map((it, i) => Object.assign({}, it, { corpo: corposNovos[i] || it.corpo }));
+          $('#panel-email-lote').dataset.itens = JSON.stringify(novos);
+          // Re-renderiza visualmente substituindo apenas os <pre> de corpo
+          const arts = $$('#panel-email-lote .el-item');
+          arts.forEach((art, i) => {
+            const pre = art.querySelector('.el-item__corpo');
+            if (pre && novos[i]) pre.textContent = novos[i].corpo;
+          });
+          mostrarFlash(`${novos.length} e-mail(is) gerados pela IA.`);
+        }
+      });
+    });
+  }
+
+  // 3) Despacho individual (#dlg-bilhete)
+  const btnBil = $('#btn-bilhete-gerar-ia');
+  if (btnBil) {
+    btnBil.addEventListener('click', () => {
+      const t = tarefas.find(x => x.id === _bilheteAtualId);
+      if (!t) { mostrarMsg('Tarefa não encontrada.', true); return; }
+      const ctx = _ctxDeTarefa(t, {
+        destinatario: t.responsavel || '',
+        tom: (_despachoOpts && _despachoOpts.tom) || 'institucional',
+        destino: (_despachoOpts && _despachoOpts.destino) || 'envio'
+      });
+      abrirIAModal({
+        modo: 'gerar',
+        tipo: 'despacho',
+        contexto: ctx,
+        onAceitar: (texto) => {
+          // Substitui o conteúdo do bilhete-digital pelo texto gerado, preservando a estrutura visual
+          const dig = $('#bilhete-digital');
+          if (dig) {
+            dig.innerHTML = '<pre style="white-space:pre-wrap;font-family:Times,serif;font-size:14px;line-height:1.55;">' + escHtml(texto) + '</pre>';
+            dig.dataset.texto = texto;
+          }
+          // Também atualiza papel/par com o mesmo texto puro
+          const pap = $('#bilhete-papel');
+          if (pap) {
+            pap.innerHTML = '<pre style="white-space:pre-wrap;font-family:Times,serif;font-size:14px;line-height:1.6;padding:1em;">' + escHtml(texto) + '</pre>';
+            pap.dataset.texto = texto;
+          }
+          const par = $('#bilhete-par');
+          if (par) { par.innerHTML = '<pre style="white-space:pre-wrap;font-family:Times,serif;font-size:14px;line-height:1.55;">' + escHtml(texto) + '</pre>'; par.dataset.texto = texto; }
+          mostrarFlash('Despacho gerado pela IA.');
+        }
+      });
+    });
+  }
+
+  // 4) Despacho em lote (#dlg-despacho-lote)
+  const btnLoteIA = $('#btn-lote-gerar-ia');
+  if (btnLoteIA) {
+    btnLoteIA.addEventListener('click', () => {
+      const papelEl = $('#lote-papel');
+      const ids = (papelEl.dataset.ids || '').split(',').filter(Boolean);
+      if (!ids.length) { mostrarMsg('Sem tarefas no lote.', true); return; }
+      const lista = ids.map(id => {
+        const t = tarefas.find(x => x.id === id);
+        return t ? _ctxDeTarefa(t, { destinatario: t.responsavel || '' }) : null;
+      }).filter(Boolean);
+      abrirIAModal({
+        modo: 'gerar',
+        tipo: 'despacho',
+        contextoLista: lista,
+        onAceitar: (textoTudo) => {
+          // Substitui o conteúdo do papel do lote por texto gerado
+          papelEl.innerHTML = '<pre style="white-space:pre-wrap;font-family:Times,serif;font-size:14px;line-height:1.6;padding:1em;">' + escHtml(textoTudo) + '</pre>';
+          papelEl.dataset.texto = textoTudo;
+          mostrarFlash(`${lista.length} despacho(s) gerados pela IA.`);
+        }
+      });
+    });
+  }
 }
 
 /* ===================================================================

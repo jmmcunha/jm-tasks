@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260506e" />
+  <link rel="stylesheet" href="styles.css?v=20260506f" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a3d7a'/%3E%3Cpath d='M9 11h14M9 16h14M9 21h9' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='25.5' cy='21' r='2' fill='%23f08000'/%3E%3C/svg%3E" />
 
   <!-- Bibliotecas: jsPDF, html2canvas, SheetJS, Chart.js -->
@@ -402,6 +402,7 @@
           <div class="lote-resumo" id="email-lote-resumo"></div>
           <div id="email-lote-conteudo" class="email-lote-conteudo"></div>
           <div class="email-lote-panel__actions">
+            <button class="btn btn--ghost btn--sm" id="btn-el-gerar-ia" type="button" title="Gerar com IA (Gemini) cada e-mail a partir do contexto das tarefas">Gerar com IA</button>
             <button class="btn btn--primary btn--sm" id="btn-el-copy-tudo" type="button">Copiar tudo</button>
             <button class="btn btn--ghost btn--sm" id="btn-el-docx" type="button">Baixar Word</button>
             <button class="btn btn--ghost btn--sm" id="btn-el-print" type="button">Imprimir</button>
@@ -546,6 +547,27 @@
 
     <!-- =================== ABA CONFIG =================== -->
     <section class="tab-panel" id="panel-config" role="tabpanel" hidden>
+      <div class="card config-section" id="sec-ia">
+        <h2>IA (geração de e-mails e despachos)</h2>
+        <p class="muted">Ao clicar em <strong>Gerar com IA</strong> nos modais de e-mail e despacho, o app envia apenas o <strong>contexto da tarefa</strong> (título, OE, prazo, responsável, status, prioridade etc.) para o <strong>Google Gemini</strong>, que redige o texto do zero em tom institucional Cebraspe, com concisão e contexto estratégico. Use a chave gratuita do <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> (sem cartão, 250 chamadas por dia no Gemini 2.5 Flash).</p>
+        <p class="muted" style="font-size:0.85em;color:#92400e;background:#fef3c7;padding:0.4rem 0.6rem;border-radius:4px;margin:0.5rem 0;"><strong>Aviso:</strong> a chave configurada aqui é compartilhada com toda a equipe autenticada e fica armazenada (ofuscada) no Firestore. Se preferir uma chave individual, não compartilhe esta tela.</p>
+        <div class="form-row" style="flex-direction:column;gap:0.5rem;">
+          <label for="f-ia-chave"><strong>Chave da API Gemini</strong></label>
+          <input type="password" id="f-ia-chave" placeholder="Cole aqui a chave do Google AI Studio" autocomplete="off" />
+          <label class="chk"><input type="checkbox" id="f-ia-mostrar" /> Mostrar chave</label>
+          <label for="f-ia-modelo"><strong>Modelo</strong></label>
+          <select id="f-ia-modelo">
+            <option value="flash">Gemini 2.5 Flash (10 req/min, 250/dia)</option>
+            <option value="flashLite">Gemini 2.5 Flash-Lite (15 req/min, 1.000/dia)</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.6rem;">
+          <button class="btn btn--primary btn--sm" id="btn-ia-testar" type="button">Testar e salvar</button>
+          <button class="btn btn--ghost btn--sm" id="btn-ia-limpar" type="button">Remover chave</button>
+        </div>
+        <p class="muted" id="ia-status" style="margin-top:0.6rem;font-size:0.9em;"></p>
+      </div>
+
       <div class="card config-section">
         <h2>Integração com Planner</h2>
         <p class="muted">Ao tocar em <strong>Planner</strong> em qualquer tarefa, o app abre um formulário Microsoft Forms já pré-preenchido com título, OE/bucket, prioridade, datas e anotações. Você só toca em <em>Enviar</em>, e o Power Automate cria a tarefa no plano <strong>DE - Geral</strong>, no bucket correto, sem caracteres HTML.</p>
@@ -613,6 +635,39 @@
         <button value="ok" class="btn btn--danger btn--sm">Confirmar</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- Modal de geração/refinamento por IA (Leva 12) -->
+  <dialog id="dlg-refinar-ia" class="modal modal--lg">
+    <div class="modal__inner">
+      <h3 id="ria12-titulo">Gerar com IA</h3>
+      <p class="muted" id="ria12-subtitulo" style="margin:0 0 0.6rem">A IA escreve do zero a partir do contexto da tarefa, com tom institucional Cebraspe.</p>
+      <div id="ria12-contexto-box" class="refinar-ctx" hidden>
+        <span class="refinar-ctx__rot">Contexto enviado à IA</span>
+        <pre id="ria12-contexto" class="refinar-ctx__corpo"></pre>
+      </div>
+      <label class="field field--full" style="margin:0.5rem 0;">
+        <span>Instrução adicional para a IA (opcional)</span>
+        <input type="text" id="ria12-instrucao" maxlength="240" placeholder="Ex.: tom mais firme; pedir confirmação em 48h; mencionar reunião de quinta" />
+      </label>
+      <div id="ria12-erro" class="muted" style="display:none;color:#c0392b;margin-bottom:0.6rem;"></div>
+      <div class="refinar-grid">
+        <div class="refinar-col" id="ria12-col-original" hidden>
+          <h4>Texto atual</h4>
+          <textarea id="ria12-original" readonly rows="14" class="refinar-textarea"></textarea>
+        </div>
+        <div class="refinar-col">
+          <h4 id="ria12-col-saida-h">Gerado pela IA</h4>
+          <textarea id="ria12-refinado" rows="14" class="refinar-textarea refinar-textarea--editavel" placeholder="Clique em Gerar para a IA escrever a partir do contexto…"></textarea>
+          <div id="ria12-loader" class="refinar-loader" hidden>Gerando…</div>
+        </div>
+      </div>
+      <div class="modal__actions">
+        <button class="btn btn--ghost btn--sm" id="ria12-cancelar" type="button">Cancelar</button>
+        <button class="btn btn--ghost btn--sm" id="ria12-tentar" type="button">Gerar</button>
+        <button class="btn btn--primary btn--sm" id="ria12-aceitar" type="button" disabled>Usar este texto</button>
+      </div>
+    </div>
   </dialog>
 
   <!-- Modal de importação (3 escolhas) -->
@@ -753,6 +808,7 @@
       <div class="lote-resumo" id="lote-resumo"></div>
       <div id="lote-papel" class="bilhete-papel"></div>
       <div class="modal__actions">
+        <button class="btn btn--ghost btn--sm" id="btn-lote-gerar-ia" type="button" title="Gerar com IA (Gemini) cada despacho a partir do contexto das tarefas">Gerar com IA</button>
         <button class="btn btn--primary btn--sm" id="btn-lote-copy" type="button">Copiar texto</button>
         <button class="btn btn--ghost btn--sm" id="btn-lote-print" type="button">Imprimir</button>
         <button class="btn btn--ghost btn--sm" id="btn-lote-pdf" type="button">PDF</button>
@@ -806,6 +862,7 @@
       <div id="bilhete-papel" class="bilhete-papel" hidden></div>
       <div id="bilhete-par" class="bilhete-par" hidden></div>
       <div class="modal__actions">
+        <button class="btn btn--ghost btn--sm" id="btn-bilhete-gerar-ia" type="button" title="Gerar com IA (Gemini) o despacho a partir do contexto da tarefa">Gerar com IA</button>
         <button class="btn btn--primary btn--sm" id="btn-bilhete-copy" type="button">Copiar</button>
         <button class="btn btn--ghost btn--sm" id="btn-bilhete-copy-plain" type="button">Copiar (sem marcação)</button>
         <button class="btn btn--ghost btn--sm" id="btn-bilhete-print" type="button">Imprimir como papel</button>
@@ -879,6 +936,7 @@
         </aside>
       </div>
       <div class="modal__actions">
+        <button class="btn btn--ghost btn--sm" id="btn-email-gerar-ia" type="button" title="Gerar com IA (Gemini) a partir do contexto da tarefa">Gerar com IA</button>
         <button class="btn btn--primary btn--sm" id="btn-email-copy" type="button">Copiar (assunto + corpo)</button>
         <button class="btn btn--ghost btn--sm" id="btn-email-copy-body" type="button">Copiar (somente corpo)</button>
         <button class="btn btn--ghost btn--sm" id="btn-email-mailto" type="button">Abrir no cliente padrão</button>
@@ -1026,10 +1084,11 @@
   </dialog>
 
   <!-- Firebase: config + sync compartilhado (equipe) -->
-  <script src="firebase-config.js?v=20260506e"></script>
-  <script src="firebase-sync.js?v=20260506e"></script>
-  <script src="app.js?v=20260506e"></script>
+  <script src="firebase-config.js?v=20260506f"></script>
+  <script src="firebase-sync.js?v=20260506f"></script>
+  <script src="ia-gemini.js?v=20260506f"></script>
+  <script src="app.js?v=20260506f"></script>
   <!-- Captura rápida em linguagem natural + voz -->
-  <script src="quick-capture.js?v=20260506e"></script>
+  <script src="quick-capture.js?v=20260506f"></script>
 </body>
 </html>

@@ -16,7 +16,8 @@
     'cebraspe_tarefas_v3',
     'cebraspe_revisoes_v1',
     'cebraspe_config_v1',
-    'cebraspe_reunioes_v1'
+    'cebraspe_reunioes_v1',
+    'cebraspe_ia_config'
   ];
 
   // Chave de tombstones de tarefas excluídas (sincronizada à parte)
