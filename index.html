@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260506s" />
+  <link rel="stylesheet" href="styles.css?v=20260506t" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a3d7a'/%3E%3Cpath d='M9 11h14M9 16h14M9 21h9' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='25.5' cy='21' r='2' fill='%23f08000'/%3E%3C/svg%3E" />
 
   <!-- Bibliotecas: jsPDF, html2canvas, SheetJS, Chart.js -->
@@ -464,22 +464,42 @@
       <div class="reunioes-grid">
         <!-- Coluna esquerda: lista -->
         <div class="card" style="padding:18px 20px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
-            <h2>Reuniões</h2>
-            <div style="display:flex;gap:6px;flex-wrap:wrap">
-              <button class="btn btn--primary btn--sm" id="btn-nova-reuniao">+ Nova reunião</button>
-              <button class="btn btn--ghost btn--sm" id="btn-nova-reuniao-teams" title="Abre o Teams direto, sem registrar reunião no app">Direto no Teams</button>
+          <div class="seg seg--reunioes" role="tablist" aria-label="Visualização" style="margin-bottom:12px">
+            <button class="seg__btn is-active" data-reun-view="reunioes" type="button" role="tab" aria-selected="true">Reuniões</button>
+            <button class="seg__btn" data-reun-view="compromissos" type="button" role="tab" aria-selected="false" title="Compromissos de terceiros vindos de encaminhamentos das reuniões">Compromissos</button>
+          </div>
+
+          <div id="view-reunioes">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+              <h2>Reuniões</h2>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <button class="btn btn--primary btn--sm" id="btn-nova-reuniao">+ Nova reunião</button>
+                <button class="btn btn--ghost btn--sm" id="btn-nova-reuniao-teams" title="Abre o Teams direto, sem registrar reunião no app">Direto no Teams</button>
+              </div>
             </div>
+            <div style="margin-bottom:12px">
+              <select id="filtro-reuniao-status" class="" style="width:100%">
+                <option value="">Todas</option>
+                <option value="planejada">Planejadas</option>
+                <option value="realizada">Realizadas</option>
+                <option value="cancelada">Canceladas</option>
+              </select>
+            </div>
+            <div id="reunioes-lista"><p class="muted">Nenhuma reunião cadastrada ainda.</p></div>
           </div>
-          <div style="margin-bottom:12px">
-            <select id="filtro-reuniao-status" class="" style="width:100%">
-              <option value="">Todas</option>
-              <option value="planejada">Planejadas</option>
-              <option value="realizada">Realizadas</option>
-              <option value="cancelada">Canceladas</option>
-            </select>
+
+          <div id="view-compromissos" hidden>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap">
+              <h2>Compromissos de terceiros</h2>
+            </div>
+            <p class="muted" style="font-size:0.85em;margin:0 0 12px">Encaminhamentos de reuniões atribuídos a outras pessoas. Use o card Identidade em Configurações para ajustar o que conta como seu.</p>
+            <div style="margin-bottom:12px">
+              <select id="filtro-compromisso-resp" style="width:100%" aria-label="Filtrar por responsável">
+                <option value="">Todos os responsáveis</option>
+              </select>
+            </div>
+            <div id="compromissos-lista"><p class="muted">Sem encaminhamentos a terceiros nas reuniões registradas.</p></div>
           </div>
-          <div id="reunioes-lista"><p class="muted">Nenhuma reunião cadastrada ainda.</p></div>
         </div>
         <!-- Coluna direita: detalhes -->
         <div class="card" id="reuniao-detalhe" style="padding:18px 20px">
@@ -623,7 +643,7 @@
       <div class="card config-section">
         <h2>Sobre o app</h2>
         <ul class="muted-list">
-          <li><strong>Build:</strong> Leva 22 (cache <code>v=20260506s</code>)</li>
+          <li><strong>Build:</strong> Leva 24 (cache <code>v=20260506t</code>)</li>
           <li><strong>Persistência:</strong> Firebase Firestore (Google Cloud) com criptografia AES-GCM 256 aplicada localmente antes do upload — o servidor só vê <em>blobs</em> cifrados.</li>
           <li><strong>Plano Diretor 2023–2026:</strong> 8 Objetivos Estratégicos do Cebraspe — opcionais por tarefa.</li>
           <li><strong>Quadrantes (taxonomia da Camila):</strong> Q1 — Crise e Contenção · Q2 — Estratégia Direcional · Q3 — Deliberação Estratégica Operacional · Q4 — Sustentação Operacional.</li>
@@ -1062,11 +1082,11 @@
   </dialog>
 
   <!-- Firebase: config + sync compartilhado (equipe) -->
-  <script src="firebase-config.js?v=20260506s"></script>
-  <script src="firebase-sync.js?v=20260506s"></script>
-  <script src="ia-gemini.js?v=20260506s"></script>
-  <script src="app.js?v=20260506s"></script>
+  <script src="firebase-config.js?v=20260506t"></script>
+  <script src="firebase-sync.js?v=20260506t"></script>
+  <script src="ia-gemini.js?v=20260506t"></script>
+  <script src="app.js?v=20260506t"></script>
   <!-- Captura rápida em linguagem natural + voz -->
-  <script src="quick-capture.js?v=20260506s"></script>
+  <script src="quick-capture.js?v=20260506t"></script>
 </body>
 </html>

@@ -686,6 +686,7 @@ function initApp() {
   bindConfig();
   bindModaisGlobais();
   bindReunioes();
+  bindReuniaoViewToggle();
   bindGuiaOEs();
   bindSecurityConfig();
   preencherDataInicioPadrao();
@@ -719,7 +720,11 @@ function trocarAba(nome) {
   if (nome === 'agenda') renderAgenda();
   if (nome === 'revisao') renderRevisao();
   if (nome === 'config') renderConfig();
-  if (nome === 'reunioes') renderReunioes();
+  if (nome === 'reunioes') {
+    const vComp = $('#view-compromissos');
+    if (vComp && !vComp.hidden) renderPainelCompromissos();
+    else renderReunioes();
+  }
 }
 
 function popularSelectsOE() {
@@ -4794,6 +4799,187 @@ function renderReunioes() {
       renderDetalheReuniao(reuniaoAtivaId);
     });
   });
+}
+
+/* ===================================================================
+   LEVA 24 — Painel de Compromissos de Terceiros (vista pura)
+   Lê reunioes[].encaminhamentos[taskId] e mostra apenas os atribuídos
+   a quem NÃO está em config.meusIdentificadores. Sem persistência.
+   =================================================================== */
+
+// Coleta lista de compromissos de terceiros a partir das reuniões.
+function compromissosDeTerceiros() {
+  if (!Array.isArray(reunioes)) return [];
+  const meus = meusIdentificadoresNormalizados();
+  const out = [];
+  for (const r of reunioes) {
+    if (!r || !r.encaminhamentos) continue;
+    const enc = r.encaminhamentos;
+    for (const taskId of Object.keys(enc)) {
+      const e = enc[taskId] || {};
+      const respRaw = (e.responsavel || '').toString().trim();
+      if (!respRaw) continue; // sem responsável definido fica de fora
+      const respKey = respRaw.toLowerCase();
+      if (meus.has(respKey)) continue; // é meu — não entra no painel
+      const t = tarefas.find(x => x.id === taskId);
+      out.push({
+        reuniaoId: r.id,
+        reuniaoTitulo: r.titulo || 'Reunião sem título',
+        reuniaoData: r.data || '',
+        reuniaoHora: r.hora || '',
+        taskId: taskId,
+        tarefaTitulo: t ? (t.titulo || '') : '(tarefa removida)',
+        responsavel: respRaw,
+        proximoPasso: (e.proximoPasso || '').trim(),
+        prazo: (e.prazo || '').trim(),
+        decisaoPrevia: (e.decisao || '').trim()
+      });
+    }
+  }
+  return out;
+}
+
+// Classifica situação a partir do prazo (ISO YYYY-MM-DD).
+function situacaoCompromisso(prazo) {
+  if (!prazo) return 'sem-prazo';
+  const hoje = hojeISO();
+  const d = diasEntre(hoje, prazo); // positivo: futuro; negativo: passado
+  if (d < 0) return 'vencido';
+  if (d <= 2) return 'iminente';
+  if (d <= 7) return 'proximo';
+  return 'futuro';
+}
+
+function _labelDiasRel(prazo) {
+  if (!prazo) return '';
+  const d = diasEntre(hojeISO(), prazo);
+  if (d === 0) return 'hoje';
+  if (d === 1) return 'amanhã';
+  if (d === -1) return 'há 1 dia';
+  if (d > 1) return 'em ' + d + ' dias';
+  return 'há ' + Math.abs(d) + ' dias';
+}
+
+function popularFiltroCompromissoResp(itens) {
+  const sel = $('#filtro-compromisso-resp');
+  if (!sel) return;
+  const atual = sel.value;
+  const distintos = Array.from(new Set(itens.map(c => c.responsavel))).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  sel.innerHTML = '<option value="">Todos os responsáveis</option>' +
+    distintos.map(r => `<option value="${escHtml(r)}">${escHtml(r)}</option>`).join('');
+  // tenta restaurar a seleção anterior se ainda existir
+  if (atual && distintos.includes(atual)) sel.value = atual;
+}
+
+function renderPainelCompromissos() {
+  const cont = $('#compromissos-lista');
+  if (!cont) return;
+  const todos = compromissosDeTerceiros();
+  popularFiltroCompromissoResp(todos);
+  const sel = $('#filtro-compromisso-resp');
+  const fResp = sel ? sel.value : '';
+  const itens = fResp ? todos.filter(c => c.responsavel === fResp) : todos;
+
+  if (!itens.length) {
+    cont.innerHTML = '<p class="muted">Sem encaminhamentos a terceiros nas reuniões registradas.</p>';
+    return;
+  }
+
+  // Agrupa por situação
+  const grupos = { vencido: [], iminente: [], proximo: [], futuro: [], 'sem-prazo': [] };
+  for (const c of itens) {
+    grupos[situacaoCompromisso(c.prazo)].push(c);
+  }
+
+  const ordem = [
+    { key: 'vencido',   titulo: 'Vencidos',          classe: 'compr-grp--vencido' },
+    { key: 'iminente',  titulo: 'Em até 2 dias',     classe: 'compr-grp--iminente' },
+    { key: 'proximo',   titulo: 'Em até 7 dias',     classe: 'compr-grp--proximo' },
+    { key: 'futuro',    titulo: 'Mais distantes',    classe: 'compr-grp--futuro' },
+    { key: 'sem-prazo', titulo: 'Sem prazo',         classe: 'compr-grp--semprazo' }
+  ];
+
+  // Ordena dentro de cada grupo: vencidos por prazo asc (mais antigo primeiro);
+  // demais por prazo asc; sem-prazo por reuniaoData desc.
+  const ordenadores = {
+    'sem-prazo': (a, b) => (b.reuniaoData || '').localeCompare(a.reuniaoData || ''),
+    _default:    (a, b) => (a.prazo || '').localeCompare(b.prazo || '')
+  };
+
+  const html = ordem.map(g => {
+    const lista = grupos[g.key];
+    if (!lista.length) return '';
+    const ord = ordenadores[g.key] || ordenadores._default;
+    lista.sort(ord);
+    const cards = lista.map(c => {
+      const sit = g.key;
+      const prazoLabel = c.prazo ? `${escHtml(fmtData(c.prazo))} <span class="compr-rel">(${escHtml(_labelDiasRel(c.prazo))})</span>` : '<span class="muted">sem prazo</span>';
+      const reuDataLabel = c.reuniaoData ? fmtData(c.reuniaoData) : 'sem data';
+      const decisaoBlock = c.decisaoPrevia
+        ? `<details class="compr-card__det"><summary>Decisão prévia da reunião</summary><div class="compr-card__decisao">${escHtml(c.decisaoPrevia)}</div></details>`
+        : '';
+      const proxBlock = c.proximoPasso
+        ? `<div class="compr-card__prox"><span class="compr-card__lbl">Próximo passo</span><div>${escHtml(c.proximoPasso)}</div></div>`
+        : '<div class="compr-card__prox compr-card__prox--vazio muted">Próximo passo não foi registrado.</div>';
+      return `<article class="compr-card compr-card--${sit}" data-task-id="${escHtml(c.taskId)}" data-reun-id="${escHtml(c.reuniaoId)}">
+        <header class="compr-card__hdr">
+          <div class="compr-card__resp">${escHtml(c.responsavel)}</div>
+          <div class="compr-card__prazo">${prazoLabel}</div>
+        </header>
+        ${proxBlock}
+        <div class="compr-card__meta">
+          <button class="btn btn--ghost btn--sm compr-card__tarefa" data-compr-tarefa="${escHtml(c.taskId)}" title="Ver tarefa-pai">${escHtml(c.tarefaTitulo)}</button>
+          <span class="compr-card__reu">de <button class="btn btn--ghost btn--sm compr-card__reu-btn" data-compr-reuniao="${escHtml(c.reuniaoId)}" title="Abrir reunião de origem">${escHtml(c.reuniaoTitulo)}</button> &middot; ${escHtml(reuDataLabel)}</span>
+        </div>
+        ${decisaoBlock}
+      </article>`;
+    }).join('');
+    return `<section class="compr-grp ${g.classe}">
+      <h3 class="compr-grp__titulo">${escHtml(g.titulo)} <span class="compr-grp__cont">(${lista.length})</span></h3>
+      <div class="compr-grp__lista">${cards}</div>
+    </section>`;
+  }).join('');
+
+  cont.innerHTML = html || '<p class="muted">Sem encaminhamentos a terceiros que se encaixem no filtro.</p>';
+
+  // Bind: clique na tarefa-pai abre histórico (reaproveita modal existente)
+  cont.querySelectorAll('[data-compr-tarefa]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tid = btn.dataset.comprTarefa;
+      if (typeof abrirHistoricoTarefa === 'function') abrirHistoricoTarefa(tid);
+    });
+  });
+  // Bind: clique na reunião abre modal de edição
+  cont.querySelectorAll('[data-compr-reuniao]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const rid = btn.dataset.comprReuniao;
+      if (typeof abrirModalReuniaoEditar === 'function') abrirModalReuniaoEditar(rid);
+    });
+  });
+}
+
+// Alterna entre vista Reuniões e vista Compromissos.
+function setReuniaoView(view) {
+  const v = (view === 'compromissos') ? 'compromissos' : 'reunioes';
+  const vReun = $('#view-reunioes');
+  const vComp = $('#view-compromissos');
+  if (vReun) vReun.hidden = (v !== 'reunioes');
+  if (vComp) vComp.hidden = (v !== 'compromissos');
+  document.querySelectorAll('[data-reun-view]').forEach(btn => {
+    const ativo = btn.dataset.reunView === v;
+    btn.classList.toggle('is-active', ativo);
+    btn.setAttribute('aria-selected', ativo ? 'true' : 'false');
+  });
+  if (v === 'compromissos') renderPainelCompromissos();
+  else renderReunioes();
+}
+
+function bindReuniaoViewToggle() {
+  document.querySelectorAll('[data-reun-view]').forEach(btn => {
+    btn.addEventListener('click', () => setReuniaoView(btn.dataset.reunView));
+  });
+  const sel = $('#filtro-compromisso-resp');
+  if (sel) sel.addEventListener('change', renderPainelCompromissos);
 }
 
 // ---- Render detalhe da reunião selecionada ----

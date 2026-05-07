@@ -1524,3 +1524,93 @@ select {
    modal de IA via abrirIAEmailDireto / abrirIADespachoDireto.
    =================================================================== */
 #dlg-email, #dlg-bilhete { display: none !important; }
+
+/* ===================================================================
+   LEVA 24 — Painel de Compromissos de Terceiros
+   Vista pura, lê encaminhamentos das reuniões cujo responsável NÃO
+   está em config.meusIdentificadores.
+   =================================================================== */
+
+/* Seletor segmentado da aba Reuniões */
+.seg.seg--reunioes { display: inline-flex; gap: 4px; padding: 3px; background: #f1f5f9; border-radius: 8px; }
+.seg.seg--reunioes .seg__btn {
+  appearance: none; border: 0; background: transparent; padding: 6px 12px;
+  font-size: 0.85em; color: #475569; border-radius: 6px; cursor: pointer;
+  font-weight: 500; transition: background .15s, color .15s;
+}
+.seg.seg--reunioes .seg__btn:hover { color: #1e293b; }
+.seg.seg--reunioes .seg__btn.is-active { background: #ffffff; color: #0f172a; box-shadow: 0 1px 2px rgba(15,23,42,0.08); }
+
+/* Grupos por situação */
+.compr-grp { margin-bottom: 18px; }
+.compr-grp__titulo {
+  font-size: 0.78em; text-transform: uppercase; letter-spacing: 0.06em;
+  color: #475569; margin: 0 0 8px; padding-bottom: 4px;
+  border-bottom: 1px solid #e2e8f0; font-weight: 600;
+  font-style: normal !important;
+}
+.compr-grp__cont { color: #94a3b8; font-weight: 500; margin-left: 4px; }
+.compr-grp--vencido .compr-grp__titulo { color: #b91c1c; border-bottom-color: #fecaca; }
+.compr-grp--iminente .compr-grp__titulo { color: #c2410c; border-bottom-color: #fed7aa; }
+.compr-grp--proximo .compr-grp__titulo { color: #b45309; border-bottom-color: #fde68a; }
+.compr-grp--futuro .compr-grp__titulo { color: #1e40af; border-bottom-color: #bfdbfe; }
+.compr-grp--semprazo .compr-grp__titulo { color: #64748b; border-bottom-color: #e2e8f0; }
+
+.compr-grp__lista { display: flex; flex-direction: column; gap: 8px; }
+
+/* Card de compromisso */
+.compr-card {
+  border: 1px solid #e2e8f0; border-left-width: 3px;
+  background: #ffffff; border-radius: 6px; padding: 10px 12px;
+  font-style: normal !important;
+}
+.compr-card--vencido   { border-left-color: #dc2626; background: #fef2f2; }
+.compr-card--iminente  { border-left-color: #ea580c; background: #fff7ed; }
+.compr-card--proximo   { border-left-color: #d97706; background: #fffbeb; }
+.compr-card--futuro    { border-left-color: #2563eb; background: #eff6ff; }
+.compr-card--sem-prazo { border-left-color: #94a3b8; background: #f8fafc; }
+
+.compr-card__hdr {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 10px; margin-bottom: 6px; flex-wrap: wrap;
+}
+.compr-card__resp {
+  font-weight: 600; color: #0f172a; font-size: 0.95em;
+  font-style: normal !important;
+}
+.compr-card__prazo { font-size: 0.82em; color: #334155; white-space: nowrap; }
+.compr-card__prazo .compr-rel { color: #64748b; font-size: 0.92em; }
+
+.compr-card__prox { margin: 6px 0; font-size: 0.88em; color: #1e293b; }
+.compr-card__prox--vazio { font-size: 0.82em; }
+.compr-card__lbl {
+  display: block; font-size: 0.7em; text-transform: uppercase;
+  letter-spacing: 0.05em; color: #64748b; margin-bottom: 2px;
+  font-weight: 600; font-style: normal !important;
+}
+
+.compr-card__meta {
+  display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center;
+  margin-top: 6px; padding-top: 6px; border-top: 1px dashed #e2e8f0;
+  font-size: 0.78em; color: #64748b;
+}
+.compr-card__tarefa {
+  font-size: 0.82em !important; padding: 2px 6px !important;
+  font-weight: 500 !important; color: #1e40af !important;
+}
+.compr-card__reu { display: inline-flex; align-items: center; gap: 4px; }
+.compr-card__reu-btn {
+  font-size: 0.82em !important; padding: 2px 4px !important;
+  color: #475569 !important; font-weight: 500 !important;
+}
+
+.compr-card__det { margin-top: 6px; font-size: 0.82em; }
+.compr-card__det summary {
+  cursor: pointer; color: #64748b; font-weight: 500;
+  font-style: normal !important;
+}
+.compr-card__decisao {
+  margin-top: 4px; padding: 6px 8px; background: #f8fafc;
+  border-left: 2px solid #cbd5e1; border-radius: 4px;
+  white-space: pre-wrap; color: #334155;
+}
