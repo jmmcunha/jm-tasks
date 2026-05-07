@@ -1,7 +1,8 @@
 // ============================================================
 // IA Gemini — geração e refinamento de e-mails (Leva 15, Leva 20: despacho removido)
 // Provedor: Google Gemini API (free tier — sem custo)
-// Modelo padrão: gemini-2.5-flash (10 RPM, 250/dia, ~1M ctx)
+// Modelo padrão: gemini-2.5-flash-lite (15 RPM, 1.000/dia, ~1M ctx).
+// Trocado de flash para flash-lite na Leva 26.1 por causa de cota diaria estourada.
 // ============================================================
 (function () {
   'use strict';
@@ -51,7 +52,15 @@
   }
 
   function getConfig() {
-    return _read(KEY_CONFIG, { chaveOfuscada: '', modelo: 'flash', configuradoPor: '', configuradoEm: '' });
+    const cfg = _read(KEY_CONFIG, { chaveOfuscada: '', modelo: 'flashLite', configuradoPor: '', configuradoEm: '' });
+    // Migracao silenciosa Leva 26.1: configuracoes antigas vinham com 'flash' por default.
+    // Troca uma unica vez para 'flashLite' (cota maior). Usuario pode reverter manualmente depois.
+    if (cfg.modelo === 'flash' && !cfg.modeloMigradoLeva261) {
+      cfg.modelo = 'flashLite';
+      cfg.modeloMigradoLeva261 = true;
+      try { _write(KEY_CONFIG, cfg); } catch(_) {}
+    }
+    return cfg;
   }
   function setConfig(novoConfig) {
     const atual = getConfig();
@@ -80,7 +89,7 @@
     if (!chave) {
       throw new Error('Chave da IA não configurada. Vá em Configurações → IA.');
     }
-    const modelo = MODELOS[cfg.modelo] || MODELOS.flash;
+    const modelo = MODELOS[cfg.modelo] || MODELOS.flashLite;
     const body = {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
@@ -111,7 +120,26 @@
         throw new Error('Chave inválida ou sem permissão. Verifique em Configurações → IA.');
       }
       if (resp.status === 429) {
-        throw new Error('Limite de uso atingido. Aguarde alguns segundos e tente novamente.');
+        // Diferencia cota diaria de cota por minuto inspecionando o JSON de erro do Gemini.
+        let detalhe = '';
+        let diaria = false;
+        try {
+          const j = JSON.parse(txt);
+          const detalhes = (j && j.error && Array.isArray(j.error.details)) ? j.error.details : [];
+          for (const d of detalhes) {
+            const violations = d && Array.isArray(d.violations) ? d.violations : [];
+            for (const v of violations) {
+              const q = (v && v.quotaId) || '';
+              if (/PerDay|Daily/i.test(q)) { diaria = true; detalhe = q; break; }
+              if (q && !detalhe) detalhe = q;
+            }
+            if (diaria) break;
+          }
+        } catch(_) {}
+        if (diaria) {
+          throw new Error('Cota diaria da IA esgotada. O limite zera às 04h da manhã (horário de Brasília). Para destravar agora, troque o modelo em Configurações → IA ou habilite faturamento na chave do Google.');
+        }
+        throw new Error('Limite por minuto atingido na IA. Aguarde cerca de 60 segundos e tente novamente.' + (detalhe ? ' (cota: ' + detalhe + ')' : ''));
       }
       throw new Error(`Erro ${resp.status} da IA. ${txt.slice(0, 200)}`);
     }

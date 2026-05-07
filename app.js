@@ -5171,8 +5171,6 @@ function abrirSolicitacaoIA(reuniaoId, taskId) {
     _diasAteVenc: e.prazo ? diasEntre(hojeISO(), e.prazo) : null
   });
   const instrucao = _instrucaoSolicitarPorSituacao(situacao);
-  // Registra a solicitação (vista pura no painel se atualiza ao reabrir; aqui salvamos imediatamente)
-  registrarSolicitacao(reuniaoId, taskId, situacao);
   abrirIAModal({
     titulo: 'Solicitar atualização (Drucker)',
     subtitulo: 'Encaminhamento atribuído a ' + ((e.responsavel || '').trim() || '—') + ' · origem: ' + (r.titulo || 'reunião'),
@@ -5180,6 +5178,8 @@ function abrirSolicitacaoIA(reuniaoId, taskId) {
     tipo: 'e-mail',
     contexto: ctx,
     onAceitar: () => {
+      // Leva 26.1: registra apenas quando usuário confirma (Aceitar), não ao abrir.
+      registrarSolicitacao(reuniaoId, taskId, situacao);
       if (typeof renderPainelCompromissos === 'function') renderPainelCompromissos();
       if (typeof renderBannerDrucker === 'function') renderBannerDrucker();
     }
@@ -6033,7 +6033,7 @@ function bindConfigIA() {
         const agora = new Date().toLocaleString('pt-BR');
         window.IAGemini.setConfig({
           chaveOfuscada: window.IAGemini.ofuscar(chaveTestar),
-          modelo: sel ? sel.value : 'flash',
+          modelo: sel ? sel.value : 'flashLite',
           configuradoPor: usuario,
           configuradoEm: agora
         });
@@ -6251,8 +6251,13 @@ function abrirIAModal({ titulo, subtitulo, modo, contexto, contextoLista, textoO
   };
 
   dlg.showModal();
-  // Dispara automaticamente a primeira geração.
-  setTimeout(executar, 80);
+  // Leva 26.1: NAO dispara mais geracao automatica ao abrir, para nao
+  // queimar cota da IA quando o usuario só quer revisar contexto antes
+  // de pedir. O botão 'Gerar' / 'Refinar' (btnTentar) faz a chamada.
+  // Mensagem de orientação no campo de saída.
+  taSaida.placeholder = mModo === 'gerar'
+    ? 'Clique em Gerar para a IA escrever a partir do contexto. Você pode antes adicionar uma instrução no campo acima.'
+    : 'Clique em Refinar para a IA reescrever o texto original.';
 }
 
 function _ctxStrCurto(c) {
