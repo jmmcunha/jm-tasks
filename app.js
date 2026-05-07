@@ -917,6 +917,11 @@ function mostrarMsg(txt, erro = false) {
   if (txt && !erro) setTimeout(() => { el.textContent = ''; }, 2500);
 }
 
+// Leva 26.2: alias histórico que aparecia em ~30 chamadas mas nunca foi
+// definido. Sem ele, qualquer ação que tentava avisar o usuário (copiar
+// prompt, gerar PDF, importar tarefas etc.) estourava ReferenceError.
+function mostrarFlash(txt) { return mostrarMsg(txt, false); }
+
 /* ===================================================================
    8. EDIÇÃO EM MODAL
    =================================================================== */
