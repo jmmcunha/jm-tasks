@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260506j" />
+  <link rel="stylesheet" href="styles.css?v=20260506k" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a3d7a'/%3E%3Cpath d='M9 11h14M9 16h14M9 21h9' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='25.5' cy='21' r='2' fill='%23f08000'/%3E%3C/svg%3E" />
 
   <!-- Bibliotecas: jsPDF, html2canvas, SheetJS, Chart.js -->
@@ -471,7 +471,10 @@
         <div class="card" style="padding:18px 20px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
             <h2>Reuniões</h2>
-            <button class="btn btn--primary btn--sm" id="btn-nova-reuniao">+ Nova reunião</button>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="btn btn--primary btn--sm" id="btn-nova-reuniao">+ Nova reunião</button>
+              <button class="btn btn--ghost btn--sm" id="btn-nova-reuniao-teams" title="Abre o Teams direto, sem registrar reunião no app">Direto no Teams</button>
+            </div>
           </div>
           <div style="margin-bottom:12px">
             <select id="filtro-reuniao-status" class="" style="width:100%">
@@ -951,7 +954,8 @@
       <div class="form form--modal">
         <label class="field field--full"><span>Título <span class="req">*</span></span><input type="text" id="rf-titulo" required maxlength="180" placeholder="Ex.: Reunião com Pablo (CRI) — alinhamentos do Eixo 1" /></label>
         <label class="field"><span>Data <span class="req">*</span></span><input type="date" id="rf-data" required /></label>
-        <label class="field"><span>Hora (opcional)</span><input type="time" id="rf-hora" /></label>
+        <label class="field"><span>Hora início (opcional)</span><input type="time" id="rf-hora" /></label>
+        <label class="field"><span>Hora fim (opcional)</span><input type="time" id="rf-hora-fim" /></label>
         <label class="field field--full"><span>Local / link</span><input type="text" id="rf-local" maxlength="200" placeholder="Sala 401, Teams, Google Meet…" /></label>
         <label class="field field--full"><span>Participantes</span>
           <div class="participantes-input">
@@ -1084,11 +1088,11 @@
   </dialog>
 
   <!-- Firebase: config + sync compartilhado (equipe) -->
-  <script src="firebase-config.js?v=20260506j"></script>
-  <script src="firebase-sync.js?v=20260506j"></script>
-  <script src="ia-gemini.js?v=20260506j"></script>
-  <script src="app.js?v=20260506j"></script>
+  <script src="firebase-config.js?v=20260506k"></script>
+  <script src="firebase-sync.js?v=20260506k"></script>
+  <script src="ia-gemini.js?v=20260506k"></script>
+  <script src="app.js?v=20260506k"></script>
   <!-- Captura rápida em linguagem natural + voz -->
-  <script src="quick-capture.js?v=20260506j"></script>
+  <script src="quick-capture.js?v=20260506k"></script>
 </body>
 </html>

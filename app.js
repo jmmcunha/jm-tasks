@@ -5481,6 +5481,8 @@ function bindReunioes() {
   document.addEventListener('click', e => {
     if (e.target.id === 'btn-nova-reuniao') {
       abrirModalReuniaoNova([]);
+    } else if (e.target.id === 'btn-nova-reuniao-teams') {
+      novaReuniaoDiretoNoTeams();
     }
   });
 
@@ -5600,6 +5602,7 @@ function abrirModalReuniaoNova(tarefasPreSelecionadas) {
   $('#rf-titulo').value = '';
   $('#rf-data').value = hojeISO();
   $('#rf-hora').value = '';
+  if ($('#rf-hora-fim')) $('#rf-hora-fim').value = '';
   $('#rf-local').value = '';
   $('#rf-observacoes').value = '';
   _rfParticipantes = [];
@@ -5618,6 +5621,7 @@ function abrirModalReuniaoEditar(id) {
   $('#rf-titulo').value = r.titulo;
   $('#rf-data').value = r.data;
   $('#rf-hora').value = r.hora || '';
+  if ($('#rf-hora-fim')) $('#rf-hora-fim').value = r.horaFim || '';
   $('#rf-local').value = r.local || '';
   $('#rf-observacoes').value = r.observacoes || '';
   _rfParticipantes = [...(r.participantes || [])];
@@ -5640,6 +5644,7 @@ function salvarReuniaoDoModal() {
     r.titulo = titulo;
     r.data = data;
     r.hora = $('#rf-hora').value;
+    r.horaFim = $('#rf-hora-fim') ? $('#rf-hora-fim').value : '';
     r.local = $('#rf-local').value.trim();
     r.participantes = [..._rfParticipantes];
     r.tarefasIds = [..._rfTarefasIds];
@@ -5651,6 +5656,7 @@ function salvarReuniaoDoModal() {
       titulo,
       data,
       hora: $('#rf-hora').value,
+      horaFim: $('#rf-hora-fim') ? $('#rf-hora-fim').value : '',
       local: $('#rf-local').value.trim(),
       participantes: [..._rfParticipantes],
       tarefasIds: [..._rfTarefasIds],
@@ -5671,66 +5677,120 @@ function salvarReuniaoDoModal() {
   if (reuniaoAtivaId) renderDetalheReuniao(reuniaoAtivaId);
 }
 
-// ---- Deep link: agendar no Teams ----
+// ---- Deep link: agendar no Teams (Leva 17) ----
 // Monta URL https://teams.microsoft.com/l/meeting/new com campos
 // pré-preenchidos a partir do objeto reunião. O Teams abre o
 // formulário de Nova reunião; usuário revisa e clica Salvar.
+// Pauta vai como HTML (Teams renderiza no campo agenda).
+
+function _escTeamsHtml(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Soma horas a uma string "HH:MM" e devolve {data, hora} em ISO local
+function _somarHoras(dataYmd, horaHm, deltaHoras) {
+  const [hh, mm] = horaHm.split(':').map(Number);
+  const dt = new Date(`${dataYmd}T${horaHm}:00`);
+  dt.setHours(dt.getHours() + deltaHoras);
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, '0');
+  const d = String(dt.getDate()).padStart(2, '0');
+  const h = String(dt.getHours()).padStart(2, '0');
+  const mi = String(dt.getMinutes()).padStart(2, '0');
+  return { data: `${y}-${m}-${d}`, hora: `${h}:${mi}` };
+}
+
 function _montarDeepLinkTeams(r) {
   if (!r) return '';
   const subject = (r.titulo || 'Reunião').trim();
 
-  // Monta startTime/endTime em ISO local (sem timezone)
-  // Se não houver hora, default 09:00-10:00
+  // Data e hora de início
   const dataBase = r.data || new Date().toISOString().slice(0, 10);
   const horaIni = (r.hora && /^\d{2}:\d{2}/.test(r.hora)) ? r.hora.slice(0, 5) : '09:00';
   const startTime = `${dataBase}T${horaIni}:00`;
-  // Hora fim: +1h sobre o início
-  const [hh, mm] = horaIni.split(':').map(Number);
-  const fimDt = new Date(`${dataBase}T${horaIni}:00`);
-  fimDt.setHours(fimDt.getHours() + 1);
-  const endHora = String(fimDt.getHours()).padStart(2, '0') + ':' + String(fimDt.getMinutes()).padStart(2, '0');
-  const endData = fimDt.toISOString().slice(0, 10);
+
+  // Data e hora de fim — usa r.horaFim se houver, senão início + 1h
+  let endData, endHora;
+  if (r.horaFim && /^\d{2}:\d{2}/.test(r.horaFim)) {
+    endData = dataBase;
+    endHora = r.horaFim.slice(0, 5);
+    // Se horaFim for menor ou igual à hora início, força +1h
+    const [iH, iM] = horaIni.split(':').map(Number);
+    const [fH, fM] = endHora.split(':').map(Number);
+    if (fH * 60 + fM <= iH * 60 + iM) {
+      const inc = _somarHoras(dataBase, horaIni, 1);
+      endData = inc.data;
+      endHora = inc.hora;
+    }
+  } else {
+    const inc = _somarHoras(dataBase, horaIni, 1);
+    endData = inc.data;
+    endHora = inc.hora;
+  }
   const endTime = `${endData}T${endHora}:00`;
 
-  // Pauta (content): tarefas vinculadas + observações
-  const linhasPauta = [];
-  linhasPauta.push('Pauta gerada pelo Cebraspe Tasks.');
-  linhasPauta.push('');
+  // ---- Pauta em HTML ----
+  const enc = r.encaminhamentos || {};
+  const blocos = [];
+  blocos.push('<p><strong>Pauta gerada pelo Cebraspe Tasks</strong></p>');
+
   if (Array.isArray(r.tarefasIds) && r.tarefasIds.length) {
-    linhasPauta.push('Tarefas tratadas:');
-    r.tarefasIds.forEach((tid, idx) => {
+    blocos.push('<p><strong>Tarefas tratadas</strong></p>');
+    blocos.push('<ol>');
+    r.tarefasIds.forEach((tid) => {
       const t = (typeof tarefas !== 'undefined') ? tarefas.find(x => x.id === tid) : null;
       if (!t) return;
       const obj = t.oeId && typeof OBJETIVOS !== 'undefined' ? OBJETIVOS.find(o => o.id === t.oeId) : null;
-      let linha = `${idx + 1}. ${t.titulo}`;
-      if (obj) linha += ` (OE ${obj.id})`;
-      if (t.responsavel) linha += ` — Resp.: ${t.responsavel}`;
-      if (t.prazo) linha += ` — Prazo: ${t.prazo}`;
-      linhasPauta.push(linha);
+      const e = enc[tid] || {};
+      let item = `<li><strong>${_escTeamsHtml(t.titulo)}</strong>`;
+      const meta = [];
+      if (obj) meta.push(`OE ${obj.id}`);
+      if (t.responsavel) meta.push(`Resp.: ${_escTeamsHtml(t.responsavel)}`);
+      if (t.prazo) meta.push(`Prazo: ${_escTeamsHtml(t.prazo)}`);
+      if (meta.length) item += `<br><span>${meta.join(' &middot; ')}</span>`;
+      if (e.decisao) item += `<br><em>Decisão prévia:</em> ${_escTeamsHtml(e.decisao)}`;
+      if (e.proximoPasso) item += `<br><em>Próximo passo:</em> ${_escTeamsHtml(e.proximoPasso)}`;
+      item += '</li>';
+      blocos.push(item);
     });
-    linhasPauta.push('');
+    blocos.push('</ol>');
   }
-  if (r.observacoes) {
-    linhasPauta.push('Observações:');
-    linhasPauta.push(r.observacoes);
-    linhasPauta.push('');
-  }
-  if (r.local) {
-    linhasPauta.push(`Local de referência: ${r.local}`);
-  }
-  const content = linhasPauta.join('\n').trim();
 
-  // Attendees: aproveita apenas participantes que parecem e-mail
-  const emails = (r.participantes || [])
-    .filter(p => typeof p === 'string' && /@/.test(p))
-    .map(p => p.trim())
-    .filter(Boolean);
+  if (r.resumoExecutivo) {
+    blocos.push('<p><strong>Resumo executivo</strong></p>');
+    blocos.push(`<p>${_escTeamsHtml(r.resumoExecutivo).replace(/\n/g, '<br>')}</p>`);
+  }
+
+  if (r.observacoes) {
+    blocos.push('<p><strong>Observações</strong></p>');
+    blocos.push(`<p>${_escTeamsHtml(r.observacoes).replace(/\n/g, '<br>')}</p>`);
+  }
+
+  const content = blocos.join('');
+
+  // ---- Location: separado da pauta ----
+  // Se r.local parece URL, deixa apenas como referência textual.
+  const location = (r.local || '').trim();
+
+  // ---- Attendees: e-mails diretos OU formato "Nome <email>" ----
+  const emails = [];
+  (r.participantes || []).forEach(p => {
+    if (typeof p !== 'string') return;
+    const m = p.match(/<\s*([^<>\s]+@[^<>\s]+)\s*>/);
+    if (m) emails.push(m[1].trim());
+    else if (/@/.test(p)) emails.push(p.trim());
+  });
 
   const params = new URLSearchParams();
   params.set('subject', subject);
   params.set('startTime', startTime);
   params.set('endTime', endTime);
   if (content) params.set('content', content);
+  if (location) params.set('location', location);
   if (emails.length) params.set('attendees', emails.join(','));
 
   return `https://teams.microsoft.com/l/meeting/new?${params.toString()}`;
@@ -5741,12 +5801,25 @@ function agendarReuniaoNoTeams(id) {
   if (!r) return;
   const url = _montarDeepLinkTeams(r);
   if (!url) return;
-  // Avisa se houver participantes não-email (vão precisar ser adicionados manualmente no Teams)
-  const naoEmails = (r.participantes || []).filter(p => typeof p === 'string' && !/@/.test(p));
+  // Avisa quais participantes precisam ser adicionados manualmente
+  const naoEmails = (r.participantes || []).filter(p => {
+    if (typeof p !== 'string') return false;
+    const temEmailNoFormato = /<\s*[^<>\s]+@[^<>\s]+\s*>/.test(p);
+    const ehEmailDireto = /@/.test(p);
+    return !temEmailNoFormato && !ehEmailDireto;
+  });
   if (naoEmails.length) {
     mostrarFlash(`Teams aberto. Adicione manualmente: ${naoEmails.slice(0, 3).join(', ')}${naoEmails.length > 3 ? ' (+' + (naoEmails.length - 3) + ')' : ''}`);
+  } else {
+    mostrarFlash('Teams aberto com a reunião pré-preenchida.');
   }
   window.open(url, '_blank', 'noopener');
+}
+
+// Atalho: abrir Teams direto para Nova reunião em branco
+// (sem registrar reunião no app — uso casual)
+function novaReuniaoDiretoNoTeams() {
+  window.open('https://teams.microsoft.com/l/meeting/new', '_blank', 'noopener');
 }
 
 // ---- Render lista de reuniões ----
