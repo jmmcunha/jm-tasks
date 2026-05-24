@@ -667,6 +667,7 @@ function initApp() {
   popularSelectsOE();
   popularResponsaveis();
   bindTabs();
+  bindMobileNav();
   bindForm();
   bindFiltros();
   bindAgrupamento();
@@ -717,6 +718,12 @@ function trocarAba(nome) {
     p.classList.toggle('is-active', ativo);
     p.hidden = !ativo;
   });
+  // Leva 27.1: FAB "+" so faz sentido na aba Tarefas.
+  const fab = document.getElementById('fab-novo');
+  if (fab) fab.hidden = (nome !== 'tarefas');
+  // Fecha a folha "Mais" caso esteja aberta (item Revisao/Config foi clicado).
+  const sheet = document.getElementById('sheet-mais');
+  if (sheet && sheet.open) { try { sheet.close(); } catch(e) {} }
   if (nome === 'agenda') renderAgenda();
   if (nome === 'revisao') renderRevisao();
   if (nome === 'config') renderConfig();
@@ -724,6 +731,50 @@ function trocarAba(nome) {
     const vComp = $('#view-compromissos');
     if (vComp && !vComp.hidden) renderPainelCompromissos();
     else renderReunioes();
+  }
+}
+
+// Leva 27.1: ativa a navegacao mobile (barra inferior, FAB e folha
+// "Mais"). A barra inferior e o FAB ficam ocultos por CSS acima de 720px,
+// entao mesmo no desktop os elementos existem no DOM mas nao aparecem.
+// Os botoes da barra inferior ja tem a classe .tab + data-tab, entao o
+// handler de bindTabs ja cuida do click. Aqui so revelamos os elementos
+// e ligamos o botao "Mais" e o FAB.
+function bindMobileNav() {
+  const bn = document.getElementById('bottomnav');
+  if (bn) bn.hidden = false;
+  // FAB so aparece quando a aba inicial e Tarefas (estado padrao).
+  const fab = document.getElementById('fab-novo');
+  if (fab) {
+    fab.hidden = (abaAtiva !== 'tarefas');
+    fab.addEventListener('click', () => {
+      // Garante que estamos na aba Tarefas e foca o campo titulo.
+      if (abaAtiva !== 'tarefas') trocarAba('tarefas');
+      const titulo = document.getElementById('f-titulo');
+      if (titulo) {
+        titulo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => titulo.focus(), 250);
+      }
+    });
+  }
+  const btnMais = document.getElementById('bn-mais');
+  const sheet = document.getElementById('sheet-mais');
+  const btnFechar = document.getElementById('sheet-mais-close');
+  if (btnMais && sheet) {
+    btnMais.addEventListener('click', () => {
+      try { sheet.showModal(); } catch(e) { sheet.setAttribute('open',''); }
+    });
+  }
+  if (btnFechar && sheet) {
+    btnFechar.addEventListener('click', () => {
+      try { sheet.close(); } catch(e) { sheet.removeAttribute('open'); }
+    });
+  }
+  // Toque no backdrop tambem fecha a folha (comportamento esperado em sheet).
+  if (sheet) {
+    sheet.addEventListener('click', (ev) => {
+      if (ev.target === sheet) { try { sheet.close(); } catch(e) {} }
+    });
   }
 }
 

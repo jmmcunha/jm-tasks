@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260506w" />
+  <link rel="stylesheet" href="styles.css?v=20260506x" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a3d7a'/%3E%3Cpath d='M9 11h14M9 16h14M9 21h9' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='25.5' cy='21' r='2' fill='%23f08000'/%3E%3C/svg%3E" />
 
   <!-- Bibliotecas: jsPDF, html2canvas, SheetJS, Chart.js -->
@@ -643,7 +643,7 @@
       <div class="card config-section">
         <h2>Sobre o app</h2>
         <ul class="muted-list">
-          <li><strong>Build:</strong> Leva 26.2 (cache <code>v=20260506w</code>)</li>
+          <li><strong>Build:</strong> Leva 27.1 (cache <code>v=20260506x</code>)</li>
           <li><strong>Persistência:</strong> Firebase Firestore (Google Cloud) com criptografia AES-GCM 256 aplicada localmente antes do upload — o servidor só vê <em>blobs</em> cifrados.</li>
           <li><strong>Plano Diretor 2023–2026:</strong> 8 Objetivos Estratégicos do Cebraspe — opcionais por tarefa.</li>
           <li><strong>Quadrantes (taxonomia da Camila):</strong> Q1 — Crise e Contenção · Q2 — Estratégia Direcional · Q3 — Deliberação Estratégica Operacional · Q4 — Sustentação Operacional.</li>
@@ -1081,12 +1081,52 @@
     </div>
   </dialog>
 
+  <!-- Leva 27.1: navegação mobile (barra inferior + FAB + folha 'Mais') -->
+  <nav class="bottomnav" id="bottomnav" aria-label="Navegação mobile" hidden>
+    <button type="button" class="bottomnav__item tab is-active" data-tab="tarefas" aria-label="Tarefas">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 5h16v2H4zm0 6h16v2H4zm0 6h10v2H4z"/></svg>
+      <span>Tarefas</span>
+    </button>
+    <button type="button" class="bottomnav__item tab" data-tab="agenda" aria-label="Agenda">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 2v2H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3V2h-2v2H9V2zm-3 6h16v12H4z"/></svg>
+      <span>Agenda</span>
+    </button>
+    <button type="button" class="bottomnav__item tab" data-tab="reunioes" aria-label="Reuniões">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4m0 2c-3.3 0-10 1.7-10 5v3h20v-3c0-3.3-6.7-5-10-5"/></svg>
+      <span>Reuniões</span>
+    </button>
+    <button type="button" class="bottomnav__item" id="bn-mais" aria-label="Mais opções" aria-haspopup="dialog">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>
+      <span>Mais</span>
+    </button>
+  </nav>
+
+  <button type="button" class="fab" id="fab-novo" aria-label="Nova tarefa" hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
+  </button>
+
+  <dialog id="sheet-mais" class="sheet" aria-label="Mais opções">
+    <div class="sheet__inner">
+      <div class="sheet__grip" aria-hidden="true"></div>
+      <h3 class="sheet__title">Mais</h3>
+      <button type="button" class="sheet__item tab" data-tab="revisao">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 4h18v2H3zm0 5h18v2H3zm0 5h12v2H3zm0 5h18v2H3z"/></svg>
+        <span>Revisão Semanal</span>
+      </button>
+      <button type="button" class="sheet__item tab" data-tab="config">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 8a4 4 0 1 0 4 4 4 4 0 0 0-4-4m9 4-2.1.6-.6 1.4.9 2-1.4 1.4-2-.9-1.4.6-.6 2.1h-2l-.6-2.1-1.4-.6-2 .9-1.4-1.4.9-2-.6-1.4L3 12l.7-2 2.1.6 1.4-.6.6-2.1h2l.6 2.1 1.4.6 2-.9 1.4 1.4-.9 2 .6 1.4z"/></svg>
+        <span>Configurações</span>
+      </button>
+      <button type="button" class="sheet__close btn btn--ghost" id="sheet-mais-close">Fechar</button>
+    </div>
+  </dialog>
+
   <!-- Firebase: config + sync compartilhado (equipe) -->
-  <script src="firebase-config.js?v=20260506w"></script>
-  <script src="firebase-sync.js?v=20260506w"></script>
-  <script src="ia-gemini.js?v=20260506w"></script>
-  <script src="app.js?v=20260506w"></script>
+  <script src="firebase-config.js?v=20260506x"></script>
+  <script src="firebase-sync.js?v=20260506x"></script>
+  <script src="ia-gemini.js?v=20260506x"></script>
+  <script src="app.js?v=20260506x"></script>
   <!-- Captura rápida em linguagem natural + voz -->
-  <script src="quick-capture.js?v=20260506w"></script>
+  <script src="quick-capture.js?v=20260506x"></script>
 </body>
 </html>

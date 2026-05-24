@@ -1645,3 +1645,152 @@ select {
   background: #dcfce7; color: #166534;
   border: 1px solid #bbf7d0;
 }
+
+/* ==========================================================
+   Leva 27.1 — Navegacao mobile (barra inferior + FAB + sheet)
+   Estrategia mobile-first: regras abaixo soh ativam ate 720px.
+   Acima disso, a navegacao do topo continua identica ao desktop.
+   ========================================================== */
+
+.bottomnav { display: none; }
+.fab { display: none; }
+
+@media (max-width: 720px) {
+  /* Cabecalho compacto: esconde KPIs detalhados e abas do topo.
+     O resumo numerico vai aparecer em chips dentro da aba Tarefas
+     na Leva 27.2; aqui apenas removemos o ruido do mobile. */
+  .topbar .kpis-quad,
+  .topbar .kpis-mini,
+  .topbar .spark-wrap { display: none; }
+  .topbar .tabs { display: none; }
+  .topbar__inner { padding-top: 8px; padding-bottom: 8px; gap: 8px; }
+  .brand__title { font-size: 1rem; }
+  .brand__sub { font-size: .75rem; }
+
+  /* Reserva espaco para a barra inferior nao tampar conteudo. */
+  body { padding-bottom: 76px; }
+  main.main { padding-bottom: 24px; }
+
+  /* Barra inferior fixa */
+  .bottomnav {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    background: #ffffff;
+    border-top: 1px solid #e2e8f0;
+    box-shadow: 0 -2px 8px rgba(10, 61, 122, .06);
+    z-index: 90;
+    padding: 4px 4px max(4px, env(safe-area-inset-bottom));
+  }
+  .bottomnav__item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    background: transparent;
+    border: 0;
+    color: #475569;
+    font-family: inherit;
+    font-size: .7rem;
+    font-weight: 500;
+    padding: 6px 4px;
+    border-radius: 10px;
+    cursor: pointer;
+    min-height: 56px;
+    transition: background .15s ease, color .15s ease;
+  }
+  .bottomnav__item svg {
+    width: 24px;
+    height: 24px;
+  }
+  .bottomnav__item:active { background: var(--azul-3); }
+  .bottomnav__item.is-active { color: var(--azul); }
+  .bottomnav__item.is-active svg { color: var(--azul); }
+
+  /* FAB: aparece apenas quando a aba Tarefas esta ativa.
+     O JS alterna o atributo hidden conforme a aba. */
+  .fab {
+    display: flex;
+    position: fixed;
+    right: 16px;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--azul);
+    color: #ffffff;
+    border: 0;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 16px rgba(10, 61, 122, .35);
+    z-index: 89;
+    cursor: pointer;
+  }
+  .fab svg { width: 26px; height: 26px; }
+  .fab:active { background: var(--azul-2); }
+
+  /* Folha "Mais": dialog ancorado na base, estilo bottom sheet. */
+  dialog.sheet {
+    border: 0;
+    padding: 0;
+    margin: 0;
+    width: 100%;
+    max-width: 100%;
+    max-height: 80vh;
+    border-radius: 16px 16px 0 0;
+    background: #ffffff;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    transform: none;
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, .18);
+  }
+  dialog.sheet::backdrop {
+    background: rgba(15, 23, 42, .45);
+  }
+  .sheet__inner {
+    padding: 8px 16px max(16px, env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .sheet__grip {
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: #cbd5e1;
+    margin: 6px auto 8px;
+  }
+  .sheet__title {
+    font-size: 1rem;
+    margin: 0 0 4px;
+    color: var(--azul);
+    font-weight: 600;
+  }
+  .sheet__item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: transparent;
+    border: 0;
+    border-radius: 12px;
+    padding: 14px 12px;
+    font-family: inherit;
+    font-size: 1rem;
+    color: #1e293b;
+    cursor: pointer;
+    text-align: left;
+    min-height: 52px;
+  }
+  .sheet__item svg { width: 22px; height: 22px; color: var(--azul); }
+  .sheet__item:active { background: var(--azul-3); }
+  .sheet__close {
+    margin-top: 8px;
+    width: 100%;
+    min-height: 44px;
+  }
+}
