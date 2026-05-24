@@ -704,6 +704,28 @@ function bindTabs() {
   $$('.tab').forEach(tab => {
     tab.addEventListener('click', () => trocarAba(tab.dataset.tab));
   });
+  // Sub-abas dentro de Tarefas (Pendentes / Concluídas)
+  $$('.subtab').forEach(st => {
+    st.addEventListener('click', () => trocarSubAbaTarefas(st.dataset.subtab));
+  });
+}
+
+function trocarSubAbaTarefas(nome) {
+  const painel = document.getElementById('panel-tarefas');
+  if (!painel) return;
+  painel.dataset.subtab = nome;
+  $$('.subtab').forEach(b => {
+    const ativo = b.dataset.subtab === nome;
+    b.classList.toggle('is-active', ativo);
+    b.setAttribute('aria-selected', ativo ? 'true' : 'false');
+  });
+  const pend = document.getElementById('subpanel-pendentes');
+  const conc = document.getElementById('subpanel-concluidas');
+  if (pend) pend.hidden = (nome !== 'pendentes');
+  if (conc) conc.hidden = (nome !== 'concluidas');
+  if (nome === 'concluidas' && typeof window.renderConcluidas === 'function') {
+    window.renderConcluidas();
+  }
 }
 
 function trocarAba(nome) {
@@ -727,7 +749,6 @@ function trocarAba(nome) {
   if (nome === 'agenda') renderAgenda();
   if (nome === 'revisao') renderRevisao();
   if (nome === 'config') renderConfig();
-  if (nome === 'concluidas' && typeof window.renderConcluidas === 'function') window.renderConcluidas();
   if (nome === 'reunioes') {
     const vComp = $('#view-compromissos');
     if (vComp && !vComp.hidden) renderPainelCompromissos();

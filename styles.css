@@ -2548,3 +2548,32 @@ select {
   border-top: 1px solid var(--borda, #e0e0e0);
 }
 .rev-modal__actions .btn { min-width: 90px; }
+
+/* Leva 32 — sub-abas dentro da aba Tarefas (Pendentes / Concluídas) */
+.subtabs {
+  display: flex;
+  gap: 0.3rem;
+  margin: 0 0 0.9rem 0;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 0;
+}
+.subtab {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: color .12s, border-color .12s;
+}
+.subtab:hover {
+  color: #1e293b;
+}
+.subtab.is-active {
+  color: #1565c0;
+  border-bottom-color: #1565c0;
+  font-weight: 600;
+}
+.subpanel[hidden] { display: none; }
