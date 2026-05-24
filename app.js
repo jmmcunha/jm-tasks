@@ -748,12 +748,25 @@ function bindMobileNav() {
   if (fab) {
     fab.hidden = (abaAtiva !== 'tarefas');
     fab.addEventListener('click', () => {
-      // Garante que estamos na aba Tarefas e foca o campo titulo.
+      // Leva 27.2: no mobile o cadastro inline esta oculto. O FAB
+      // garante que estamos na aba Tarefas e revela o cadastro como
+      // drawer no topo da pagina (classe is-open). Toca de novo fecha.
       if (abaAtiva !== 'tarefas') trocarAba('tarefas');
-      const titulo = document.getElementById('f-titulo');
-      if (titulo) {
-        titulo.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        setTimeout(() => titulo.focus(), 250);
+      const card = document.querySelector('#panel-tarefas .form-card');
+      if (!card) return;
+      const aberto = card.classList.toggle('is-open');
+      if (aberto) {
+        const titulo = document.getElementById('f-titulo');
+        setTimeout(() => { if (titulo) titulo.focus(); }, 60);
+        // Fecha automaticamente apos salvar bem-sucedido.
+        const form = document.getElementById('form');
+        if (form && !form.dataset.mobileBound) {
+          form.dataset.mobileBound = '1';
+          form.addEventListener('submit', () => {
+            // Pequeno delay para deixar o fluxo de salvar terminar.
+            setTimeout(() => { card.classList.remove('is-open'); }, 200);
+          });
+        }
       }
     });
   }
@@ -776,6 +789,12 @@ function bindMobileNav() {
       if (ev.target === sheet) { try { sheet.close(); } catch(e) {} }
     });
   }
+  // Leva 27.2: Escape fecha o drawer de Cadastro rapido no mobile.
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Escape') return;
+    const card = document.querySelector('#panel-tarefas .form-card.is-open');
+    if (card) card.classList.remove('is-open');
+  });
 }
 
 function popularSelectsOE() {

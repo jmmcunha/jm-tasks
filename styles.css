@@ -1822,3 +1822,166 @@ select {
   body { padding-bottom: 96px; }
   main.main { padding-bottom: 32px; }
 }
+
+/* ==========================================================
+   Leva 27.2 — Lista de tarefas em cards (mobile)
+   Transforma a linha .tarefa (grid 1fr/auto no desktop) em
+   card vertical com mais respiro, fontes maiores e acoes
+   empilhadas embaixo. Esconde paineis pesados de export que
+   nao fazem sentido no celular. Esconde o cadastro inline
+   (Cadastro rapido) no mobile: a entrada agora e via FAB.
+   ========================================================== */
+
+@media (max-width: 720px) {
+  /* Tipografia base ligeiramente maior para leitura confortavel. */
+  html, body { font-size: 16px; }
+
+  /* Cadastro rapido no mobile: fica oculto por padrao; o FAB '+'
+     adiciona a classe .is-open que transforma o card em drawer
+     fullscreen com botao de fechar e formulario rolavel. */
+  #panel-tarefas .form-card {
+    display: none;
+  }
+  #panel-tarefas .form-card.is-open {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 95;
+    background: var(--surface);
+    overflow-y: auto;
+    padding: 16px 14px 96px;
+    margin: 0;
+    border-radius: 0;
+    box-shadow: none;
+    max-width: 100%;
+  }
+  #panel-tarefas .form-card.is-open::before {
+    content: 'Toque no botao + ou pressione Escape para fechar';
+    display: block;
+    font-size: .78rem;
+    color: var(--text-3);
+    text-align: center;
+    padding: 4px 0 12px;
+  }
+
+  /* Paineis pesados de exportacao e e-mail em lote: ocultos no
+     mobile. Exportacao continua disponivel no desktop. */
+  #panel-exportar,
+  #panel-revisao-ia,
+  #panel-email-lote { display: none !important; }
+
+  /* Drucker (banner de avisos): comprime o padding. */
+  #banner-drucker { padding: 12px !important; font-size: .95rem; }
+
+  /* Card de tarefa: vira bloco vertical. */
+  .tarefa {
+    display: block;
+    padding: 14px 14px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .tarefa:hover { background: var(--surface); }
+  .tarefa + .tarefa { border-top-width: 1px; }
+
+  .tarefa__main { width: 100%; }
+
+  /* Titulo maior, com mais respiro. */
+  .tarefa__titulo {
+    font-size: 1.05rem;
+    line-height: 1.35;
+    margin-bottom: 10px;
+    font-weight: 600;
+  }
+
+  /* Checkbox de selecao maior, alinhado ao topo do titulo. */
+  .tarefa__main > div:first-child {
+    align-items: flex-start !important;
+    gap: 10px !important;
+  }
+  .tarefa-select {
+    width: 20px; height: 20px;
+    margin-top: 2px;
+    flex-shrink: 0;
+  }
+
+  /* Meta (chips e icones): mais respiro, fonte ligeiramente maior. */
+  .tarefa__meta {
+    gap: 6px 8px;
+    font-size: .85rem;
+    margin-bottom: 4px;
+  }
+  .tarefa__meta .badge {
+    font-size: .75rem;
+    padding: 3px 9px;
+  }
+
+  /* Resultado da tarefa (se houver): mais visivel. */
+  .tarefa__resultado {
+    font-size: .9rem;
+    margin-top: 8px;
+    padding: 6px 10px;
+    background: var(--bg);
+    border-radius: 8px;
+    border-left: 3px solid var(--azul);
+  }
+
+  /* Acoes embaixo, em linha cheia, com altura amigavel ao toque. */
+  .tarefa__actions {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+    gap: 6px;
+  }
+  .tarefa__actions .btn {
+    padding: 7px 12px;
+    font-size: .82rem;
+    min-height: 36px;
+  }
+  .tarefa__status-sel {
+    flex: 1 1 auto;
+    min-width: 130px;
+    font-size: .85rem;
+    padding: 7px 26px 7px 10px;
+    min-height: 36px;
+  }
+  .icon-btn {
+    padding: 8px;
+    min-width: 36px;
+    min-height: 36px;
+  }
+  .icon-btn svg { width: 18px; height: 18px; }
+
+  /* Grupos: cabecalho mais visivel. */
+  .grupo__head {
+    padding: 12px 14px !important;
+  }
+  .grupo__title { font-size: 1rem; }
+  .grupo__progress { display: none; }
+
+  /* Filtros: garantem empilhamento. */
+  .filtros {
+    grid-template-columns: 1fr !important;
+    gap: 8px;
+  }
+  .filtros select,
+  .filtros input {
+    width: 100%;
+    min-height: 40px;
+    font-size: .95rem;
+  }
+
+  /* Captura rapida (banner com prompt): texto maior. */
+  .quick-capture-bar,
+  .qc-bar,
+  .quick-capture { font-size: .95rem; }
+
+  /* Container principal: padding lateral menor para aproveitar
+     a tela inteira dos cards. */
+  main.main.container,
+  .container { padding-left: 10px; padding-right: 10px; }
+
+  /* Botoes globais: altura minima confortavel para toque. */
+  .btn { min-height: 36px; }
+  .btn--sm { min-height: 32px; }
+  .btn--xs { min-height: 28px; }
+}
