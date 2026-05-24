@@ -1097,10 +1097,17 @@ function bindModaisGlobais() {
       $('#ef-revisitar-em').focus();
       return;
     }
+    const statusAnteriorEdit = t.status;
     t.status = novoStatus;
     t.revisitarEm = novoStatus === 'em-maturacao' ? novoRevisitar : '';
     t.resultado = $('#ef-resultado').value.trim();
-    t.atualizadaEm = new Date().toISOString();
+    const agoraEditISO = new Date().toISOString();
+    t.atualizadaEm = agoraEditISO;
+    if (novoStatus === 'concluida' && statusAnteriorEdit !== 'concluida') {
+      t.concluidaEm = agoraEditISO;
+    } else if (novoStatus !== 'concluida' && statusAnteriorEdit === 'concluida') {
+      delete t.concluidaEm;
+    }
     salvarTarefas();
     popularResponsaveis();
     renderTudo();
@@ -1143,8 +1150,17 @@ function alterarStatus(id, novo) {
     t.revisitarEm = dt;
   }
   if (novo !== 'em-maturacao') t.revisitarEm = '';
+  const statusAnterior = t.status;
   t.status = novo;
-  t.atualizadaEm = new Date().toISOString();
+  const agoraISO = new Date().toISOString();
+  t.atualizadaEm = agoraISO;
+  // Registra/limpa a data de conclusão conforme a transição de status.
+  if (novo === 'concluida' && statusAnterior !== 'concluida') {
+    t.concluidaEm = agoraISO;
+  } else if (novo !== 'concluida' && statusAnterior === 'concluida') {
+    // Tarefa foi reaberta: limpa a marca de conclusão.
+    delete t.concluidaEm;
+  }
   salvarTarefas();
   renderTudo();
 }

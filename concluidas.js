@@ -23,7 +23,12 @@
     return s;
   }
   function dataConclusaoEfetiva(t) {
-    return t.concluidaEm || t.atualizadoEm || t.criadoEm || null;
+    // Aceita tanto atualizadaEm (feminino, usado pelo app principal) quanto atualizadoEm
+    // e tanto criadaEm quanto criadoEm.
+    return t.concluidaEm
+      || t.atualizadaEm || t.atualizadoEm
+      || t.criadaEm || t.criadoEm
+      || null;
   }
 
   // OBJETIVOS é exposto via app.js (const global no script clássico).
