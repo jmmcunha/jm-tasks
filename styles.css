@@ -1985,3 +1985,94 @@ select {
   .btn--sm { min-height: 32px; }
   .btn--xs { min-height: 28px; }
 }
+
+/* ==========================================================
+   Leva 27.2.1 — Corrige overflow horizontal no mobile.
+   Os botoes de exportacao (PDF/Excel/CSV/JSON/Importar/Revisao
+   IA), Sugerir quadrantes e Retrospectiva estavam empurrando o
+   panel-tarefas para fora da viewport, fazendo o texto dos
+   cards ficar cortado e o botao 'Mais' da barra inferior sair
+   da tela. Esta correcao esconde esses controles no mobile,
+   garante overflow-x hidden no body como rede de seguranca, e
+   forca a toolbar de filtros a empilhar em coluna.
+   ========================================================== */
+
+@media (max-width: 720px) {
+  html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
+  /* Controles de exportacao e funcoes desktop: ocultos no mobile. */
+  .export-group { display: none !important; }
+  #btn-sugerir-quadrantes,
+  #btn-retro,
+  #btn-revisao-ia { display: none !important; }
+
+  /* Toolbar de filtros: empilha em coluna. */
+  .list-toolbar,
+  .list-toolbar--secondary {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+  .list-toolbar select,
+  .list-toolbar input,
+  .list-toolbar .seg {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .seg {
+    display: flex !important;
+    flex-wrap: wrap;
+  }
+  .seg__btn {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: .82rem;
+  }
+  .spacer { display: none !important; }
+
+  /* Captura rapida: garante largura limitada. */
+  #qc-card,
+  .qc-card { max-width: 100% !important; }
+  #qc-card .qc-row,
+  .qc-row {
+    flex-wrap: wrap !important;
+    max-width: 100% !important;
+  }
+  #qc-card textarea,
+  .qc-row textarea,
+  .qc-row input[type=text] {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 56px;
+    font-size: 1rem;
+  }
+
+  /* Garante que os blocos principais nao estouram. */
+  #panel-tarefas,
+  #panel-agenda,
+  #panel-reunioes,
+  #panel-revisao,
+  #panel-config,
+  .tarefa,
+  .grupo,
+  #banner-drucker,
+  #selecao-bar {
+    max-width: 100% !important;
+    box-sizing: border-box;
+  }
+
+  /* Barra de selecao (rodape com 'X tarefa(s) selecionada(s)'):
+     no mobile fica em coluna para nao estourar. */
+  #selecao-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    padding: 10px 12px !important;
+    bottom: 80px !important;
+  }
+  #selecao-bar .btn { width: 100%; }
+}
