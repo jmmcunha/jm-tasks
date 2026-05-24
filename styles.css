@@ -1794,3 +1794,31 @@ select {
     min-height: 44px;
   }
 }
+
+/* ==========================================================
+   Leva 27.1.1 — Ajustes pos-Leva 27.1
+   - Compacta a barra de usuario flutuante (#fb-userbar) no mobile:
+     esconde o e-mail e o botao Resincronizar, mantem apenas Sair.
+   - Aumenta o respiro inferior do conteudo para a barra de
+     navegacao mobile nao tampar a ultima linha de tarefa.
+   ========================================================== */
+
+@media (max-width: 720px) {
+  #fb-userbar {
+    padding: 4px 6px !important;
+    gap: 4px !important;
+  }
+  /* O primeiro <span> da userbar contem o e-mail. Esconde no mobile. */
+  #fb-userbar > span:first-child { display: none !important; }
+  /* Esconde tambem o botao Resincronizar manual (auto-sync ja ocorre). */
+  #fb-userbar #fb-resync { display: none !important; }
+  /* Remove a borda esquerda do Sair que so fazia sentido com Resincronizar antes. */
+  #fb-userbar #fb-logout {
+    border-left: 0 !important;
+    padding-left: 4px !important;
+  }
+
+  /* Mais espaco no rodape para a ultima tarefa nao ficar atras da barra. */
+  body { padding-bottom: 96px; }
+  main.main { padding-bottom: 32px; }
+}
