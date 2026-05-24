@@ -224,7 +224,7 @@
       doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
       const linhaMeta = [
         r.OE,
-        r.Responsável ? `Resp.: ${r.Responsável}` : '',
+        r.Responsável ? `Responsável: ${r.Responsável}` : '',
         r.Prioridade ? `Prioridade: ${r.Prioridade}` : '',
         r.ConcluídaEm ? `Concluída em ${fmtBR(r.ConcluídaEm)}` : '',
         r.Prazo ? `Prazo: ${fmtBR(r.Prazo)}` : '',
