@@ -727,6 +727,7 @@ function trocarAba(nome) {
   if (nome === 'agenda') renderAgenda();
   if (nome === 'revisao') renderRevisao();
   if (nome === 'config') renderConfig();
+  if (nome === 'concluidas' && typeof window.renderConcluidas === 'function') window.renderConcluidas();
   if (nome === 'reunioes') {
     const vComp = $('#view-compromissos');
     if (vComp && !vComp.hidden) renderPainelCompromissos();
@@ -1166,6 +1167,9 @@ function aplicarFiltros() {
   const fQuad = $('#filtro-quadrante').value;
 
   let lista = tarefas.filter(t => {
+    // Concluídas agora vivem na aba própria; só aparecem aqui se o usuário
+    // escolher explicitamente o filtro de status 'concluída'.
+    if (t.status === 'concluida' && fStatus !== 'concluida') return false;
     if (fObj && String(t.oeId) !== fObj) return false;
     if (fStatus && t.status !== fStatus) return false;
     if (fQuad && quadranteDe(t) !== fQuad) return false;

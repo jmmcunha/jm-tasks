@@ -18,6 +18,7 @@
 
   const KEY_DEC = 'decisoes_v1';
   const KEY_PES = 'cebraspe_pessoas_v1';
+  const KEY_CAT = 'cebraspe_categorias_v1';
   const TEAM_ID = 'team';
 
   // -----------------------------------------------------------------
@@ -112,7 +113,7 @@
 
   async function upsertItem(key, item) {
     if (!firebase.auth().currentUser) {
-      flash('Voce precisa estar autenticado.', true); return;
+      flash('Você precisa estar autenticado.', true); return;
     }
     const ref = docRef(key);
     const ts = Date.now();
@@ -149,7 +150,7 @@
 
   async function deletarItem(key, id) {
     if (!firebase.auth().currentUser) {
-      flash('Voce precisa estar autenticado.', true); return;
+      flash('Você precisa estar autenticado.', true); return;
     }
     const ref = docRef(key);
     const ts = Date.now();
@@ -166,28 +167,51 @@
     try { localStorage.setItem(key, JSON.stringify(localList)); } catch (_) {}
   }
 
+  // Substitui a lista inteira (usado em categorias: ordem importa).
+  async function salvarLista(key, lista) {
+    if (!firebase.auth().currentUser) {
+      flash('Você precisa estar autenticado.', true); return;
+    }
+    const ref = docRef(key);
+    const ts = Date.now();
+    await firebase.firestore().runTransaction(async (tx) => {
+      tx.set(ref, { value: lista, updatedAt: ts, updatedBy: meuId() });
+    });
+    try { localStorage.setItem(key, JSON.stringify(lista)); } catch (_) {}
+  }
+
   // -----------------------------------------------------------------
   // ===================== MODULO DECISOES ===========================
   // -----------------------------------------------------------------
 
-  const CATEGORIAS = {
-    contrato: 'Contrato',
-    pessoal: 'Pessoal',
-    orcamento: 'Orcamento',
-    editorial: 'Editorial',
-    operacional: 'Operacional',
-    institucional: 'Institucional',
-    outro: 'Outro'
-  };
-  const COR_CAT = {
-    contrato: '#1565C0',
-    pessoal: '#C0392B',
-    orcamento: '#2E7D32',
-    editorial: '#E65100',
-    operacional: '#455A64',
-    institucional: '#6A1B9A',
-    outro: '#607D8B'
-  };
+  // Categorias de Decisões — lista dinâmica, persistida em
+  // shared/team/data/cebraspe_categorias_v1. Quando vazia, usa-se o seed.
+  const CATEGORIAS_SEED = [
+    { id: 'contrato',      label: 'Contrato',      cor: '#1565C0', ordem: 1 },
+    { id: 'pessoal',       label: 'Pessoal',       cor: '#C0392B', ordem: 2 },
+    { id: 'orcamento',     label: 'Orçamento',     cor: '#2E7D32', ordem: 3 },
+    { id: 'editorial',     label: 'Editorial',     cor: '#E65100', ordem: 4 },
+    { id: 'operacional',   label: 'Operacional',   cor: '#455A64', ordem: 5 },
+    { id: 'institucional', label: 'Institucional', cor: '#6A1B9A', ordem: 6 },
+    { id: 'outro',         label: 'Outro',         cor: '#607D8B', ordem: 99 }
+  ];
+
+  function lerCategorias() {
+    const raw = lerArray(KEY_CAT);
+    if (!raw.length) return CATEGORIAS_SEED.slice();
+    return raw.slice().sort((a, b) => (a.ordem || 0) - (b.ordem || 0) || (a.label || '').localeCompare(b.label || ''));
+  }
+  function getCatById(id) {
+    return lerCategorias().find((c) => c.id === id) || null;
+  }
+  function labelCat(id) {
+    const c = getCatById(id);
+    return c ? c.label : 'Outro';
+  }
+  function corCat(id) {
+    const c = getCatById(id);
+    return c ? c.cor : '#607D8B';
+  }
 
   const stateDec = { busca: '', categoria: 'todas', selId: null };
 
@@ -224,13 +248,13 @@
 
     if (!filtradas.length) {
       lista.innerHTML = `<p class="muted" style="padding:14px">${
-        todas.length === 0 ? 'Nenhuma decisao registrada ainda.'
-        : 'Nenhuma decisao corresponde aos filtros.'
+        todas.length === 0 ? 'Nenhuma decisão registrada ainda.'
+        : 'Nenhuma decisão corresponde aos filtros.'
       }</p>`;
     } else {
       lista.innerHTML = filtradas.map((d) => {
-        const cor = COR_CAT[d.categoria] || '#607D8B';
-        const rotulo = CATEGORIAS[d.categoria] || 'Outro';
+        const cor = corCat(d.categoria);
+        const rotulo = labelCat(d.categoria);
         const data = fmtTimestamp(d.criadaEm);
         const sel = stateDec.selId === d.id ? ' is-selected' : '';
         return `
@@ -265,13 +289,13 @@
     const todas = lerDecisoes();
     const d = todas.find((x) => x.id === stateDec.selId);
     if (!d) {
-      det.innerHTML = '<p class="muted">Selecione uma decisao a esquerda, ou clique em "Nova decisao".</p>';
+      det.innerHTML = '<p class="muted">Selecione uma decisão à esquerda, ou clique em "Nova decisão".</p>';
       return;
     }
     const pessoas = lerPessoas();
     const pessoa = d.pessoaId ? pessoas.find((p) => p.id === d.pessoaId) : null;
-    const cor = COR_CAT[d.categoria] || '#607D8B';
-    const rotulo = CATEGORIAS[d.categoria] || 'Outro';
+    const cor = corCat(d.categoria);
+    const rotulo = labelCat(d.categoria);
     det.innerHTML = `
       <div class="dp-detail">
         <div class="dp-detail__head">
@@ -279,8 +303,8 @@
           <span class="muted">${esc(fmtTimestamp(d.criadaEm))}</span>
         </div>
         <h3 class="dp-detail__title">${esc(d.assunto)}</h3>
-        <p class="dp-detail__decisao"><strong>Decisao:</strong> ${esc(d.decisao)}</p>
-        ${d.fundamentacao ? `<p><strong>Fundamentacao:</strong> ${esc(d.fundamentacao)}</p>` : ''}
+        <p class="dp-detail__decisao"><strong>Decisão:</strong> ${esc(d.decisao)}</p>
+        ${d.fundamentacao ? `<p><strong>Fundamentação:</strong> ${esc(d.fundamentacao)}</p>` : ''}
         ${Array.isArray(d.partes) && d.partes.length ? `
           <p><strong>Partes:</strong> ${d.partes.map(p => `<span class="badge">${esc(p)}</span>`).join(' ')}</p>` : ''}
         ${pessoa ? `<p><strong>Pessoa vinculada:</strong> ${esc(pessoa.nome)}${pessoa.cargo ? ' - ' + esc(pessoa.cargo) : ''}</p>` : ''}
@@ -297,7 +321,7 @@
         await deletarItem(KEY_DEC, d.id);
         stateDec.selId = null;
         renderDecisoes();
-        flash('Decisao excluida.');
+        flash('Decisão excluída.');
       } catch (e) { flash('Falha ao excluir: ' + e.message, true); }
     });
   }
@@ -309,19 +333,19 @@
     overlay.body.innerHTML = `
       <div class="dp-form">
         <label>Assunto<input type="text" id="d-assunto" value="${esc(decisao ? decisao.assunto : '')}" maxlength="200" /></label>
-        <label>Decisao<textarea id="d-decisao" rows="3">${esc(decisao ? decisao.decisao : '')}</textarea></label>
-        <label>Fundamentacao<textarea id="d-fund" rows="3">${esc(decisao ? decisao.fundamentacao : '')}</textarea></label>
-        <label>Partes (separadas por virgula)<input type="text" id="d-partes" value="${esc(partesStr)}" /></label>
+        <label>Decisão<textarea id="d-decisao" rows="3">${esc(decisao ? decisao.decisao : '')}</textarea></label>
+        <label>Fundamentação<textarea id="d-fund" rows="3">${esc(decisao ? decisao.fundamentacao : '')}</textarea></label>
+        <label>Partes (separadas por vírgula)<input type="text" id="d-partes" value="${esc(partesStr)}" /></label>
         <label>Categoria
           <select id="d-cat">
-            ${Object.entries(CATEGORIAS).map(([k, v]) =>
-              `<option value="${k}"${(decisao && decisao.categoria === k) ? ' selected' : ''}>${v}</option>`
+            ${lerCategorias().map((c) =>
+              `<option value="${esc(c.id)}"${(decisao && decisao.categoria === c.id) ? ' selected' : ''}>${esc(c.label)}</option>`
             ).join('')}
           </select>
         </label>
         <label>Pessoa vinculada
           <select id="d-pessoa">
-            <option value="">— sem vinculo —</option>
+            <option value="">— sem vínculo —</option>
             ${pessoas.map((p) =>
               `<option value="${esc(p.id)}"${(decisao && decisao.pessoaId === p.id) ? ' selected' : ''}>${esc(p.nome)}${p.cargo ? ' - ' + esc(p.cargo) : ''}</option>`
             ).join('')}
@@ -331,7 +355,7 @@
     overlay.btnSalvar.addEventListener('click', async () => {
       const assunto = $('#d-assunto', overlay.body).value.trim();
       const dec = $('#d-decisao', overlay.body).value.trim();
-      if (!assunto || !dec) { flash('Assunto e decisao sao obrigatorios.', true); return; }
+      if (!assunto || !dec) { flash('Assunto e decisão são obrigatórios.', true); return; }
       const partes = $('#d-partes', overlay.body).value.split(',').map(s => s.trim()).filter(Boolean);
       const cat = $('#d-cat', overlay.body).value;
       const pid = $('#d-pessoa', overlay.body).value || null;
@@ -345,7 +369,7 @@
         stateDec.selId = novo.id;
         overlay.fechar();
         renderDecisoes();
-        flash('Decisao salva.');
+        flash('Decisão salva.');
       } catch (e) { flash('Falha ao salvar: ' + e.message, true); }
     });
   }
@@ -355,20 +379,20 @@
   function _exportarDecPDF() {
     const lista = filtrarDecisoes(lerDecisoes());
     if (!lista.length) { flash('Nada para exportar.', true); return; }
-    if (!window.jspdf || !window.jspdf.jsPDF) { flash('PDF indisponivel.', true); return; }
+    if (!window.jspdf || !window.jspdf.jsPDF) { flash('PDF indisponível.', true); return; }
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const margemL = 25, margemR = 20, larg = 210 - margemL - margemR;
     let y = 25;
     doc.setFont('times', 'bold'); doc.setFontSize(16);
-    doc.text('Registro de decisoes', margemL, y); y += 8;
+    doc.text('Registro de decisões', margemL, y); y += 8;
     doc.setFont('times', 'normal'); doc.setFontSize(11);
-    doc.text(`Emitido em ${fmtDataExtenso(hojeISO())} - ${lista.length} decisao(oes)`, margemL, y); y += 10;
+    doc.text(`Emitido em ${fmtDataExtenso(hojeISO())} - ${lista.length} decisão(ões)`, margemL, y); y += 10;
     const pessoas = lerPessoas();
     lista.forEach((d, i) => {
       if (y > 260) { doc.addPage(); y = 25; }
       doc.setFont('times', 'bold'); doc.setFontSize(12);
-      const cabec = `${i + 1}. ${d.assunto} - ${CATEGORIAS[d.categoria] || 'Outro'} - ${fmtTimestamp(d.criadaEm)}`;
+      const cabec = `${i + 1}. ${d.assunto} — ${labelCat(d.categoria)} — ${fmtTimestamp(d.criadaEm)}`;
       const linhasCab = doc.splitTextToSize(cabec, larg);
       for (const ln of linhasCab) {
         if (y > 280) { doc.addPage(); y = 25; }
@@ -376,8 +400,8 @@
       }
       doc.setFont('times', 'normal'); doc.setFontSize(11);
       const blocos = [
-        ['Decisao', d.decisao],
-        ['Fundamentacao', d.fundamentacao],
+        ['Decisão', d.decisao],
+        ['Fundamentação', d.fundamentacao],
         ['Partes', Array.isArray(d.partes) ? d.partes.join(', ') : '']
       ];
       const pessoa = d.pessoaId ? pessoas.find((p) => p.id === d.pessoaId) : null;
@@ -399,23 +423,23 @@
   async function _exportarDecDOCX() {
     const lista = filtrarDecisoes(lerDecisoes());
     if (!lista.length) { flash('Nada para exportar.', true); return; }
-    if (!window.docx) { flash('Word indisponivel.', true); return; }
+    if (!window.docx) { flash('Word indisponível.', true); return; }
     const D = window.docx;
     const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = D;
     const pessoas = lerPessoas();
     const elementos = [];
-    elementos.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Registro de decisoes' })] }));
-    elementos.push(new Paragraph({ children: [new TextRun({ text: `Emitido em ${fmtDataExtenso(hojeISO())} - ${lista.length} decisao(oes)` })] }));
+    elementos.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Registro de decisões' })] }));
+    elementos.push(new Paragraph({ children: [new TextRun({ text: `Emitido em ${fmtDataExtenso(hojeISO())} - ${lista.length} decisão(ões)` })] }));
     elementos.push(new Paragraph({ children: [new TextRun({ text: '' })] }));
     lista.forEach((d, i) => {
       elementos.push(new Paragraph({
         heading: HeadingLevel.HEADING_2,
         children: [new TextRun({ text: `${i + 1}. ${d.assunto}` })]
       }));
-      elementos.push(new Paragraph({ children: [new TextRun({ text: `Categoria: ${CATEGORIAS[d.categoria] || 'Outro'} - ${fmtTimestamp(d.criadaEm)}`, italics: false })] }));
+      elementos.push(new Paragraph({ children: [new TextRun({ text: `Categoria: ${labelCat(d.categoria)} — ${fmtTimestamp(d.criadaEm)}`, italics: false })] }));
       elementos.push(new Paragraph({ children: [new TextRun({ text: '' })] }));
-      elementos.push(new Paragraph({ children: [new TextRun({ text: `Decisao: ${d.decisao}` })] }));
-      if (d.fundamentacao) elementos.push(new Paragraph({ children: [new TextRun({ text: `Fundamentacao: ${d.fundamentacao}` })] }));
+      elementos.push(new Paragraph({ children: [new TextRun({ text: `Decisão: ${d.decisao}` })] }));
+      if (d.fundamentacao) elementos.push(new Paragraph({ children: [new TextRun({ text: `Fundamentação: ${d.fundamentacao}` })] }));
       if (Array.isArray(d.partes) && d.partes.length) {
         elementos.push(new Paragraph({ children: [new TextRun({ text: `Partes: ${d.partes.join(', ')}` })] }));
       }
@@ -508,7 +532,7 @@
     const todas = lerPessoas();
     const p = todas.find((x) => x.id === statePes.selId);
     if (!p) {
-      det.innerHTML = '<p class="muted">Selecione uma pessoa a esquerda, ou clique em "Nova pessoa".</p>';
+      det.innerHTML = '<p class="muted">Selecione uma pessoa à esquerda, ou clique em "Nova pessoa".</p>';
       return;
     }
     const decisoes = lerDecisoes()
@@ -536,15 +560,15 @@
           ${p.email ? `<div><strong>E-mail:</strong><br>${esc(p.email)}</div>` : ''}
         </div>
         ${Array.isArray(p.tags) && p.tags.length ? `<p>${p.tags.map(t => `<span class="badge">${esc(t)}</span>`).join(' ')}</p>` : ''}
-        ${p.observacoes ? `<p><strong>Observacoes:</strong><br>${esc(p.observacoes).replace(/\n/g,'<br>')}</p>` : ''}
+        ${p.observacoes ? `<p><strong>Observações:</strong><br>${esc(p.observacoes).replace(/\n/g,'<br>')}</p>` : ''}
 
-        <h4 class="dp-detail__h4">Decisoes vinculadas (${decisoes.length})</h4>
-        ${decisoes.length === 0 ? '<p class="muted">Nenhuma decisao vinculada.</p>'
+        <h4 class="dp-detail__h4">Decisões vinculadas (${decisoes.length})</h4>
+        ${decisoes.length === 0 ? '<p class="muted">Nenhuma decisão vinculada.</p>'
           : '<ul class="dp-history">' + decisoes.slice(0, 20).map((d) => `
             <li><strong>${esc(d.assunto)}</strong> - ${esc(d.decisao)} <span class="muted">(${esc(fmtTimestamp(d.criadaEm))})</span></li>
           `).join('') + '</ul>'}
 
-        <h4 class="dp-detail__h4">Tarefas em que e responsavel (${tarefas.length})</h4>
+        <h4 class="dp-detail__h4">Tarefas em que é responsável (${tarefas.length})</h4>
         ${tarefas.length === 0 ? '<p class="muted">Nenhuma tarefa.</p>'
           : '<ul class="dp-history">' + tarefas.slice(0, 20).map((t) => `
             <li>${t.status === 'concluida' ? '✓ ' : ''}${esc(t.titulo)} <span class="muted">(prazo ${esc(fmtData(t.prazo))})</span></li>
@@ -562,7 +586,7 @@
         await deletarItem(KEY_PES, p.id);
         statePes.selId = null;
         renderPessoas();
-        flash('Pessoa excluida.');
+        flash('Pessoa excluída.');
       } catch (e) { flash('Falha ao excluir: ' + e.message, true); }
     });
   }
@@ -573,18 +597,18 @@
     overlay.body.innerHTML = `
       <div class="dp-form">
         <label>Nome*<input type="text" id="p-nome" value="${esc(pessoa ? pessoa.nome : '')}" required /></label>
-        <label>Cargo / funcao<input type="text" id="p-cargo" value="${esc(pessoa ? pessoa.cargo : '')}" /></label>
-        <label>Instituicao<input type="text" id="p-inst" value="${esc(pessoa ? pessoa.instituicao : '')}" /></label>
+        <label>Cargo / função<input type="text" id="p-cargo" value="${esc(pessoa ? pessoa.cargo : '')}" /></label>
+        <label>Instituição<input type="text" id="p-inst" value="${esc(pessoa ? pessoa.instituicao : '')}" /></label>
         <div class="dp-grid2">
           <label>Telefone<input type="text" id="p-tel" value="${esc(pessoa ? pessoa.telefone : '')}" /></label>
           <label>E-mail<input type="email" id="p-email" value="${esc(pessoa ? pessoa.email : '')}" /></label>
         </div>
-        <label>Tags (separadas por virgula)<input type="text" id="p-tags" value="${esc(tagsStr)}" /></label>
-        <label>Observacoes<textarea id="p-obs" rows="4">${esc(pessoa ? pessoa.observacoes : '')}</textarea></label>
+        <label>Tags (separadas por vírgula)<input type="text" id="p-tags" value="${esc(tagsStr)}" /></label>
+        <label>Observações<textarea id="p-obs" rows="4">${esc(pessoa ? pessoa.observacoes : '')}</textarea></label>
       </div>`;
     overlay.btnSalvar.addEventListener('click', async () => {
       const nome = $('#p-nome', overlay.body).value.trim();
-      if (!nome) { flash('Nome e obrigatorio.', true); return; }
+      if (!nome) { flash('Nome é obrigatório.', true); return; }
       const tags = $('#p-tags', overlay.body).value.split(',').map(s => s.trim()).filter(Boolean);
       const novo = Object.assign({}, pessoa || { id: gerarId() }, {
         nome,
@@ -610,7 +634,7 @@
   function _exportarPesPDF() {
     const lista = filtrarPessoas(lerPessoas());
     if (!lista.length) { flash('Nada para exportar.', true); return; }
-    if (!window.jspdf || !window.jspdf.jsPDF) { flash('PDF indisponivel.', true); return; }
+    if (!window.jspdf || !window.jspdf.jsPDF) { flash('PDF indisponível.', true); return; }
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const margemL = 25, margemR = 20, larg = 210 - margemL - margemR;
@@ -629,7 +653,7 @@
       if (p.telefone) linhas.push('Telefone: ' + p.telefone);
       if (p.email) linhas.push('E-mail: ' + p.email);
       if (Array.isArray(p.tags) && p.tags.length) linhas.push('Tags: ' + p.tags.join(', '));
-      if (p.observacoes) linhas.push('Observacoes: ' + p.observacoes);
+      if (p.observacoes) linhas.push('Observações: ' + p.observacoes);
       for (const l of linhas) {
         const seg = doc.splitTextToSize(l, larg);
         for (const ln of seg) {
@@ -645,7 +669,7 @@
   async function _exportarPesDOCX() {
     const lista = filtrarPessoas(lerPessoas());
     if (!lista.length) { flash('Nada para exportar.', true); return; }
-    if (!window.docx) { flash('Word indisponivel.', true); return; }
+    if (!window.docx) { flash('Word indisponível.', true); return; }
     const D = window.docx;
     const { Document, Packer, Paragraph, TextRun, HeadingLevel } = D;
     const elementos = [];
@@ -662,7 +686,7 @@
       if (p.telefone) linhas.push('Telefone: ' + p.telefone);
       if (p.email) linhas.push('E-mail: ' + p.email);
       if (Array.isArray(p.tags) && p.tags.length) linhas.push('Tags: ' + p.tags.join(', '));
-      if (p.observacoes) linhas.push('Observacoes: ' + p.observacoes);
+      if (p.observacoes) linhas.push('Observações: ' + p.observacoes);
       for (const l of linhas) {
         elementos.push(new Paragraph({ children: [new TextRun({ text: l })] }));
       }
@@ -711,6 +735,111 @@
   }
 
   // -----------------------------------------------------------------
+  // Gestor de categorias de Decisões
+  // -----------------------------------------------------------------
+
+  function _slugify(s) {
+    return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+      .slice(0, 40) || ('cat_' + Date.now().toString(36));
+  }
+
+  function abrirGerirCategorias() {
+    const overlay = construirOverlay('Gerir categorias de decisões');
+    overlay.btnSalvar.textContent = 'Salvar lista';
+    // Trabalha em cópia local até o usuário clicar Salvar.
+    let lista = lerCategorias().map((c) => Object.assign({}, c));
+
+    function render() {
+      overlay.body.innerHTML = `
+        <p class="muted" style="margin:0 0 10px;font-size:13px">
+          As categorias são compartilhadas entre web e celular. Renomear mantém as decisões já vinculadas. Excluir não apaga as decisões — elas ficam “sem categoria” e voltam a aparecer como “Outro” até você reclassificar.
+        </p>
+        <table class="dp-cat-table">
+          <thead>
+            <tr><th style="width:36px"></th><th>Rótulo</th><th style="width:60px">Cor</th><th style="width:70px">Ordem</th><th style="width:60px"></th></tr>
+          </thead>
+          <tbody id="cat-tbody">
+            ${lista.map((c, i) => `
+              <tr data-i="${i}">
+                <td style="text-align:center;color:#8895a7">☰</td>
+                <td><input type="text" data-f="label" value="${esc(c.label)}" maxlength="40" /></td>
+                <td><input type="color" data-f="cor" value="${esc(c.cor || '#607D8B')}" /></td>
+                <td><input type="number" data-f="ordem" value="${Number(c.ordem || 0)}" min="0" max="999" step="1" /></td>
+                <td><button type="button" class="btn btn--ghost btn--sm cat-del" title="Excluir">✕</button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="btn btn--ghost btn--sm" id="cat-add">+ Nova categoria</button>
+          <button type="button" class="btn btn--ghost btn--sm" id="cat-reset">Restaurar padrão</button>
+        </div>
+      `;
+      // Bindings de cada linha
+      $$('#cat-tbody tr', overlay.body).forEach((tr) => {
+        const i = Number(tr.dataset.i);
+        $$('input[data-f]', tr).forEach((inp) => {
+          inp.addEventListener('input', () => {
+            const f = inp.dataset.f;
+            if (f === 'ordem') lista[i][f] = parseInt(inp.value, 10) || 0;
+            else lista[i][f] = inp.value;
+          });
+        });
+        $('.cat-del', tr).addEventListener('click', () => {
+          if (!confirm(`Excluir a categoria “${lista[i].label}”?`)) return;
+          lista.splice(i, 1);
+          render();
+        });
+      });
+      $('#cat-add', overlay.body).addEventListener('click', () => {
+        const proxOrdem = Math.max(0, ...lista.map((c) => c.ordem || 0)) + 1;
+        lista.push({
+          id: 'cat_' + Date.now().toString(36),
+          label: 'Nova categoria',
+          cor: '#607D8B',
+          ordem: proxOrdem
+        });
+        render();
+      });
+      $('#cat-reset', overlay.body).addEventListener('click', () => {
+        if (!confirm('Restaurar a lista padrão? Suas categorias atuais serão substituídas.')) return;
+        lista = CATEGORIAS_SEED.map((c) => Object.assign({}, c));
+        render();
+      });
+    }
+    render();
+
+    overlay.btnSalvar.addEventListener('click', async () => {
+      // Sanitiza: garante id, label não vazio, ordem numérica, ids únicos.
+      const usados = new Set();
+      const sanit = [];
+      for (const c of lista) {
+        const label = (c.label || '').trim();
+        if (!label) { flash('Rótulo não pode ficar vazio.', true); return; }
+        let id = c.id && /^[a-z0-9_]+$/.test(c.id) ? c.id : _slugify(label);
+        // Evita colisão
+        let base = id, n = 2;
+        while (usados.has(id)) { id = base + '_' + n; n++; }
+        usados.add(id);
+        sanit.push({
+          id, label,
+          cor: (c.cor && /^#[0-9a-fA-F]{6}$/.test(c.cor)) ? c.cor : '#607D8B',
+          ordem: Number.isFinite(Number(c.ordem)) ? Number(c.ordem) : 99
+        });
+      }
+      try {
+        await salvarLista(KEY_CAT, sanit);
+        overlay.fechar();
+        renderDecisoes();
+        flash('Categorias salvas.');
+      } catch (e) {
+        flash('Falha ao salvar: ' + e.message, true);
+      }
+    });
+  }
+
+  // -----------------------------------------------------------------
   // Mounts: injeta paineis se nao existem e liga eventos
   // -----------------------------------------------------------------
 
@@ -729,28 +858,30 @@
       <div class="dp-grid">
         <div class="card" style="padding:18px 20px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
-            <h2>Decisoes</h2>
+            <h2>Decisões</h2>
             <div style="display:flex;gap:6px;flex-wrap:wrap">
-              <button class="btn btn--primary btn--sm" id="btn-nova-decisao" type="button">+ Nova decisao</button>
+              <button class="btn btn--primary btn--sm" id="btn-nova-decisao" type="button">+ Nova decisão</button>
+              <button class="btn btn--ghost btn--sm" id="btn-gerir-cats" type="button" title="Gerir categorias">Categorias</button>
               <button class="btn btn--export" id="btn-dec-pdf" type="button" title="Exportar PDF">PDF</button>
               <button class="btn btn--export" id="btn-dec-docx" type="button" title="Exportar Word">Word</button>
             </div>
           </div>
           <div class="dp-toolbar">
-            <input type="text" id="decisoes-busca" placeholder="Buscar assunto, decisao, parte..." />
+            <input type="text" id="decisoes-busca" placeholder="Buscar assunto, decisão, parte..." />
             <select id="decisoes-cat">
               <option value="todas">Todas as categorias</option>
-              ${Object.entries(CATEGORIAS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}
+              ${lerCategorias().map((c) => `<option value="${esc(c.id)}">${esc(c.label)}</option>`).join('')}
             </select>
           </div>
           <div class="muted" id="decisoes-contador" style="margin:6px 0 10px;font-size:12px">0 resultados</div>
           <div id="decisoes-lista" class="dp-lista"></div>
         </div>
         <div class="card" id="decisao-detalhe" style="padding:18px 20px">
-          <p class="muted">Selecione uma decisao a esquerda, ou clique em "Nova decisao".</p>
+          <p class="muted">Selecione uma decisão à esquerda, ou clique em "Nova decisão".</p>
         </div>
       </div>`;
     $('#btn-nova-decisao', painel).addEventListener('click', () => abrirEditorDecisao(null));
+    $('#btn-gerir-cats', painel).addEventListener('click', () => abrirGerirCategorias());
     $('#btn-dec-pdf', painel).addEventListener('click', _exportarDecPDF);
     $('#btn-dec-docx', painel).addEventListener('click', _exportarDecDOCX);
     const busca = $('#decisoes-busca', painel);
@@ -782,13 +913,13 @@
             </div>
           </div>
           <div class="dp-toolbar">
-            <input type="text" id="pessoas-busca" placeholder="Buscar nome, cargo, instituicao, tag..." />
+            <input type="text" id="pessoas-busca" placeholder="Buscar nome, cargo, instituição, tag..." />
           </div>
           <div class="muted" id="pessoas-contador" style="margin:6px 0 10px;font-size:12px">0 pessoas</div>
           <div id="pessoas-lista" class="dp-lista"></div>
         </div>
         <div class="card" id="pessoa-detalhe" style="padding:18px 20px">
-          <p class="muted">Selecione uma pessoa a esquerda, ou clique em "Nova pessoa".</p>
+          <p class="muted">Selecione uma pessoa à esquerda, ou clique em "Nova pessoa".</p>
         </div>
       </div>`;
     $('#btn-nova-pessoa', painel).addEventListener('click', () => abrirEditorPessoa(null));
