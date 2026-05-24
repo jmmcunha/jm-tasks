@@ -26,17 +26,19 @@
     return t.concluidaEm || t.atualizadoEm || t.criadoEm || null;
   }
 
-  // OBJETIVOS é exposto via app.js (let global). Tentar acessar com fallback.
+  // OBJETIVOS é exposto via app.js (const global no script clássico).
   function getObjetivos() {
     try { if (typeof OBJETIVOS !== 'undefined' && Array.isArray(OBJETIVOS)) return OBJETIVOS; } catch (e) {}
     return [];
   }
 
   function rotuloOE(id) {
-    if (!id) return '—';
-    const obj = getObjetivos().find(o => o.id === id || o.codigo === id);
-    if (!obj) return String(id);
-    return `${obj.codigo} — ${obj.titulo}`;
+    if (id == null || id === '') return 'Sem objetivo estratégico';
+    const objs = getObjetivos();
+    // Compara numericamente e como string, pois oeId pode vir como '1' ou 1.
+    const obj = objs.find(o => o.id === id || String(o.id) === String(id));
+    if (!obj) return 'Sem objetivo estratégico';
+    return `OE${obj.id} — ${obj.curto || obj.texto || ''}`.trim();
   }
 
   function carregarTarefas() {
@@ -56,11 +58,16 @@
     const sel = $('#concluidas-oe');
     if (!sel) return;
     const valorAtual = sel.value;
-    const oesUsados = new Set(listaConcluidas().map(t => t.oeId || t.objetivoId).filter(Boolean));
-    const objs = getObjetivos().filter(o => oesUsados.has(o.id) || oesUsados.has(o.codigo));
-    let html = '<option value="">Todos os OEs</option>';
+    const oesUsados = new Set(
+      listaConcluidas()
+        .map(t => (t.oeId !== undefined && t.oeId !== null) ? t.oeId : t.objetivoId)
+        .filter(v => v !== undefined && v !== null && v !== '')
+        .map(v => String(v))
+    );
+    const objs = getObjetivos().filter(o => oesUsados.has(String(o.id)));
+    let html = '<option value="">Todos os objetivos estratégicos</option>';
     for (const o of objs) {
-      html += `<option value="${esc(o.id)}">${esc(o.codigo)} — ${esc(o.titulo)}</option>`;
+      html += `<option value="${esc(o.id)}">OE${esc(o.id)} — ${esc(o.curto || '')}</option>`;
     }
     sel.innerHTML = html;
     if (valorAtual) sel.value = valorAtual;
@@ -78,8 +85,8 @@
         if (!blob.includes(q)) return false;
       }
       if (oe) {
-        const tid = t.oeId || t.objetivoId;
-        if (tid !== oe) return false;
+        const tid = (t.oeId !== undefined && t.oeId !== null) ? t.oeId : t.objetivoId;
+        if (String(tid) !== String(oe)) return false;
       }
       if (limite > 0) {
         const dc = dataConclusaoEfetiva(t);
@@ -100,24 +107,42 @@
     });
   }
 
+  // Rotulo amigavel da prioridade (capitalizado).
+  function rotuloPrioridade(p) {
+    const s = String(p || '').toLowerCase();
+    if (s === 'alta') return 'Alta';
+    if (s === 'baixa') return 'Baixa';
+    if (s === 'media' || s === 'média') return 'Média';
+    return '';
+  }
+
   function renderItem(t) {
     const dc = dataConclusaoEfetiva(t);
-    const dataStr = dc ? (typeof dc === 'number' ? new Date(dc).toISOString().slice(0,10) : String(dc).slice(0,10)) : '';
+    let dataStr = '';
+    if (dc) {
+      if (typeof dc === 'number') dataStr = new Date(dc).toISOString().slice(0,10);
+      else if (typeof dc === 'string') dataStr = dc.slice(0,10);
+    }
+    const dataExibida = dataStr ? fmtBR(dataStr) : 'data não registrada';
     const prioCls = t.prioridade === 'alta' ? 'badge--alta' : t.prioridade === 'baixa' ? 'badge--baixa' : 'badge--media';
+    const prioLabel = rotuloPrioridade(t.prioridade);
+    const oeIdRaw = (t.oeId !== undefined && t.oeId !== null) ? t.oeId : t.objetivoId;
+    const oeLabel = rotuloOE(oeIdRaw);
+    const responsavel = (t.responsavel || '').trim();
     return `
       <article class="task task--done" style="display:grid;grid-template-columns:1fr auto;gap:0.4rem 0.8rem;padding:0.7rem 0.9rem;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;margin-bottom:0.5rem;">
         <div>
           <div style="font-weight:600;color:#1e293b;">${esc(t.titulo || '(sem título)')}</div>
           <div class="muted" style="font-size:0.85em;margin-top:0.2rem;">
-            <span>${esc(rotuloOE(t.oeId || t.objetivoId))}</span>
-            ${t.responsavel ? ` · <span>Resp.: ${esc(t.responsavel)}</span>` : ''}
-            ${t.prioridade ? ` · <span class="badge ${prioCls}" style="margin-left:0.2rem;">${esc(t.prioridade)}</span>` : ''}
+            <span>${esc(oeLabel)}</span>
+            ${responsavel ? ` · <span>Responsável: ${esc(responsavel)}</span>` : ''}
+            ${prioLabel ? ` · <span class="badge ${prioCls}" style="margin-left:0.2rem;">${esc(prioLabel)}</span>` : ''}
           </div>
           ${t.resultado ? `<div style="font-size:0.88em;margin-top:0.3rem;color:#334155;"><strong>Resultado:</strong> ${esc(t.resultado)}</div>` : ''}
         </div>
         <div style="text-align:right;font-size:0.82em;color:#475569;white-space:nowrap;">
           <div>Concluída em</div>
-          <div style="font-weight:600;">${fmtBR(dataStr)}</div>
+          <div style="font-weight:600;">${esc(dataExibida)}</div>
         </div>
       </article>
     `;
@@ -151,16 +176,21 @@
   function dadosExport() {
     return ordenar(filtrar(listaConcluidas())).map(t => {
       const dc = dataConclusaoEfetiva(t);
-      const dataStr = dc ? (typeof dc === 'number' ? new Date(dc).toISOString().slice(0,10) : String(dc).slice(0,10)) : '';
+      let dataStr = '';
+      if (dc) {
+        if (typeof dc === 'number') dataStr = new Date(dc).toISOString().slice(0,10);
+        else if (typeof dc === 'string') dataStr = dc.slice(0,10);
+      }
+      const oeIdRaw = (t.oeId !== undefined && t.oeId !== null) ? t.oeId : t.objetivoId;
       return {
-        Título: t.titulo || '',
-        OE: rotuloOE(t.oeId || t.objetivoId),
-        Responsável: t.responsavel || '',
-        Prioridade: t.prioridade || '',
-        Prazo: t.prazo || '',
-        ConcluídaEm: dataStr,
-        Resultado: t.resultado || '',
-        Descrição: t.descricao || '',
+        'Título': t.titulo || '',
+        'Objetivo Estratégico': rotuloOE(oeIdRaw),
+        'Responsável': t.responsavel || '',
+        'Prioridade': rotuloPrioridade(t.prioridade),
+        'Prazo': t.prazo ? fmtBR(t.prazo) : '',
+        'Concluída em': dataStr ? fmtBR(dataStr) : 'data não registrada',
+        'Resultado': t.resultado || '',
+        'Descrição': t.descricao || '',
       };
     });
   }
