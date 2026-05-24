@@ -15,6 +15,7 @@
   <!-- Bibliotecas: jsPDF, html2canvas, SheetJS, Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
@@ -57,6 +58,8 @@
     <nav class="tabs container" role="tablist" aria-label="Navegação principal">
       <button class="tab is-active" data-tab="tarefas" role="tab" aria-selected="true">Tarefas</button>
       <button class="tab" data-tab="agenda" role="tab" aria-selected="false">Agenda</button>
+      <button class="tab" data-tab="decisoes" role="tab" aria-selected="false">Decisões</button>
+      <button class="tab" data-tab="pessoas" role="tab" aria-selected="false">Pessoas</button>
       <button class="tab" data-tab="reunioes" role="tab" aria-selected="false">Reuniões</button>
       <button class="tab" data-tab="revisao" role="tab" aria-selected="false">Revisão Semanal</button>
       <button class="tab" data-tab="config" role="tab" aria-selected="false">Configurações</button>
@@ -1091,9 +1094,13 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 2v2H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3V2h-2v2H9V2zm-3 6h16v12H4z"/></svg>
       <span>Agenda</span>
     </button>
-    <button type="button" class="bottomnav__item tab" data-tab="reunioes" aria-label="Reuniões">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4m0 2c-3.3 0-10 1.7-10 5v3h20v-3c0-3.3-6.7-5-10-5"/></svg>
-      <span>Reuniões</span>
+    <button type="button" class="bottomnav__item tab" data-tab="decisoes" aria-label="Decisões">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 4h13l-1.5 1.5L16 7l3-3-3-3-1.5 1.5L17 4H3zm18 16H8l1.5-1.5L8 17l-3 3 3 3 1.5-1.5L8 20h13zM7 9h11v2H7zm0 4h11v2H7z"/></svg>
+      <span>Decisões</span>
+    </button>
+    <button type="button" class="bottomnav__item tab" data-tab="pessoas" aria-label="Pessoas">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3m-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3m0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5m8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5"/></svg>
+      <span>Pessoas</span>
     </button>
     <button type="button" class="bottomnav__item" id="bn-mais" aria-label="Mais opções" aria-haspopup="dialog">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>
@@ -1109,6 +1116,10 @@
     <div class="sheet__inner">
       <div class="sheet__grip" aria-hidden="true"></div>
       <h3 class="sheet__title">Mais</h3>
+      <button type="button" class="sheet__item tab" data-tab="reunioes">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4m0 2c-3.3 0-10 1.7-10 5v3h20v-3c0-3.3-6.7-5-10-5"/></svg>
+        <span>Reuniões</span>
+      </button>
       <button type="button" class="sheet__item tab" data-tab="revisao">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 4h18v2H3zm0 5h18v2H3zm0 5h12v2H3zm0 5h18v2H3z"/></svg>
         <span>Revisão Semanal</span>
@@ -1128,5 +1139,7 @@
   <script src="app.js?v=20260506aa"></script>
   <!-- Captura rápida em linguagem natural + voz -->
   <script src="quick-capture.js?v=20260506aa"></script>
+  <!-- Leva 31: Decisões e CRM Pessoas -->
+  <script src="decisoes-pessoas.js?v=20260524"></script>
 </body>
 </html>
