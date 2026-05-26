@@ -2796,8 +2796,10 @@ function exportarXLSXCustom() {
 // Claude/Gemini/Perplexity -> cola resposta -> diff visual ->
 // aplica selecionadas (com backup automático).
 // ============================================================
-let _riaRevisao = null; // { tarefas: [...], duplicatas: [...], orfas: [...] }
+let _riaRevisao = null; // { tarefas: [...], duplicatas: [...], orfas: [...], andamentos_revisados?: [...] }
 let _riaOriginais = null; // map id -> tarefa original (para diff)
+let _riaModoAndamentos = false; // true quando a revisão é só de andamentos
+let _riaAndamentosAceitos = null; // Map<idTarefa, Set<em>> com andamentos aceitos para aplicação
 
 function _riaEscopo() {
   const r = $('input[name="ria-escopo"]:checked');
@@ -2816,8 +2818,21 @@ function _riaTarefasEscopo() {
   return tarefas.slice();
 }
 
-function _riaTarefaSlim(t) {
-  // Versão enxuta para enviar à IA: só campos relevantes
+function _riaTarefaSlim(t, opts) {
+  // Versão enxuta para enviar à IA: só campos relevantes.
+  // No modo "somente andamentos", devolve um payload reduzido focado no histórico.
+  const soAndamentos = !!(opts && opts.soAndamentos);
+  if (soAndamentos) {
+    return {
+      id: t.id,
+      titulo: t.titulo || '',
+      responsavel: t.responsavel || '',
+      andamentos: (Array.isArray(t.andamentos) ? t.andamentos : []).map(a => ({
+        em: a && a.em ? String(a.em) : '',
+        texto: a && a.texto ? String(a.texto) : '',
+      })),
+    };
+  }
   return {
     id: t.id,
     titulo: t.titulo || '',
@@ -2834,6 +2849,62 @@ function _riaTarefaSlim(t) {
 
 function gerarPromptIA() {
   const lista = _riaTarefasEscopo();
+  const soAndamentos = !!$('#ria-rev-andamentos')?.checked;
+
+  // Modo exclusivo: revisar somente andamentos.
+  if (soAndamentos) {
+    const listaComAnd = lista.filter(t => Array.isArray(t.andamentos) && t.andamentos.length);
+    const totalAnd = listaComAnd.reduce((acc, t) => acc + t.andamentos.length, 0);
+    const promptAnd =
+`Você é assistente de redação oficial do Cebraspe (Plano de Ação 2026). Sua tarefa é revisar APENAS o texto dos registros de andamento das tarefas abaixo, sem alterar nenhum outro campo.
+
+## Regras de revisão dos andamentos
+- Reescrever cada texto de andamento em português brasileiro formal, voz ativa, impessoal, conforme o Manual de Redação da Presidência da República.
+- Eliminar gírias, marcadores informais, redundância e ruído de digitação.
+- Padronizar verbos no pretérito perfeito do indicativo quando descrevem fato consumado ("Encaminhou-se", "Realizou-se", "Concluiu-se").
+- Preservar 100% dos fatos relatados. Não inventar informação.
+- Manter o campo "em" (data/hora ISO 8601) EXATAMENTE como recebido em cada andamento. NUNCA alterar, remover ou criar novas datas.
+- Quando dois ou mais andamentos consecutivos tratarem do mesmo fato sem acréscimo de informação, sinalizar em "sugestao_consolidacao" os ids "em" envolvidos, com a redação consolidada proposta. Não excluir nada por conta própria.
+- Se um texto já estiver adequado, repeti-lo igual no campo "texto" e marcar "_inalterado": true.
+
+## Diretrizes de redação
+- Sem itálico, sem negrito, sem emoji, sem markdown dentro dos textos.
+- Frases curtas e diretas. Máximo 3 frases por andamento, salvo necessidade técnica.
+- Não usar a palavra "determino". Preferir "solicitou-se", "encaminhou-se", "foi acordado".
+
+## Schema da resposta (devolver ESTE JSON, e nada mais)
+{
+  "andamentos_revisados": [
+    {
+      "id": "<id da tarefa>",
+      "andamentos": [
+        { "em": "<ISO original, inalterado>", "texto": "<texto revisado>", "_inalterado": false }
+      ],
+      "sugestao_consolidacao": [
+        { "em_origem": ["<ISO1>","<ISO2>"], "texto_consolidado": "<redação única proposta>" }
+      ],
+      "_motivo": "<resumo da revisão em uma frase>"
+    }
+  ]
+}
+
+IMPORTANTE: inclua em "andamentos_revisados" APENAS tarefas em que pelo menos um andamento foi alterado ou que receberam sugestão de consolidação. Mantenha o id original da tarefa e o "em" original de cada andamento. Não invente ids nem datas. "sugestao_consolidacao" é opcional — omita o campo quando não houver sugestão.
+
+## Tarefas com andamentos (${listaComAnd.length} tarefa(s), ${totalAnd} andamento(s))
+${JSON.stringify(listaComAnd.map(t => _riaTarefaSlim(t, { soAndamentos: true })), null, 2)}
+`;
+    const taA = $('#ria-prompt');
+    if (taA) taA.value = promptAnd;
+    $('#ria-copiar').disabled = false;
+    $('#ria-resumo-gerar').textContent =
+      `${listaComAnd.length} tarefa(s) com andamentos · ${totalAnd} andamento(s) · ${promptAnd.length.toLocaleString('pt-BR')} caracteres.`;
+    _riaOriginais = new Map(lista.map(t => [t.id, t]));
+    _riaModoAndamentos = true;
+    return;
+  }
+
+  _riaModoAndamentos = false;
+
   const fazQuad = $('#ria-rev-quad')?.checked;
   const fazPad = $('#ria-rev-pad')?.checked;
   const fazVazios = $('#ria-rev-vazios')?.checked;
@@ -2946,13 +3017,19 @@ function analisarRespostaIA() {
     tarefas: Array.isArray(obj.tarefas) ? obj.tarefas : [],
     duplicatas: Array.isArray(obj.duplicatas) ? obj.duplicatas : [],
     orfas: Array.isArray(obj.orfas) ? obj.orfas : [],
+    andamentos_revisados: Array.isArray(obj.andamentos_revisados) ? obj.andamentos_revisados : [],
   };
   if (!_riaOriginais) {
     // Caso o usuário cole resposta sem ter gerado prompt na sessão atual
     _riaOriginais = new Map(tarefas.map(t => [t.id, t]));
   }
+  // Detecção automática de modo "somente andamentos" pela resposta colada
+  if (out.andamentos_revisados.length && !out.tarefas.length && !out.duplicatas.length && !out.orfas.length) {
+    _riaModoAndamentos = true;
+  }
   // Filtra tarefas inválidas (sem id ou id desconhecido)
   out.tarefas = out.tarefas.filter(r => r && typeof r.id === 'string' && _riaOriginais.has(r.id));
+  out.andamentos_revisados = out.andamentos_revisados.filter(r => r && typeof r.id === 'string' && _riaOriginais.has(r.id));
   _riaRevisao = out;
   renderDiffIA();
 }
@@ -2985,6 +3062,98 @@ function _riaCamposComparados(orig, rev) {
   return linhas;
 }
 
+function _fmtAndamentoEm(em) {
+  if (!em) return '';
+  const d = new Date(em);
+  if (isNaN(d.getTime())) return String(em);
+  try {
+    return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  } catch (_) {
+    return d.toISOString();
+  }
+}
+
+function _renderDiffAndamentosIA() {
+  // Renderiza cards de revisão focados em andamentos.
+  const lista = $('#ria-diff-lista');
+  const dupBloco = $('#ria-duplicatas-bloco');
+  const orfBloco = $('#ria-orfas-bloco');
+  dupBloco.hidden = true;
+  orfBloco.hidden = true;
+
+  const cards = [];
+  let tarefasAfetadas = 0;
+  let andamentosAlterados = 0;
+  let sugConsolida = 0;
+
+  for (const rev of (_riaRevisao.andamentos_revisados || [])) {
+    const orig = _riaOriginais.get(rev.id);
+    if (!orig) continue;
+    const mapOrig = new Map((Array.isArray(orig.andamentos) ? orig.andamentos : []).map(a => [a.em, a.texto || '']));
+    const linhas = [];
+    for (const a of (Array.isArray(rev.andamentos) ? rev.andamentos : [])) {
+      if (!a || !a.em || !mapOrig.has(a.em)) continue;
+      const antes = mapOrig.get(a.em) || '';
+      const depois = String(a.texto || '');
+      const inalterado = !!a._inalterado || antes.trim() === depois.trim();
+      if (inalterado) continue;
+      andamentosAlterados++;
+      linhas.push(`
+        <div class="diff-row diff-row--and">
+          <label class="chk" style="flex:0 0 auto;">
+            <input type="checkbox" class="diff-and-aceitar" data-id="${escHtml(rev.id)}" data-em="${escHtml(a.em)}" checked />
+          </label>
+          <div class="diff-row__label">${escHtml(_fmtAndamentoEm(a.em))}</div>
+          <div class="diff-old">${escHtml(antes) || '<span class="muted">(vazio)</span>'}</div>
+          <div class="diff-arrow">→</div>
+          <div class="diff-new">${escHtml(depois) || '<span class="muted">(vazio)</span>'}</div>
+        </div>
+      `);
+    }
+
+    const sugs = Array.isArray(rev.sugestao_consolidacao) ? rev.sugestao_consolidacao : [];
+    const sugHTML = sugs.map((s, i) => {
+      const origens = Array.isArray(s.em_origem) ? s.em_origem : [];
+      const consol = String(s.texto_consolidado || '').trim();
+      if (!origens.length || !consol) return '';
+      sugConsolida++;
+      const origensTxt = origens.map(_fmtAndamentoEm).join(', ');
+      return `
+        <div class="diff-row diff-row--and diff-row--sug">
+          <label class="chk" style="flex:0 0 auto;">
+            <input type="checkbox" class="diff-and-consol" data-id="${escHtml(rev.id)}" data-origens='${escHtml(JSON.stringify(origens))}' data-idx="${i}" />
+          </label>
+          <div class="diff-row__label">Consolidar (${escHtml(String(origens.length))})</div>
+          <div class="diff-old"><span class="muted">${escHtml(origensTxt)}</span></div>
+          <div class="diff-arrow">→</div>
+          <div class="diff-new">${escHtml(consol)}</div>
+        </div>
+      `;
+    }).join('');
+
+    if (!linhas.length && !sugHTML) continue;
+    tarefasAfetadas++;
+    const motivo = rev._motivo ? `<div class="diff-motivo">${escHtml(rev._motivo)}</div>` : '';
+    cards.push(`
+      <div class="diff-card" data-id="${escHtml(rev.id)}">
+        <div class="diff-card__head">
+          <strong>${escHtml(orig.titulo || '(sem título)')}</strong>
+          <span class="diff-quad-chip">${escHtml(String(linhas.length))} andamento(s)</span>
+        </div>
+        ${motivo}
+        <div class="diff-rows">${linhas.join('')}${sugHTML}</div>
+      </div>
+    `);
+  }
+
+  lista.innerHTML = cards.length
+    ? cards.join('')
+    : '<p class="muted">A IA não sugeriu mudanças nos andamentos.</p>';
+
+  $('#ria-diff-resumo').innerHTML =
+    `<strong>${tarefasAfetadas}</strong> tarefa(s) · <strong>${andamentosAlterados}</strong> andamento(s) com nova redação · <strong>${sugConsolida}</strong> sugestão(ões) de consolidação.`;
+}
+
 function renderDiffIA() {
   const bloco = $('#ria-diff-bloco');
   const lista = $('#ria-diff-lista');
@@ -2995,6 +3164,12 @@ function renderDiffIA() {
   if (!_riaRevisao) return;
 
   bloco.hidden = false;
+
+  // Modo "somente andamentos": render dedicado.
+  if (_riaModoAndamentos) {
+    _renderDiffAndamentosIA();
+    return;
+  }
 
   const cards = [];
   let comMudancas = 0;
@@ -3070,6 +3245,12 @@ function renderDiffIA() {
 
 async function aplicarRevisaoIA() {
   if (!_riaRevisao) return;
+
+  // Modo "somente andamentos": aplicação dedicada.
+  if (_riaModoAndamentos) {
+    return _aplicarRevisaoAndamentosIA();
+  }
+
   const aceitos = new Set(
     Array.from(document.querySelectorAll('.diff-aceitar'))
       .filter(cb => cb.checked)
@@ -3113,6 +3294,132 @@ async function aplicarRevisaoIA() {
   fecharPainelRevisaoIA();
 }
 
+async function _aplicarRevisaoAndamentosIA() {
+  // Coleta aceites por tarefa
+  const aceitosPorTarefa = new Map(); // id -> Set(em)
+  document.querySelectorAll('.diff-and-aceitar').forEach(cb => {
+    if (!cb.checked) return;
+    const id = cb.dataset.id;
+    const em = cb.dataset.em;
+    if (!id || !em) return;
+    if (!aceitosPorTarefa.has(id)) aceitosPorTarefa.set(id, new Set());
+    aceitosPorTarefa.get(id).add(em);
+  });
+
+  // Coleta consolidações aceitas
+  const consolidacoes = []; // {id, origens:[em], texto}
+  document.querySelectorAll('.diff-and-consol').forEach(cb => {
+    if (!cb.checked) return;
+    const id = cb.dataset.id;
+    const idx = Number(cb.dataset.idx);
+    let origens = [];
+    try { origens = JSON.parse(cb.dataset.origens || '[]'); } catch (_) {}
+    const rev = (_riaRevisao.andamentos_revisados || []).find(r => r.id === id);
+    const sug = rev && Array.isArray(rev.sugestao_consolidacao) ? rev.sugestao_consolidacao[idx] : null;
+    const texto = sug ? String(sug.texto_consolidado || '').trim() : '';
+    if (!id || !origens.length || !texto) return;
+    consolidacoes.push({ id, origens, texto });
+  });
+
+  const totalAceites = Array.from(aceitosPorTarefa.values()).reduce((acc, s) => acc + s.size, 0);
+  if (totalAceites === 0 && consolidacoes.length === 0) {
+    mostrarMsg('Nenhum andamento marcado para aplicar.', true);
+    return;
+  }
+
+  const ok = await confirmar('Aplicar revisão dos andamentos?',
+    `Serão atualizados ${totalAceites} texto(s) de andamento` +
+    (consolidacoes.length ? ` e aplicadas ${consolidacoes.length} consolidação(ões)` : '') +
+    `. Um backup automático será salvo no navegador.`);
+  if (!ok) return;
+
+  // Backup
+  _write(KEY_TAREFAS_V3 + '_backup_ia', { tarefas, salvoEm: new Date().toISOString() });
+
+  // Constrói mapa de novos textos por tarefa
+  const textoNovoPorTarefa = new Map(); // id -> Map(em -> texto)
+  for (const rev of (_riaRevisao.andamentos_revisados || [])) {
+    if (!aceitosPorTarefa.has(rev.id)) continue;
+    const setEm = aceitosPorTarefa.get(rev.id);
+    const mTextos = new Map();
+    for (const a of (Array.isArray(rev.andamentos) ? rev.andamentos : [])) {
+      if (a && a.em && setEm.has(a.em)) {
+        mTextos.set(a.em, String(a.texto || ''));
+      }
+    }
+    textoNovoPorTarefa.set(rev.id, mTextos);
+  }
+
+  // Agrupa consolidações por tarefa
+  const consolPorTarefa = new Map(); // id -> [{origens:Set, texto}]
+  for (const c of consolidacoes) {
+    if (!consolPorTarefa.has(c.id)) consolPorTarefa.set(c.id, []);
+    consolPorTarefa.get(c.id).push({ origens: new Set(c.origens), texto: c.texto });
+  }
+
+  let andamentosAlterados = 0;
+  let tarefasAfetadas = 0;
+  let consolAplicadas = 0;
+
+  const idsAfetados = new Set([
+    ...textoNovoPorTarefa.keys(),
+    ...consolPorTarefa.keys(),
+  ]);
+
+  for (const id of idsAfetados) {
+    const idx = tarefas.findIndex(t => t.id === id);
+    if (idx < 0) continue;
+    const t = tarefas[idx];
+    const lista = Array.isArray(t.andamentos) ? t.andamentos.slice() : [];
+    if (!lista.length) continue;
+
+    // 1) Substitui texto dos aceites individuais
+    const mTextos = textoNovoPorTarefa.get(id);
+    if (mTextos) {
+      for (let i = 0; i < lista.length; i++) {
+        const a = lista[i];
+        if (a && a.em && mTextos.has(a.em)) {
+          lista[i] = { em: a.em, texto: mTextos.get(a.em) };
+          andamentosAlterados++;
+        }
+      }
+    }
+
+    // 2) Aplica consolidações: substitui o mais antigo da origem pelo texto consolidado,
+    //    remove os demais. Mantém a ordem cronológica preservando "em" do mais antigo.
+    const sugs = consolPorTarefa.get(id) || [];
+    for (const sug of sugs) {
+      const origensArr = lista
+        .map((a, i) => ({ a, i }))
+        .filter(x => x.a && x.a.em && sug.origens.has(x.a.em))
+        .sort((x, y) => (x.a.em < y.a.em ? -1 : 1));
+      if (!origensArr.length) continue;
+      const manter = origensArr[0];
+      const removerIdxs = new Set(origensArr.slice(1).map(x => x.i));
+      lista[manter.i] = { em: manter.a.em, texto: sug.texto };
+      // Remove de trás pra frente para preservar índices
+      const ordenado = Array.from(removerIdxs).sort((a, b) => b - a);
+      for (const ri of ordenado) lista.splice(ri, 1);
+      consolAplicadas++;
+    }
+
+    // Reordena cronologicamente por "em"
+    lista.sort((a, b) => (a.em < b.em ? -1 : a.em > b.em ? 1 : 0));
+    t.andamentos = lista;
+    t.atualizadaEm = new Date().toISOString();
+    tarefasAfetadas++;
+  }
+
+  salvarTarefas();
+  renderTudo();
+  mostrarMsg(
+    `Revisão de andamentos aplicada: ${andamentosAlterados} texto(s) atualizado(s)` +
+    (consolAplicadas ? `, ${consolAplicadas} consolidação(ões) aplicada(s)` : '') +
+    ` em ${tarefasAfetadas} tarefa(s). Backup salvo.`
+  );
+  fecharPainelRevisaoIA();
+}
+
 function abrirPainelRevisaoIA() {
   // Fecha outros painéis
   fecharPainelExportar?.();
@@ -3122,6 +3429,10 @@ function abrirPainelRevisaoIA() {
   // Reset estado
   _riaRevisao = null;
   _riaOriginais = null;
+  _riaModoAndamentos = false;
+  const cbAnd = $('#ria-rev-andamentos');
+  if (cbAnd) cbAnd.checked = false;
+  _riaAtualizarToggleAndamentos?.();
   $('#ria-prompt').value = '';
   $('#ria-resposta').value = '';
   $('#ria-erro').textContent = '';
@@ -3138,10 +3449,23 @@ function fecharPainelRevisaoIA() {
   if (p) p.hidden = true;
 }
 
+function _riaAtualizarToggleAndamentos() {
+  const cb = $('#ria-rev-andamentos');
+  const ativo = !!(cb && cb.checked);
+  ['#ria-rev-quad', '#ria-rev-pad', '#ria-rev-vazios', '#ria-rev-orfas'].forEach(sel => {
+    const el = $(sel);
+    if (!el) return;
+    el.disabled = ativo;
+    const lbl = el.closest('label');
+    if (lbl) lbl.style.opacity = ativo ? '0.45' : '';
+  });
+}
+
 function bindPainelRevisaoIA() {
   $('#btn-revisao-ia')?.addEventListener('click', abrirPainelRevisaoIA);
   $('#ria-close')?.addEventListener('click', fecharPainelRevisaoIA);
   $('#ria-gerar')?.addEventListener('click', gerarPromptIA);
+  $('#ria-rev-andamentos')?.addEventListener('change', _riaAtualizarToggleAndamentos);
   $('#ria-copiar')?.addEventListener('click', copiarPromptIA);
   $('#ria-analisar')?.addEventListener('click', analisarRespostaIA);
   $('#ria-aplicar')?.addEventListener('click', aplicarRevisaoIA);

@@ -2760,3 +2760,37 @@ select {
   word-break: break-word;
   line-height: 1.4;
 }
+
+/* Leva 33.3 — Revisão por IA: linhas de andamento */
+.diff-row--and {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-top: 1px dashed #e2e2e2;
+}
+.diff-row--and:first-child { border-top: none; }
+.diff-row--and .diff-row__label {
+  flex: 0 0 140px;
+  font-size: 0.82em;
+  color: #555;
+  font-weight: 600;
+}
+.diff-row--and .diff-old,
+.diff-row--and .diff-new {
+  flex: 1 1 260px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.4;
+}
+.diff-row--and .diff-old { color: #8a4a4a; }
+.diff-row--and .diff-new { color: #1d6b3a; }
+.diff-row--and .diff-arrow { flex: 0 0 auto; color: #888; padding-top: 0.05rem; }
+.diff-row--sug {
+  background: #fff8e1;
+  border-radius: 6px;
+  border: 1px solid #f1d97b;
+  padding: 0.5rem;
+}
+.diff-row--sug .diff-row__label { color: #7a5a00; }
