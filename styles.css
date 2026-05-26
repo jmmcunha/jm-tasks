@@ -2690,3 +2690,73 @@ select {
   border-radius: 4px;
 }
 .andamento-item__remover:hover { color: #c0392b; background: rgba(192,57,43,.08); }
+
+/* ============ ANDAMENTO NA REVISÃO ITEM A ITEM ============ */
+.rev-andamento-resumo {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: #f5f9fc;
+  border-left: 3px solid #0a3d7a;
+  border-radius: 4px;
+}
+.rev-andamento-resumo--vazio {
+  background: #fafafa;
+  border-left-color: #ccc;
+}
+.rev-andamento-resumo__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  margin-bottom: 4px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.rev-andamento-resumo__head strong { color: #0a3d7a; }
+.rev-andamento-resumo__texto {
+  font-size: 13px;
+  color: #333;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.4;
+}
+.rev-andamento-novo {
+  margin-top: 10px;
+  padding: 12px;
+  background: #fffbe6;
+  border: 1px solid #f0c419;
+  border-radius: 6px;
+}
+.rev-andamento-historico {
+  margin-top: 10px;
+  padding: 12px;
+  background: #f5f9fc;
+  border: 1px solid #d6e3ee;
+  border-radius: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.rev-andamento-historico__lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rev-andamento-item {
+  padding: 8px 10px;
+  background: #fff;
+  border-left: 3px solid #0a3d7a;
+  border-radius: 4px;
+}
+.rev-andamento-item__data {
+  font-size: 11px;
+  color: #607d8b;
+  margin-bottom: 3px;
+  font-weight: 500;
+}
+.rev-andamento-item__texto {
+  font-size: 13px;
+  color: #333;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.4;
+}
