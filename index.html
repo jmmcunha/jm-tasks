@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260506aa" />
+  <link rel="stylesheet" href="styles.css?v=20260526a" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a3d7a'/%3E%3Cpath d='M9 11h14M9 16h14M9 21h9' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='25.5' cy='21' r='2' fill='%23f08000'/%3E%3C/svg%3E" />
 
   <!-- Bibliotecas: jsPDF, html2canvas, SheetJS, Chart.js -->
@@ -755,41 +755,62 @@
   <dialog id="dlg-edit" class="modal modal--lg">
     <form method="dialog" class="modal__inner" id="dlg-edit-form">
       <h3>Editar tarefa</h3>
-      <div class="form form--modal">
-        <label class="field field--full"><span>Tarefa</span><input type="text" id="ef-titulo" required maxlength="180" /></label>
-        <div class="field field--full">
-          <div class="oe-label-row">
-            <span>Objetivo Estratégico</span>
-            <button type="button" class="btn-link-icon" id="btn-oe-guia-edit" title="Abrir guia dos OEs">Guia dos OEs</button>
+      <div class="modal-tabs" role="tablist">
+        <button type="button" class="modal-tab is-active" data-tab="dados" role="tab">Dados</button>
+        <button type="button" class="modal-tab" data-tab="andamento" role="tab">Andamento <span class="modal-tab__badge" id="ef-and-count" hidden>0</span></button>
+      </div>
+      <div class="modal-tab-panel is-active" data-tab-panel="dados">
+        <div class="form form--modal">
+          <label class="field field--full"><span>Tarefa</span><input type="text" id="ef-titulo" required maxlength="180" /></label>
+          <div class="field field--full">
+            <div class="oe-label-row">
+              <span>Objetivo Estratégico</span>
+              <button type="button" class="btn-link-icon" id="btn-oe-guia-edit" title="Abrir guia dos OEs">Guia dos OEs</button>
+            </div>
+            <select id="ef-objetivo"></select>
+            <div id="ef-objetivo-detalhe" class="oe-detalhe" hidden></div>
           </div>
-          <select id="ef-objetivo"></select>
-          <div id="ef-objetivo-detalhe" class="oe-detalhe" hidden></div>
+          <div class="field field--full eisen-row">
+            <span>Quadrante</span>
+            <select id="ef-quadrante">
+              <option value="NC">Não classificar</option>
+              <option value="Q1">Q1 — Crise e Contenção</option>
+              <option value="Q2">Q2 — Estratégia Direcional</option>
+              <option value="Q3">Q3 — Deliberação Estratégica Operacional</option>
+              <option value="Q4">Q4 — Sustentação Operacional</option>
+            </select>
+            <div id="ef-quad-preview" class="quad-chip quad-chip--nc">Não classificada</div>
+          </div>
+          <label class="field"><span>Responsável</span><input type="text" id="ef-responsavel" /></label>
+          <label class="field"><span>Data de início</span><input type="date" id="ef-data-inicio" /></label>
+          <label class="field"><span>Prazo (data de conclusão)</span><input type="date" id="ef-prazo" /></label>
+          <label class="field"><span>Prioridade</span>
+            <select id="ef-prioridade"><option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option></select>
+          </label>
+          <label class="field"><span>Status</span>
+            <select id="ef-status"><option value="a-fazer">A fazer</option><option value="em-andamento">Em andamento</option><option value="em-maturacao">Em maturação</option><option value="concluida">Concluída</option><option value="bloqueada">Bloqueada</option></select>
+          </label>
+          <label class="field" id="ef-revisitar-wrap" hidden>
+            <span>Revisitar em <span class="muted">(obrigatório para maturação)</span></span>
+            <input type="date" id="ef-revisitar-em" />
+          </label>
+          <label class="field field--full"><span>Resultado esperado</span><input type="text" id="ef-resultado" maxlength="200" /></label>
         </div>
-        <div class="field field--full eisen-row">
-          <span>Quadrante</span>
-          <select id="ef-quadrante">
-            <option value="NC">Não classificar</option>
-            <option value="Q1">Q1 — Crise e Contenção</option>
-            <option value="Q2">Q2 — Estratégia Direcional</option>
-            <option value="Q3">Q3 — Deliberação Estratégica Operacional</option>
-            <option value="Q4">Q4 — Sustentação Operacional</option>
-          </select>
-          <div id="ef-quad-preview" class="quad-chip quad-chip--nc">Não classificada</div>
+      </div>
+      <div class="modal-tab-panel" data-tab-panel="andamento">
+        <div class="andamento-novo">
+          <label class="field field--full">
+            <span>Nova atualização</span>
+            <textarea id="ef-and-texto" rows="3" maxlength="1000" placeholder="Descreva o que avançou, o que está pendente, próximos passos..."></textarea>
+          </label>
+          <div class="andamento-novo__acoes">
+            <button type="button" class="btn btn--primary btn--sm" id="ef-and-add">Registrar andamento</button>
+            <span class="muted" id="ef-and-hint">A data e a hora serão registradas automaticamente.</span>
+          </div>
         </div>
-        <label class="field"><span>Responsável</span><input type="text" id="ef-responsavel" /></label>
-        <label class="field"><span>Data de início</span><input type="date" id="ef-data-inicio" /></label>
-        <label class="field"><span>Prazo (data de conclusão)</span><input type="date" id="ef-prazo" /></label>
-        <label class="field"><span>Prioridade</span>
-          <select id="ef-prioridade"><option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option></select>
-        </label>
-        <label class="field"><span>Status</span>
-          <select id="ef-status"><option value="a-fazer">A fazer</option><option value="em-andamento">Em andamento</option><option value="em-maturacao">Em maturação</option><option value="concluida">Concluída</option><option value="bloqueada">Bloqueada</option></select>
-        </label>
-        <label class="field" id="ef-revisitar-wrap" hidden>
-          <span>Revisitar em <span class="muted">(obrigatório para maturação)</span></span>
-          <input type="date" id="ef-revisitar-em" />
-        </label>
-        <label class="field field--full"><span>Resultado esperado</span><input type="text" id="ef-resultado" maxlength="200" /></label>
+        <div class="andamento-timeline" id="ef-and-lista">
+          <p class="andamento-vazio muted">Nenhum andamento registrado ainda.</p>
+        </div>
       </div>
       <div class="modal__actions">
         <button value="cancel" type="button" class="btn btn--ghost btn--sm" id="ef-cancel">Cancelar</button>
@@ -1164,7 +1185,7 @@
   <script src="firebase-config.js?v=20260506aa"></script>
   <script src="firebase-sync.js?v=20260506aa"></script>
   <script src="ia-gemini.js?v=20260506aa"></script>
-  <script src="app.js?v=20260524c"></script>
+  <script src="app.js?v=20260526a"></script>
   <!-- Captura rápida em linguagem natural + voz -->
   <script src="quick-capture.js?v=20260506aa"></script>
   <!-- Leva 31: Decisões e CRM Pessoas -->

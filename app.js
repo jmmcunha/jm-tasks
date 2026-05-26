@@ -1018,10 +1018,103 @@ function mostrarFlash(txt) { return mostrarMsg(txt, false); }
    8. EDIÇÃO EM MODAL
    =================================================================== */
 
+// ============ ANDAMENTO (timeline de atualizações) ============
+function formatarAndamentoData(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} · ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function renderAndamentosEdicao(t) {
+  const lista = $('#ef-and-lista');
+  const badge = $('#ef-and-count');
+  if (!lista) return;
+  const andamentos = Array.isArray(t.andamentos) ? t.andamentos.slice() : [];
+  // Ordem cronológica decrescente
+  andamentos.sort((a, b) => (b.em || '').localeCompare(a.em || ''));
+  if (badge) {
+    if (andamentos.length > 0) {
+      badge.hidden = false;
+      badge.textContent = String(andamentos.length);
+    } else {
+      badge.hidden = true;
+    }
+  }
+  if (andamentos.length === 0) {
+    lista.innerHTML = '<p class="andamento-vazio muted">Nenhum andamento registrado ainda.</p>';
+    return;
+  }
+  lista.innerHTML = '';
+  andamentos.forEach((a, idx) => {
+    const item = document.createElement('div');
+    item.className = 'andamento-item';
+    const head = document.createElement('div');
+    head.className = 'andamento-item__head';
+    const data = document.createElement('span');
+    data.className = 'andamento-item__data';
+    data.textContent = formatarAndamentoData(a.em);
+    const btnRem = document.createElement('button');
+    btnRem.type = 'button';
+    btnRem.className = 'andamento-item__remover';
+    btnRem.title = 'Remover andamento';
+    btnRem.textContent = 'remover';
+    btnRem.addEventListener('click', () => removerAndamentoEdicao(a.em));
+    head.appendChild(data);
+    head.appendChild(btnRem);
+    const texto = document.createElement('p');
+    texto.className = 'andamento-item__texto';
+    texto.textContent = a.texto || '';
+    item.appendChild(head);
+    item.appendChild(texto);
+    lista.appendChild(item);
+  });
+}
+
+function adicionarAndamentoEdicao() {
+  const dlg = $('#dlg-edit');
+  const id = dlg && dlg.dataset.editId;
+  if (!id) return;
+  const t = tarefas.find(x => x.id === id);
+  if (!t) return;
+  const ta = $('#ef-and-texto');
+  const texto = (ta.value || '').trim();
+  if (!texto) {
+    ta.focus();
+    return;
+  }
+  if (!Array.isArray(t.andamentos)) t.andamentos = [];
+  t.andamentos.push({ em: new Date().toISOString(), texto });
+  t.atualizadaEm = new Date().toISOString();
+  ta.value = '';
+  // Persiste imediatamente para não perder se o usuário fechar sem salvar.
+  salvarTarefas();
+  renderAndamentosEdicao(t);
+}
+
+function removerAndamentoEdicao(emISO) {
+  const dlg = $('#dlg-edit');
+  const id = dlg && dlg.dataset.editId;
+  if (!id) return;
+  const t = tarefas.find(x => x.id === id);
+  if (!t || !Array.isArray(t.andamentos)) return;
+  t.andamentos = t.andamentos.filter(a => a.em !== emISO);
+  t.atualizadaEm = new Date().toISOString();
+  salvarTarefas();
+  renderAndamentosEdicao(t);
+}
+
 function abrirEdicao(id) {
   const t = tarefas.find(x => x.id === id);
   if (!t) return;
   const dlg = $('#dlg-edit');
+  // Sempre começa na aba "Dados"
+  dlg.querySelectorAll('.modal-tab').forEach(b => b.classList.toggle('is-active', b.dataset.tab === 'dados'));
+  dlg.querySelectorAll('.modal-tab-panel').forEach(p => p.classList.toggle('is-active', p.dataset.tabPanel === 'dados'));
+  // Limpa campo de nova entrada e renderiza lista
+  const taAnd = $('#ef-and-texto'); if (taAnd) taAnd.value = '';
+  renderAndamentosEdicao(t);
   $('#ef-titulo').value = t.titulo;
   $('#ef-objetivo').value = t.oeId || '';
   renderOeDetalhe('ef-objetivo', 'ef-objetivo-detalhe');
@@ -1069,6 +1162,27 @@ function abrirEdicao(id) {
 function bindModaisGlobais() {
   // editar
   $('#ef-cancel').addEventListener('click', () => $('#dlg-edit').close());
+  // Troca de abas dentro do modal de edição
+  document.querySelectorAll('#dlg-edit .modal-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const alvo = btn.dataset.tab;
+      document.querySelectorAll('#dlg-edit .modal-tab').forEach(b => b.classList.toggle('is-active', b === btn));
+      document.querySelectorAll('#dlg-edit .modal-tab-panel').forEach(p => p.classList.toggle('is-active', p.dataset.tabPanel === alvo));
+    });
+  });
+  // Botão de registrar andamento
+  const btnAddAnd = $('#ef-and-add');
+  if (btnAddAnd) btnAddAnd.addEventListener('click', adicionarAndamentoEdicao);
+  // Atalho: Ctrl/Cmd + Enter na textarea adiciona
+  const taAnd = $('#ef-and-texto');
+  if (taAnd) {
+    taAnd.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        adicionarAndamentoEdicao();
+      }
+    });
+  }
   $('#dlg-edit-form').addEventListener('submit', e => {
     e.preventDefault();
     const dlg = $('#dlg-edit');
