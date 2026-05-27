@@ -527,8 +527,12 @@ function _hashTarefa(t) {
     t.titulo, t.descricao, t.responsavel, t.objetivo,
     t.importante ? 1 : 0, t.urgente ? 1 : 0,
     t.prazo, t.dataInicio, t.status, t.prioridade, t.resultado,
+    t.concluidaEm || '',
     Array.isArray(t.checklist) ? JSON.stringify(t.checklist) : '',
-    Array.isArray(t.tags) ? t.tags.join('|') : ''
+    Array.isArray(t.tags) ? t.tags.join('|') : '',
+    Array.isArray(t.andamentos)
+      ? t.andamentos.map(a => `${a && a.em || ''}\u241E${a && a.texto || ''}`).join('\u241D')
+      : ''
   ].join('\u241F');
   // FNV-1a 32-bit
   let h = 0x811c9dc5;
@@ -557,7 +561,15 @@ function _carimbarLWMSeNecessario() {
       // Mudou de fato nesta sessão: carimba agora.
       t._lwm = agora;
       t.atualizadaEm = new Date(agora).toISOString();
-    } else if (hashAntes === undefined) {
+    } else if (t.atualizadaEm) {
+      // Defesa: se atualizadaEm é mais novo que _lwm, o caller já marcou
+      // mudança (ex.: revisao-interativa) — alinhar _lwm para não perder no merge.
+      const ms = Date.parse(t.atualizadaEm);
+      if (Number.isFinite(ms) && ms > (typeof t._lwm === 'number' ? t._lwm : 0)) {
+        t._lwm = ms;
+      }
+    }
+    if (hashAntes === undefined) {
       // É nova nesta sessão (criada agora) e ainda não tem hash anterior.
       // Se _lwm é muito antigo (>60s), atualiza; senão respeita (veio do Firestore).
       if (agora - t._lwm > 60000 && !t.criadaEm) {
