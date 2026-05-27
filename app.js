@@ -2659,6 +2659,7 @@ function bindPainelExportar() {
     if (e.target.id === 'btn-exp-reset') { _expResetar(); return; }
     if (e.target.id === 'btn-exp-pdf') { exportarPDFCustom(); return; }
     if (e.target.id === 'btn-exp-xlsx') { exportarXLSXCustom(); return; }
+    if (e.target.id === 'btn-exp-dossie') { exportarDossiePDF(); return; }
   });
   painel.addEventListener('change', () => _expAtualizarResumo());
   painel.addEventListener('input', () => _expAtualizarResumo());
@@ -2735,6 +2736,227 @@ function exportarPDFCustom() {
   }
   doc.save(`tarefas_cebraspe_${hojeISO()}.pdf`);
   mostrarFlash('PDF gerado.');
+}
+
+/* ---------- Dossiê PDF (uma seção por tarefa, com linha do tempo de andamentos) ---------- */
+
+function _dossieFmtDataHora(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    const pad = n => String(n).padStart(2, '0');
+    return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} \u00b7 ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  } catch (_) { return iso; }
+}
+
+function exportarDossiePDF() {
+  const lista = _expAplicarOpcoes();
+  if (!lista.length) return mostrarMsg('Nenhuma tarefa atende aos filtros escolhidos.', true);
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  // Paleta institucional
+  const azul = [10, 61, 122];
+  const laranja = [240, 128, 0];
+  const cinzaEscuro = [55, 65, 81];
+  const cinzaMedio = [110, 119, 130];
+  const cinzaSuave = [240, 243, 247];
+  const cinzaBorda = [220, 225, 232];
+
+  const PAGE_W = 210;
+  const PAGE_H = 297;
+  const MARGEM_X = 16;
+  const LARG = PAGE_W - MARGEM_X * 2;
+  const RODAPE_Y = PAGE_H - 12;
+  const LIMITE_CORPO_Y = RODAPE_Y - 6;
+
+  let pagina = 1;
+
+  const cabecalhoPagina = () => {
+    doc.setFillColor(...azul); doc.rect(0, 0, PAGE_W, 22, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+    doc.text('Dossiê de Tarefas Estratégicas', MARGEM_X, 11);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+    doc.text('Cebraspe · Plano Diretor 2023–2026 · Andamentos', MARGEM_X, 17);
+    doc.setFontSize(8);
+    doc.text(`Emitido em ${fmtData(hojeISO())}`, PAGE_W - MARGEM_X, 11, { align: 'right' });
+    doc.text(`${lista.length} tarefa(s)`, PAGE_W - MARGEM_X, 17, { align: 'right' });
+    doc.setFillColor(...laranja); doc.rect(0, 22, PAGE_W, 1.2, 'F');
+  };
+
+  const rodapePagina = (n, total) => {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5);
+    doc.setTextColor(...cinzaMedio);
+    doc.text('Cebraspe · Tarefas Estratégicas · Plano Diretor 2023–2026', MARGEM_X, RODAPE_Y);
+    doc.text(`Página ${n} de ${total}`, PAGE_W - MARGEM_X, RODAPE_Y, { align: 'right' });
+  };
+
+  cabecalhoPagina();
+  let y = 30;
+
+  const novaPagina = () => {
+    pagina++;
+    doc.addPage();
+    cabecalhoPagina();
+    y = 30;
+  };
+
+  const garantirEspaco = (alt) => {
+    if (y + alt > LIMITE_CORPO_Y) novaPagina();
+  };
+
+  lista.forEach((t, idx) => {
+    // Sempre uma página nova para cada tarefa, exceto a primeira.
+    if (idx > 0) novaPagina();
+
+    // --- Cabeçalho da tarefa ---
+    const q = quadranteDe(t);
+    const corQuad = (q !== 'NC' && QUADRANTES[q]) ? hexToRgb(QUADRANTES[q].cor) : azul;
+    const bgQuad  = (q !== 'NC' && QUADRANTES[q]) ? hexToRgb(QUADRANTES[q].bg) : cinzaSuave;
+
+    // Faixa vertical colorida à esquerda
+    doc.setFillColor(...corQuad);
+    doc.rect(MARGEM_X, y, 2.2, 22, 'F');
+
+    // Título
+    doc.setTextColor(...cinzaEscuro);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
+    const tituloLinhas = doc.splitTextToSize(t.titulo || '(sem título)', LARG - 6);
+    doc.text(tituloLinhas[0], MARGEM_X + 5, y + 6);
+    if (tituloLinhas.length > 1) {
+      doc.setFontSize(11);
+      doc.text(tituloLinhas.slice(1).join(' '), MARGEM_X + 5, y + 12);
+    }
+
+    // Etiqueta de quadrante e status
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+    doc.setTextColor(...cinzaMedio);
+    const qLabel = q === 'NC' ? 'Não classificada' : `${q} — ${QUADRANTES[q].nome}`;
+    const stLabel = STATUS_ROTULOS[t.status] || '—';
+    const prLabel = PRIORIDADE_ROTULOS[t.prioridade] || '—';
+    doc.text(`${qLabel}  ·  Status: ${stLabel}  ·  Prioridade: ${prLabel}`, MARGEM_X + 5, y + 17);
+    y += 24;
+
+    // --- Bloco de informações ---
+    doc.setDrawColor(...cinzaBorda);
+    doc.setFillColor(...cinzaSuave);
+    const infoYInicio = y;
+    const linhasInfo = [];
+    const oe = OBJETIVOS.find(o => o.id === t.oeId);
+    linhasInfo.push(['Objetivo Estratégico', oe ? `OE ${oe.id} · ${oe.curto}` : '—']);
+    linhasInfo.push(['Responsável', t.responsavel || '—']);
+    if (t.dataInicio) linhasInfo.push(['Início', fmtData(t.dataInicio)]);
+    if (t.prazo) linhasInfo.push(['Prazo', fmtData(t.prazo) + (isAtrasada(t) ? ' (atrasada)' : '')]);
+    if (t.resultado) linhasInfo.push(['Resultado esperado', t.resultado]);
+
+    // Calcula altura aproximada
+    const altLinhaInfo = (rotulo, valor) => {
+      const linhas = doc.splitTextToSize(valor, LARG - 50);
+      return Math.max(5, linhas.length * 4.8) + 2;
+    };
+    let altInfo = 4;
+    linhasInfo.forEach(([r, v]) => { altInfo += altLinhaInfo(r, v); });
+
+    garantirEspaco(altInfo + 6);
+    doc.rect(MARGEM_X, y, LARG, altInfo, 'FD');
+    let yInfo = y + 4;
+    linhasInfo.forEach(([rotulo, valor]) => {
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
+      doc.setTextColor(...cinzaMedio);
+      doc.text(rotulo, MARGEM_X + 3, yInfo + 3);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+      doc.setTextColor(...cinzaEscuro);
+      const linhas = doc.splitTextToSize(valor, LARG - 50);
+      doc.text(linhas, MARGEM_X + 44, yInfo + 3);
+      yInfo += Math.max(5, linhas.length * 4.8) + 2;
+    });
+    y += altInfo + 6;
+
+    // --- Linha do tempo de andamentos ---
+    const andamentos = Array.isArray(t.andamentos) ? t.andamentos.slice() : [];
+    // Ordena do mais antigo para o mais recente (linha do tempo natural)
+    andamentos.sort((a, b) => (a && a.em || '').localeCompare(b && b.em || ''));
+
+    garantirEspaco(10);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+    doc.setTextColor(...azul);
+    doc.text('Andamentos', MARGEM_X, y);
+    doc.setDrawColor(...laranja);
+    doc.setLineWidth(0.6);
+    doc.line(MARGEM_X + 27, y - 1.2, MARGEM_X + 50, y - 1.2);
+    doc.setLineWidth(0.2);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+    doc.setTextColor(...cinzaMedio);
+    doc.text(`${andamentos.length} registro(s)`, PAGE_W - MARGEM_X, y, { align: 'right' });
+    y += 5;
+
+    if (andamentos.length === 0) {
+      doc.setFont('helvetica', 'italic'); doc.setFontSize(9);
+      doc.setTextColor(...cinzaMedio);
+      doc.text('Nenhum andamento registrado até o momento.', MARGEM_X, y + 4);
+      doc.setFont('helvetica', 'normal');
+      y += 10;
+    } else {
+      // Linha vertical da timeline
+      const TL_X = MARGEM_X + 4;
+      const PAD_X = TL_X + 8;
+      const LARG_TEXTO = PAGE_W - MARGEM_X - PAD_X;
+
+      andamentos.forEach((a, i) => {
+        const dataHora = _dossieFmtDataHora(a && a.em);
+        const texto = (a && a.texto || '').trim() || '(sem texto)';
+        const linhasTxt = doc.splitTextToSize(texto, LARG_TEXTO);
+        const altItem = 5.5 + linhasTxt.length * 4.6 + 4;
+
+        // Se não couber, quebra página e repete o cabeçalho "Andamentos (continuação)"
+        if (y + altItem > LIMITE_CORPO_Y) {
+          novaPagina();
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+          doc.setTextColor(...azul);
+          doc.text('Andamentos (continuação)', MARGEM_X, y);
+          y += 5;
+        }
+
+        const yItemInicio = y;
+
+        // Marcador
+        doc.setFillColor(...corQuad);
+        doc.circle(TL_X, y + 2.5, 1.6, 'F');
+
+        // Data/hora
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8.8);
+        doc.setTextColor(...cinzaEscuro);
+        doc.text(dataHora, PAD_X, y + 3);
+
+        // Texto
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+        doc.setTextColor(40, 48, 60);
+        doc.text(linhasTxt, PAD_X, y + 8);
+
+        y += 5.5 + linhasTxt.length * 4.6;
+
+        // Linha vertical conectando ao próximo (se houver)
+        if (i < andamentos.length - 1) {
+          doc.setDrawColor(...cinzaBorda);
+          doc.setLineWidth(0.4);
+          doc.line(TL_X, yItemInicio + 4.5, TL_X, y + 1.5);
+        }
+        y += 4;
+      });
+    }
+  });
+
+  // Numeração de páginas
+  const total = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= total; i++) {
+    doc.setPage(i);
+    rodapePagina(i, total);
+  }
+
+  doc.save(`dossie_tarefas_${hojeISO()}.pdf`);
+  mostrarFlash('Dossiê gerado.');
 }
 
 /* ---------- Geração XLSX custom ---------- */
