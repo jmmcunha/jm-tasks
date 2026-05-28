@@ -1140,13 +1140,14 @@ function removerAndamentoEdicao(emISO) {
   renderAndamentosEdicao(t);
 }
 
-function abrirEdicao(id) {
+function abrirEdicao(id, abaInicial) {
   const t = tarefas.find(x => x.id === id);
   if (!t) return;
   const dlg = $('#dlg-edit');
-  // Sempre começa na aba "Dados"
-  dlg.querySelectorAll('.modal-tab').forEach(b => b.classList.toggle('is-active', b.dataset.tab === 'dados'));
-  dlg.querySelectorAll('.modal-tab-panel').forEach(p => p.classList.toggle('is-active', p.dataset.tabPanel === 'dados'));
+  // Aba inicial: 'dados' (padrao) ou 'andamento' quando vier do botao Andamento do card.
+  const aba = (abaInicial === 'andamento') ? 'andamento' : 'dados';
+  dlg.querySelectorAll('.modal-tab').forEach(b => b.classList.toggle('is-active', b.dataset.tab === aba));
+  dlg.querySelectorAll('.modal-tab-panel').forEach(p => p.classList.toggle('is-active', p.dataset.tabPanel === aba));
   // Limpa campo de nova entrada e renderiza lista
   const taAnd = $('#ef-and-texto'); if (taAnd) taAnd.value = '';
   renderAndamentosEdicao(t);
@@ -1454,39 +1455,13 @@ function solicitacoesPreventivas() {
 }
 
 function renderBannerDrucker() {
+  // Leva 33.12: banner Drucker suprimido a pedido do usuário.
+  // Mantém a função por compatibilidade com chamadores espalhados (renderTudo,
+  // callbacks de solicitações etc.), mas sempre esconde o banner.
   const banner = $('#banner-drucker');
   if (!banner) return;
-  const { lembretes, cobrancas, revisoes } = tarefasPreventivas();
-  const { vencidas: solVenc, iminentes: solImi } = (typeof solicitacoesPreventivas === 'function') ? solicitacoesPreventivas() : { vencidas: [], iminentes: [] };
-  if (!lembretes.length && !cobrancas.length && !revisoes.length && !solVenc.length && !solImi.length) {
-    banner.hidden = true;
-    banner.innerHTML = '';
-    return;
-  }
-  const partes = [];
-  if (cobrancas.length) {
-    partes.push(`<button class="druk__chip druk__chip--alerta" data-druk="cobranca" type="button" title="Ver tarefas com prazo vencido"><strong>${cobrancas.length}</strong> ${cobrancas.length===1?'aguarda cobrança':'aguardam cobrança'}</button>`);
-  }
-  if (solVenc.length) {
-    partes.push(`<button class="druk__chip druk__chip--alerta" data-druk="sol-vencidas" type="button" title="Encaminhamentos a terceiros com prazo vencido sem solicitação em aberto"><strong>${solVenc.length}</strong> ${solVenc.length===1?'solicitação vencida':'solicitações vencidas'}</button>`);
-  }
-  if (lembretes.length) {
-    partes.push(`<button class="druk__chip druk__chip--alerta-leve" data-druk="lembrete" type="button" title="Ver tarefas com prazo nos próximos 3 dias"><strong>${lembretes.length}</strong> ${lembretes.length===1?'cabe lembrete':'cabem lembretes'}</button>`);
-  }
-  if (solImi.length) {
-    partes.push(`<button class="druk__chip druk__chip--alerta-leve" data-druk="sol-iminentes" type="button" title="Encaminhamentos a terceiros com prazo nos próximos 2 dias"><strong>${solImi.length}</strong> ${solImi.length===1?'solicitação iminente':'solicitações iminentes'}</button>`);
-  }
-  if (revisoes.length) {
-    partes.push(`<button class="druk__chip druk__chip--neutro" data-druk="revisao" type="button" title="Tarefas em maturação cuja data prevista de revisão já passou"><strong>${revisoes.length}</strong> ${revisoes.length===1?'pede revisão':'pedem revisão'}</button>`);
-  }
-  banner.innerHTML = `
-    <div class="druk__corpo">
-      <span class="druk__hint">Drucker dizia que antecipar a fricção é mais barato que resolvê-la.</span>
-      <div class="druk__chips">${partes.join('')}</div>
-    </div>
-    <button class="druk__close" id="druk-close" type="button" aria-label="Ocultar painel" title="Ocultar nesta sessão">×</button>
-  `;
-  banner.hidden = false;
+  banner.hidden = true;
+  banner.innerHTML = '';
 }
 
 // abre lista de tarefas elegiveis num popover/modal simples
@@ -1863,7 +1838,7 @@ function _retroTextoPlano(periodo) {
   bloco('Concluídas no período', r.concluidasPer, t => `${t.titulo} (${t.responsavel || '—'})`);
   bloco('Prazos vencidos no período', r.vencidasPer, t => `${t.titulo} (${t.responsavel || '—'}) — prazo ${fmtDataExtenso(t.prazo)}`);
   bloco('Paradas há 7 dias ou mais', r.paradas, ({t,dias}) => `${t.titulo} (${t.responsavel || '—'}) — ${dias} dias sem atualização`);
-  linhas.push('Pergunta da semana (Drucker):');
+  linhas.push('Pergunta da semana:');
   linhas.push('  ' + r.pergunta);
   return linhas.join('\n');
 }
@@ -2079,8 +2054,10 @@ function renderGrupos(lista) {
     el.querySelector('[data-edit]').addEventListener('click', () => abrirEdicao(id));
     el.querySelector('[data-del]').addEventListener('click', () => excluirTarefa(id));
     el.querySelector('[data-email]').addEventListener('click', () => abrirIAEmailDireto(id));
-    const btnHist = el.querySelector('[data-historico]');
-    if (btnHist) btnHist.addEventListener('click', () => abrirHistoricoTarefa(id));
+    // Leva 33.12: botão "Andamento vinculado" substitui o antigo "Histórico".
+    // Abre o modal de edição já na aba Andamento.
+    const btnAnd = el.querySelector('[data-andamento]');
+    if (btnAnd) btnAnd.addEventListener('click', () => abrirEdicao(id, 'andamento'));
     const btnPlanner = el.querySelector('[data-planner]');
     if (btnPlanner) btnPlanner.addEventListener('click', () => enviarParaPlanner(id));
     el.querySelector('.tarefa__status-sel').addEventListener('change', e => alterarStatus(id, e.target.value));
@@ -2143,7 +2120,7 @@ function renderTarefa(t) {
           ${Object.entries(STATUS_ROTULOS).map(([v, r]) => `<option value="${v}" ${t.status === v ? 'selected' : ''}>${r}</option>`).join('')}
         </select>
         <button class="btn btn--ghost btn--sm" data-email title="Gerar e-mail">E-mail</button>
-        <button class="btn btn--ghost btn--sm" data-historico title="Histórico de decisões das reuniões">Histórico${reunioesQueTrataramTarefa(t.id).length ? ` (${reunioesQueTrataramTarefa(t.id).length})` : ''}</button>
+        <button class="btn btn--ghost btn--sm" data-andamento title="Andamento vinculado a esta tarefa">Andamento${Array.isArray(t.andamentos) && t.andamentos.length ? ` (${t.andamentos.length})` : ''}</button>
         <button class="btn btn--ghost btn--sm" data-planner title="Abrir Microsoft Forms pré-preenchido para criar tarefa no Planner">Planner</button>
         <button class="icon-btn" data-edit title="Editar"><svg viewBox="0 0 16 16"><path d="M11 1l4 4-9 9H2v-4l9-9z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></button>
         <button class="icon-btn danger" data-del title="Excluir"><svg viewBox="0 0 16 16"><path d="M3 4h10M5 4v9h6V4M6 4V2h4v2M6 7v4M10 7v4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
@@ -6065,7 +6042,7 @@ function abrirSolicitacaoIA(reuniaoId, taskId) {
   });
   const instrucao = _instrucaoSolicitarPorSituacao(situacao);
   abrirIAModal({
-    titulo: 'Solicitar atualização (Drucker)',
+    titulo: 'Solicitar atualização',
     subtitulo: 'Encaminhamento atribuído a ' + ((e.responsavel || '').trim() || '—') + ' · origem: ' + (r.titulo || 'reunião'),
     modo: 'gerar',
     tipo: 'e-mail',
