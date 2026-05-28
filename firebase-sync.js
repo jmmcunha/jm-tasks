@@ -356,6 +356,9 @@
   //   Assim, se um dispositivo gravou uma tarefa sem o último andamento
   //   registrado em outro lugar, esse andamento NÃO é destruído.
   function _mergeAndamentos(localT, remoteT) {
+    // Leva 33.13: respeita tombstones de andamentos (campo _andDel: { em: ts }).
+    // O tombstone do lado MAIS NOVO (maior _lwm) prevalece. Se o lwm desse
+    // lado eh >= a qualquer apareicao do andamento, o andamento e removido.
     const ands = new Map(); // em -> { texto, lwm }
     const lLwm = (localT && typeof localT._lwm === 'number') ? localT._lwm : 0;
     const rLwm = (remoteT && typeof remoteT._lwm === 'number') ? remoteT._lwm : 0;
@@ -374,6 +377,24 @@
     };
     aplicar(remoteT && remoteT.andamentos, rLwm);
     aplicar(localT && localT.andamentos, lLwm);
+    // Mescla tombstones dos dois lados: chave em -> timestamp da remocao.
+    const tomb = new Map();
+    const coletarTomb = (obj) => {
+      if (!obj || !obj._andDel || typeof obj._andDel !== 'object') return;
+      for (const k of Object.keys(obj._andDel)) {
+        const ts = Number(obj._andDel[k]) || 0;
+        const prev = tomb.get(k) || 0;
+        if (ts > prev) tomb.set(k, ts);
+      }
+    };
+    coletarTomb(localT);
+    coletarTomb(remoteT);
+    // Remove qualquer andamento cuja remocao seja mais recente ou igual ao
+    // lwm que carregou aquele texto. Tombstone vence empate (>=).
+    for (const [em, ts] of tomb) {
+      const v = ands.get(em);
+      if (v && ts >= v.lwm) ands.delete(em);
+    }
     const out = Array.from(ands.entries()).map(([em, v]) => ({ em, texto: v.texto }));
     out.sort((a, b) => (a.em < b.em ? -1 : a.em > b.em ? 1 : 0));
     return out;
@@ -432,22 +453,44 @@
         t.andamentos = _mergeAndamentos(l, r);
       }
     }
-    // Watchdog anti-perda: se algum andamento que estava no local desapareceu
-    // do array final, restaura a uniao garantida (local + remote por `em`).
+    // Watchdog anti-perda: se algum andamento que estava no local OU remoto
+    // desapareceu do array final E NAO ha tombstone para ele, restaura.
+    // Leva 33.13: respeita tombstones explicitos (_andDel) para nao ressuscitar
+    // andamentos que o usuario removeu intencionalmente.
     const snapLocal = _snapshotAndamentosPorId(localList);
     const snapRemote = _snapshotAndamentosPorId(remoteList);
     for (const [id, t] of porId) {
+      const l = localById.get(id);
+      const r = remoteById.get(id);
+      // Conjunto de tombstones para esta tarefa (uniao dos dois lados).
+      const tombSet = new Set();
+      if (l && l._andDel && typeof l._andDel === 'object') {
+        for (const k of Object.keys(l._andDel)) tombSet.add(k);
+      }
+      if (r && r._andDel && typeof r._andDel === 'object') {
+        for (const k of Object.keys(r._andDel)) tombSet.add(k);
+      }
       const ems = new Set((Array.isArray(t.andamentos) ? t.andamentos : []).map(a => String(a && a.em || '')));
-      const ausentesLocal = (snapLocal.get(id) || []).filter(a => a.em && !ems.has(a.em));
-      const ausentesRemoto = (snapRemote.get(id) || []).filter(a => a.em && !ems.has(a.em));
+      const ausentesLocal = (snapLocal.get(id) || []).filter(a => a.em && !ems.has(a.em) && !tombSet.has(a.em));
+      const ausentesRemoto = (snapRemote.get(id) || []).filter(a => a.em && !ems.has(a.em) && !tombSet.has(a.em));
       if (ausentesLocal.length || ausentesRemoto.length) {
-        // Recompoe: tudo do local + tudo do remoto, sem duplicar `em`.
+        // Recompoe: tudo do local + tudo do remoto SEM tombstone, sem duplicar.
         const map = new Map();
-        for (const a of (snapRemote.get(id) || [])) if (a.em) map.set(a.em, a);
-        for (const a of (snapLocal.get(id) || [])) if (a.em) map.set(a.em, a); // local prevalece em conflito
+        for (const a of (snapRemote.get(id) || [])) if (a.em && !tombSet.has(a.em)) map.set(a.em, a);
+        for (const a of (snapLocal.get(id) || [])) if (a.em && !tombSet.has(a.em)) map.set(a.em, a);
         t.andamentos = Array.from(map.values()).sort((a, b) => a.em < b.em ? -1 : a.em > b.em ? 1 : 0);
         try { console.warn('[firebase-sync] watchdog recuperou', ausentesLocal.length + ausentesRemoto.length, 'andamento(s) na tarefa', id); } catch {}
       }
+      // Preserva o _andDel acumulado para o proximo round-trip.
+      const tombMerge = {};
+      if (l && l._andDel) Object.assign(tombMerge, l._andDel);
+      if (r && r._andDel) {
+        for (const k of Object.keys(r._andDel)) {
+          const ts = Number(r._andDel[k]) || 0;
+          if (!tombMerge[k] || ts > tombMerge[k]) tombMerge[k] = ts;
+        }
+      }
+      if (Object.keys(tombMerge).length > 0) t._andDel = tombMerge;
     }
 
     // Aplica tombstones: id em tombstone com _del > _lwm da tarefa => remove

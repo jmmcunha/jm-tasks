@@ -534,8 +534,13 @@ let _tarefasHashAnterior = new Map();
 function _hashTarefa(t) {
   // Hash leve: campos relevantes que justificam novo carimbo
   // (não inclui _lwm nem atualizadaEm para evitar loop).
+  // Leva 33.13: inclui oeId e revisitarEm, ausentes na versão anterior, o que
+  // fazia alterações de objetivo estratégico ou data de revisão serem
+  // sobrescritas pelo eco do Firestore.
   const campos = [
     t.titulo, t.descricao, t.responsavel, t.objetivo,
+    t.oeId == null ? '' : String(t.oeId),
+    t.revisitarEm || '',
     t.importante ? 1 : 0, t.urgente ? 1 : 0,
     t.prazo, t.dataInicio, t.status, t.prioridade, t.resultado,
     t.concluidaEm || '',
@@ -1134,8 +1139,25 @@ function removerAndamentoEdicao(emISO) {
   if (!id) return;
   const t = tarefas.find(x => x.id === id);
   if (!t || !Array.isArray(t.andamentos)) return;
+  // Log defensivo: registra remocao em log local antes de apagar, para auditoria.
+  try {
+    const removido = t.andamentos.find(a => a.em === emISO);
+    if (removido) {
+      const log = JSON.parse(localStorage.getItem('cebraspe_andamentos_removidos_log') || '[]');
+      log.push({ tarefaId: t.id, titulo: t.titulo, em: removido.em, texto: removido.texto, removidoEm: new Date().toISOString() });
+      if (log.length > 500) log.splice(0, log.length - 500);
+      localStorage.setItem('cebraspe_andamentos_removidos_log', JSON.stringify(log));
+    }
+  } catch (e) { console.warn('[andamentos] falha ao gravar log de remocao', e); }
   t.andamentos = t.andamentos.filter(a => a.em !== emISO);
   t.atualizadaEm = new Date().toISOString();
+  // Leva 33.13: carimba _lwm imediatamente para impedir que o eco do Firestore
+  // (com a versao antiga que ainda contem o andamento) sobrescreva a remocao.
+  const agoraMs = Date.now();
+  t._lwm = agoraMs;
+  // Grava tombstone do andamento: o merge respeita _andDel e nao ressuscita.
+  if (!t._andDel || typeof t._andDel !== 'object') t._andDel = {};
+  t._andDel[emISO] = agoraMs;
   salvarTarefas();
   renderAndamentosEdicao(t);
 }
@@ -1258,6 +1280,9 @@ function bindModaisGlobais() {
     } else if (novoStatus !== 'concluida' && statusAnteriorEdit === 'concluida') {
       delete t.concluidaEm;
     }
+    // Leva 33.13: carimba _lwm imediatamente apos qualquer edicao manual no
+    // modal, garantindo que o merge com o Firestore preserve as alteracoes.
+    t._lwm = Date.now();
     salvarTarefas();
     popularResponsaveis();
     renderTudo();
