@@ -379,6 +379,18 @@
     return out;
   }
 
+  // Snapshot defensivo dos andamentos por id antes do merge, para detectar
+  // qualquer reducao inesperada e recuperar via fallback.
+  function _snapshotAndamentosPorId(lista) {
+    const m = new Map();
+    for (const t of (lista || [])) {
+      if (!t || !t.id) continue;
+      const arr = Array.isArray(t.andamentos) ? t.andamentos : [];
+      m.set(t.id, arr.map(a => ({ em: String(a && a.em || ''), texto: String(a && a.texto || '') })));
+    }
+    return m;
+  }
+
   function mergeTarefas(localList, remoteList, localTombs, remoteTombs) {
     // Indices auxiliares (por id) dos dois lados, para fundir andamentos.
     const remoteById = new Map();
@@ -420,6 +432,24 @@
         t.andamentos = _mergeAndamentos(l, r);
       }
     }
+    // Watchdog anti-perda: se algum andamento que estava no local desapareceu
+    // do array final, restaura a uniao garantida (local + remote por `em`).
+    const snapLocal = _snapshotAndamentosPorId(localList);
+    const snapRemote = _snapshotAndamentosPorId(remoteList);
+    for (const [id, t] of porId) {
+      const ems = new Set((Array.isArray(t.andamentos) ? t.andamentos : []).map(a => String(a && a.em || '')));
+      const ausentesLocal = (snapLocal.get(id) || []).filter(a => a.em && !ems.has(a.em));
+      const ausentesRemoto = (snapRemote.get(id) || []).filter(a => a.em && !ems.has(a.em));
+      if (ausentesLocal.length || ausentesRemoto.length) {
+        // Recompoe: tudo do local + tudo do remoto, sem duplicar `em`.
+        const map = new Map();
+        for (const a of (snapRemote.get(id) || [])) if (a.em) map.set(a.em, a);
+        for (const a of (snapLocal.get(id) || [])) if (a.em) map.set(a.em, a); // local prevalece em conflito
+        t.andamentos = Array.from(map.values()).sort((a, b) => a.em < b.em ? -1 : a.em > b.em ? 1 : 0);
+        try { console.warn('[firebase-sync] watchdog recuperou', ausentesLocal.length + ausentesRemoto.length, 'andamento(s) na tarefa', id); } catch {}
+      }
+    }
+
     // Aplica tombstones: id em tombstone com _del > _lwm da tarefa => remove
     const allTombs = new Map();
     for (const x of (remoteTombs || [])) {

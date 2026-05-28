@@ -1097,9 +1097,21 @@ function adicionarAndamentoEdicao() {
     return;
   }
   if (!Array.isArray(t.andamentos)) t.andamentos = [];
-  t.andamentos.push({ em: new Date().toISOString(), texto });
+  const novoEm = new Date().toISOString();
+  t.andamentos.push({ em: novoEm, texto });
   t.atualizadaEm = new Date().toISOString();
+  // Forca carimbo imediato do _lwm para garantir que o merge nao descarte.
+  t._lwm = Date.now();
   ta.value = '';
+  // Backup defensivo: registra a operacao em log local indelevel para recuperar
+  // caso algum sync apague o andamento.
+  try {
+    const log = JSON.parse(localStorage.getItem('cebraspe_andamentos_log') || '[]');
+    log.push({ tarefaId: t.id, titulo: t.titulo, em: novoEm, texto, gravadoEm: new Date().toISOString() });
+    // Mantem apenas os ultimos 500 para nao crescer indefinidamente.
+    if (log.length > 500) log.splice(0, log.length - 500);
+    localStorage.setItem('cebraspe_andamentos_log', JSON.stringify(log));
+  } catch (e) { console.warn('[andamentos] falha ao gravar log defensivo', e); }
   // Persiste imediatamente para não perder se o usuário fechar sem salvar.
   salvarTarefas();
   renderAndamentosEdicao(t);
