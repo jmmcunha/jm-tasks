@@ -477,22 +477,33 @@ function migrarV1ParaV3(t) {
 
 function normalizarTarefa(t) {
   // garante shape v3 — útil para imports e cargas
-  return {
-    id: t.id || uid(),
-    titulo: t.titulo || '',
-    oeId: t.oeId ?? t.objetivoId ?? null,
-    importante: (t.importante === true || t.importante === false) ? t.importante : null,
-    urgente: (t.urgente === true || t.urgente === false) ? t.urgente : null,
-    responsavel: t.responsavel || '',
-    dataInicio: t.dataInicio || '',
-    prazo: t.prazo || '',
-    prioridade: t.prioridade || 'media',
-    status: t.status || 'a-fazer',
-    revisitarEm: t.revisitarEm || '',
-    resultado: t.resultado || '',
-    criadaEm: t.criadaEm || t.criadoEm || new Date().toISOString(),
-    atualizadaEm: t.atualizadaEm || t.atualizadoEm || new Date().toISOString()
-  };
+  // IMPORTANTE: precisa preservar TODOS os campos da tarefa.
+  // Bug histórico: a versão anterior só listava um subconjunto fixo de campos
+  // (titulo, oeId, etc.) e descartava silenciosamente andamentos, concluidaEm,
+  // _lwm, objetivo, descricao, checklist, tags etc. Como carregarTarefas faz
+  // `tarefas = v3.map(normalizarTarefa)`, cada reload do app apagava esses
+  // campos da memoria. O proximo salvarTarefas reescrevia o localStorage
+  // sem eles e, na pior das hipoteses, o eco do onSnapshot consolidava a
+  // perda na nuvem. Corrige preservando o objeto original por spread e
+  // apenas normalizando os campos de shape v3.
+  const base = (t && typeof t === 'object') ? t : {};
+  return Object.assign({}, base, {
+    id: base.id || uid(),
+    titulo: base.titulo || '',
+    oeId: base.oeId ?? base.objetivoId ?? null,
+    importante: (base.importante === true || base.importante === false) ? base.importante : null,
+    urgente: (base.urgente === true || base.urgente === false) ? base.urgente : null,
+    responsavel: base.responsavel || '',
+    dataInicio: base.dataInicio || '',
+    prazo: base.prazo || '',
+    prioridade: base.prioridade || 'media',
+    status: base.status || 'a-fazer',
+    revisitarEm: base.revisitarEm || '',
+    resultado: base.resultado || '',
+    criadaEm: base.criadaEm || base.criadoEm || new Date().toISOString(),
+    atualizadaEm: base.atualizadaEm || base.atualizadoEm || new Date().toISOString(),
+    andamentos: Array.isArray(base.andamentos) ? base.andamentos.slice() : []
+  });
 }
 
 // Tombstones de tarefas excluídas: lista de { id, _del: timestamp }
