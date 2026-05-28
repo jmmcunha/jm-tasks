@@ -3632,16 +3632,34 @@ async function _aplicarRevisaoAndamentosIA() {
   // Backup
   _write(KEY_TAREFAS_V3 + '_backup_ia', { tarefas, salvoEm: new Date().toISOString() });
 
-  // Constrói mapa de novos textos por tarefa
+  // Constrói mapa de novos textos por tarefa, descartando textos vazios ou
+  // que pareçam eco de instrução (regras do próprio prompt vazadas pelo modelo).
+  const _riaTextoSuspeito = (s) => {
+    const t = String(s || '').trim();
+    if (!t) return true;
+    const low = t.toLowerCase();
+    const padroes = [
+      'no markdown', 'no quotes', 'no asterisks', 'respond in', 'output only',
+      'guidelines:', 'rules:', 'instructions:',
+      'diretrizes do texto', 'manual da presid', 'manual da presidencia',
+      'devolva apenas', 'regras de estilo', 'formato da resposta',
+      'voz ativa com sujeito oculto',
+    ];
+    for (const p of padroes) if (low.includes(p)) return true;
+    if (/(^|\n)\s*\d+\.\s*$/.test(t)) return true;
+    return false;
+  };
   const textoNovoPorTarefa = new Map(); // id -> Map(em -> texto)
+  let _riaTextosRejeitados = 0;
   for (const rev of (_riaRevisao.andamentos_revisados || [])) {
     if (!aceitosPorTarefa.has(rev.id)) continue;
     const setEm = aceitosPorTarefa.get(rev.id);
     const mTextos = new Map();
     for (const a of (Array.isArray(rev.andamentos) ? rev.andamentos : [])) {
-      if (a && a.em && setEm.has(a.em)) {
-        mTextos.set(a.em, String(a.texto || ''));
-      }
+      if (!a || !a.em || !setEm.has(a.em)) continue;
+      const txt = String(a.texto || '');
+      if (_riaTextoSuspeito(txt)) { _riaTextosRejeitados++; continue; }
+      mTextos.set(a.em, txt);
     }
     textoNovoPorTarefa.set(rev.id, mTextos);
   }
@@ -3711,7 +3729,8 @@ async function _aplicarRevisaoAndamentosIA() {
   mostrarMsg(
     `Revisão de andamentos aplicada: ${andamentosAlterados} texto(s) atualizado(s)` +
     (consolAplicadas ? `, ${consolAplicadas} consolidação(ões) aplicada(s)` : '') +
-    ` em ${tarefasAfetadas} tarefa(s). Backup salvo.`
+    ` em ${tarefasAfetadas} tarefa(s). Backup salvo.` +
+    (_riaTextosRejeitados ? ` ${_riaTextosRejeitados} texto(s) rejeitado(s) por conter eco de instruções do prompt.` : '')
   );
   fecharPainelRevisaoIA();
 }
