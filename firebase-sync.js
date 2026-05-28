@@ -347,7 +347,49 @@
   // Faz merge entre lista local e lista remota usando _lwm (last-write-marker).
   // Tombstones (de qualquer lado) vão ser respeitados: id presente em tombstone
   // posterior a _lwm da tarefa significa que ela foi excluída.
+  //
+  // Regra anti-perda de andamentos:
+  //   O `_lwm` decide o vencedor para TODOS os campos da tarefa EXCETO o
+  //   array `andamentos`. O `andamentos` é fundido por chave `em` entre os
+  //   dois lados: cada `em` único é preservado, e quando o mesmo `em`
+  //   aparece nos dois lados, vence o texto do lado mais novo pelo `_lwm`.
+  //   Assim, se um dispositivo gravou uma tarefa sem o último andamento
+  //   registrado em outro lugar, esse andamento NÃO é destruído.
+  function _mergeAndamentos(localT, remoteT) {
+    const ands = new Map(); // em -> { texto, lwm }
+    const lLwm = (localT && typeof localT._lwm === 'number') ? localT._lwm : 0;
+    const rLwm = (remoteT && typeof remoteT._lwm === 'number') ? remoteT._lwm : 0;
+    const aplicar = (arr, lwm) => {
+      if (!Array.isArray(arr)) return;
+      for (const a of arr) {
+        if (!a || typeof a !== 'object') continue;
+        const em = String(a.em || '');
+        if (!em) continue;
+        const texto = String(a.texto || '');
+        const prev = ands.get(em);
+        if (!prev || lwm >= prev.lwm) {
+          ands.set(em, { texto, lwm });
+        }
+      }
+    };
+    aplicar(remoteT && remoteT.andamentos, rLwm);
+    aplicar(localT && localT.andamentos, lLwm);
+    const out = Array.from(ands.entries()).map(([em, v]) => ({ em, texto: v.texto }));
+    out.sort((a, b) => (a.em < b.em ? -1 : a.em > b.em ? 1 : 0));
+    return out;
+  }
+
   function mergeTarefas(localList, remoteList, localTombs, remoteTombs) {
+    // Indices auxiliares (por id) dos dois lados, para fundir andamentos.
+    const remoteById = new Map();
+    for (const t of (remoteList || [])) {
+      if (t && t.id) remoteById.set(t.id, t);
+    }
+    const localById = new Map();
+    for (const t of (localList || [])) {
+      if (t && t.id) localById.set(t.id, t);
+    }
+
     const porId = new Map();
     // Index remote primeiro
     for (const t of (remoteList || [])) {
@@ -365,6 +407,17 @@
         if (lLwm > rLwm) {
           porId.set(t.id, { ...t, _origin: 'local' });
         }
+      }
+    }
+    // Substitui o array `andamentos` do vencedor pela união por `em` dos
+    // dois lados. Preserva qualquer andamento que esteja em apenas um lado.
+    for (const [id, t] of porId) {
+      const l = localById.get(id);
+      const r = remoteById.get(id);
+      // Só faz merge se ambos os lados existem; se só um lado tem a tarefa,
+      // o array dele é a fonte da verdade.
+      if (l && r) {
+        t.andamentos = _mergeAndamentos(l, r);
       }
     }
     // Aplica tombstones: id em tombstone com _del > _lwm da tarefa => remove
