@@ -532,24 +532,24 @@ function adicionarTombstone(id) {
 let _tarefasHashAnterior = new Map();
 
 function _hashTarefa(t) {
-  // Hash leve: campos relevantes que justificam novo carimbo
-  // (não inclui _lwm nem atualizadaEm para evitar loop).
-  // Leva 33.13: inclui oeId e revisitarEm, ausentes na versão anterior, o que
-  // fazia alterações de objetivo estratégico ou data de revisão serem
-  // sobrescritas pelo eco do Firestore.
-  const campos = [
-    t.titulo, t.descricao, t.responsavel, t.objetivo,
-    t.oeId == null ? '' : String(t.oeId),
-    t.revisitarEm || '',
-    t.importante ? 1 : 0, t.urgente ? 1 : 0,
-    t.prazo, t.dataInicio, t.status, t.prioridade, t.resultado,
-    t.concluidaEm || '',
-    Array.isArray(t.checklist) ? JSON.stringify(t.checklist) : '',
-    Array.isArray(t.tags) ? t.tags.join('|') : '',
-    Array.isArray(t.andamentos)
-      ? t.andamentos.map(a => `${a && a.em || ''}\u241E${a && a.texto || ''}`).join('\u241D')
-      : ''
-  ].join('\u241F');
+  // Leva 33.13.1: hash COMPLETO (excluindo apenas _lwm e atualizadaEm para
+  // evitar loop). Antes era um subconjunto de campos, o que fazia alterações
+  // em campos não listados (oeId, revisitarEm, encaminhamentos etc.) não
+  // dispararem novo carimbo de _lwm — e o eco do Firestore vencia o merge.
+  let serial = '';
+  try {
+    const copia = {};
+    for (const k of Object.keys(t || {})) {
+      if (k === '_lwm' || k === 'atualizadaEm' || k === '_origin') continue;
+      copia[k] = t[k];
+    }
+    // Ordena chaves para hash estavel.
+    const chaves = Object.keys(copia).sort();
+    serial = chaves.map(k => k + '\u241E' + JSON.stringify(copia[k])).join('\u241F');
+  } catch {
+    serial = (t && t.id || '') + ':' + (t && t.titulo || '');
+  }
+  const campos = serial;
   // FNV-1a 32-bit
   let h = 0x811c9dc5;
   for (let i = 0; i < campos.length; i++) {
