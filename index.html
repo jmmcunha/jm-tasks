@@ -322,6 +322,8 @@
               <label class="chk"><input type="radio" name="ria-escopo" value="todas" checked /> Todas as tarefas</label>
               <label class="chk"><input type="radio" name="ria-escopo" value="filtradas" /> Apenas as filtradas</label>
               <label class="chk"><input type="radio" name="ria-escopo" value="selecionadas" /> Apenas as selecionadas</label>
+              <hr style="border:none;border-top:1px solid #e5e7eb;margin:0.6rem 0" />
+              <label class="chk" title="Por padrão, tarefas concluídas e canceladas são excluídas para não consumir contexto da IA com histórico encerrado."><input type="checkbox" id="ria-inclui-conc" /> Incluir concluídas e canceladas</label>
             </div>
             <div class="ria-bloco">
               <h4>2. O que a IA deve revisar</h4>
@@ -329,6 +331,8 @@
               <label class="chk"><input type="checkbox" id="ria-rev-pad" checked /> Padronizar título e resultado</label>
               <label class="chk"><input type="checkbox" id="ria-rev-vazios" checked /> Sugerir prazo e OE quando vazios</label>
               <label class="chk"><input type="checkbox" id="ria-rev-orfas" checked /> Detectar duplicatas e tarefas órfãs</label>
+              <label class="chk" title="Inclui o histórico de andamentos no payload e pede revisão textual deles junto com os demais campos."><input type="checkbox" id="ria-rev-and-junto" /> Revisar andamentos junto com os demais campos</label>
+              <label class="chk" title="Modo focado: a IA ignora demais campos e revisa apenas o texto dos andamentos."><input type="checkbox" id="ria-rev-andamentos" /> Revisar SOMENTE andamentos (modo focado)</label>
             </div>
           </div>
 
@@ -1186,7 +1190,7 @@
   <script src="firebase-config.js?v=20260506aa"></script>
   <script src="firebase-sync.js?v=20260506aa"></script>
   <script src="ia-gemini.js?v=20260506aa"></script>
-  <script src="app.js?v=20260526e"></script>
+  <script src="app.js?v=20260528a"></script>
   <!-- Captura rápida em linguagem natural + voz -->
   <script src="quick-capture.js?v=20260506aa"></script>
   <!-- Leva 31: Decisões e CRM Pessoas -->

@@ -3033,6 +3033,7 @@ function exportarXLSXCustom() {
 let _riaRevisao = null; // { tarefas: [...], duplicatas: [...], orfas: [...], andamentos_revisados?: [...] }
 let _riaOriginais = null; // map id -> tarefa original (para diff)
 let _riaModoAndamentos = false; // true quando a revisão é só de andamentos
+let _riaModoAndamentosJunto = false; // true quando o modo padrão inclui andamentos
 let _riaAndamentosAceitos = null; // Map<idTarefa, Set<em>> com andamentos aceitos para aplicação
 
 function _riaEscopo() {
@@ -3042,20 +3043,25 @@ function _riaEscopo() {
 
 function _riaTarefasEscopo() {
   const escopo = _riaEscopo();
-  if (escopo === 'filtradas') return aplicarFiltros();
-  if (escopo === 'selecionadas') {
+  let base;
+  if (escopo === 'filtradas') base = aplicarFiltros();
+  else if (escopo === 'selecionadas') {
     if (typeof selecaoTarefasIds !== 'undefined' && selecaoTarefasIds instanceof Set) {
-      return tarefas.filter(t => selecaoTarefasIds.has(t.id));
-    }
-    return [];
+      base = tarefas.filter(t => selecaoTarefasIds.has(t.id));
+    } else base = [];
+  } else base = tarefas.slice();
+  // Por padrão, excluir concluídas e canceladas (a menos que o usuário peca para incluir).
+  const incluiConc = !!$('#ria-inclui-conc')?.checked;
+  if (!incluiConc) {
+    base = base.filter(t => t.status !== 'concluida' && t.status !== 'cancelada');
   }
-  return tarefas.slice();
+  return base;
 }
 
 function _riaTarefaSlim(t, opts) {
   // Versão enxuta para enviar à IA: só campos relevantes.
-  // No modo "somente andamentos", devolve um payload reduzido focado no histórico.
   const soAndamentos = !!(opts && opts.soAndamentos);
+  const comAndamentos = !!(opts && opts.comAndamentos);
   if (soAndamentos) {
     return {
       id: t.id,
@@ -3067,7 +3073,7 @@ function _riaTarefaSlim(t, opts) {
       })),
     };
   }
-  return {
+  const base = {
     id: t.id,
     titulo: t.titulo || '',
     quadrante: quadranteDe(t),
@@ -3079,40 +3085,70 @@ function _riaTarefaSlim(t, opts) {
     resultado: t.resultado || '',
     dataInicio: t.dataInicio || '',
   };
+  if (comAndamentos) {
+    base.andamentos = (Array.isArray(t.andamentos) ? t.andamentos : []).map(a => ({
+      em: a && a.em ? String(a.em) : '',
+      texto: a && a.texto ? String(a.texto) : '',
+    }));
+  }
+  return base;
 }
 
 function gerarPromptIA() {
   const lista = _riaTarefasEscopo();
   const soAndamentos = !!$('#ria-rev-andamentos')?.checked;
+  const comAndamentosJunto = !!$('#ria-rev-and-junto')?.checked;
+  const incluiConc = !!$('#ria-inclui-conc')?.checked;
 
-  // Modo exclusivo: revisar somente andamentos.
+  // Bloco comum: padrão de redação dos andamentos com exemplos few-shot.
+  // Aprendizado do mobile: o modelo respondia em inglês ou meta-comentava
+  // quando o prompt era abstrato — few-shot resolve.
+  const blocoRedacaoAndamento =
+`### Padrão de redação dos andamentos (Manual da Presidência)
+- Português brasileiro formal, impessoal, objetivo. NUNCA responder em inglês.
+- Voz ativa com sujeito oculto: Solicitou-se, Encaminhou-se, Realizou-se, Concluiu-se, Acordou-se, Recomendou-se, Tratou-se.
+- Frases curtas. Máximo de três períodos por andamento.
+- Corrigir acentuação, ortografia, pontuação e concordância.
+- Eliminar marcadores conversacionais (aí, então, tipo, né, a gente), repetições e ruídos de transcrição por voz. Substituir "a gente" por sujeito impessoal.
+- Não usar "determino" nem "determina-se". Prefira "solicitou-se", "encaminhou-se", "foi acordado", "recomendou-se".
+- Preservar 100% dos fatos, nomes próprios, siglas e números. Não inventar nem omitir informação.
+- Sem markdown, sem asteriscos, sem aspas envolvendo o texto, sem prefixos como "SAÍDA:" ou "Revisado:".
+- Manter o campo "em" (ISO 8601) EXATAMENTE como recebido em cada andamento. NUNCA alterar, remover ou criar datas.
+
+### Exemplos de revisão de andamento
+
+ORIGINAL: "então o foi encaminhado para o jurídico para aparecer a alteração da instrução do serviço e também o Lucimar ficou de enviar quais eventos a gente pode começar sem o modelo 70/30"
+REVISADO: "Encaminhou-se a questão ao Jurídico para análise da alteração da instrução de serviço. Lucimar ficou de informar quais eventos podem ser iniciados sem a regra 70/30."
+
+ORIGINAL: "aí eu falei com a Maria e ela disse que vai mandar até sexta o relatório"
+REVISADO: "Tratou-se do assunto com Maria, que se comprometeu a encaminhar o relatório até sexta-feira."
+
+ORIGINAL: "reunião feita ontem com o Pablo a gente definiu que o POP fica pronto dia 27"
+REVISADO: "Realizou-se reunião com Pablo. Acordou-se a entrega do POP em 27."`;
+
+  // ---------------- Modo exclusivo: revisar SOMENTE andamentos ----------------
   if (soAndamentos) {
     const listaComAnd = lista.filter(t => Array.isArray(t.andamentos) && t.andamentos.length);
     const totalAnd = listaComAnd.reduce((acc, t) => acc + t.andamentos.length, 0);
     const promptAnd =
-`Você é assistente de redação oficial do Cebraspe (Plano de Ação 2026). Sua tarefa é revisar APENAS o texto dos registros de andamento das tarefas abaixo, sem alterar nenhum outro campo.
+`Você é revisor de redação oficial do Cebraspe (Plano de Ação 2026).
+Objetivo: revisar APENAS o texto dos andamentos das tarefas abaixo. Não alterar nenhum outro campo.
 
-## Regras de revisão dos andamentos
-- Reescrever cada texto de andamento em português brasileiro formal, voz ativa, impessoal, conforme o Manual de Redação da Presidência da República.
-- Eliminar gírias, marcadores informais, redundância e ruído de digitação.
-- Padronizar verbos no pretérito perfeito do indicativo quando descrevem fato consumado ("Encaminhou-se", "Realizou-se", "Concluiu-se").
-- Preservar 100% dos fatos relatados. Não inventar informação.
-- Manter o campo "em" (data/hora ISO 8601) EXATAMENTE como recebido em cada andamento. NUNCA alterar, remover ou criar novas datas.
-- Quando dois ou mais andamentos consecutivos tratarem do mesmo fato sem acréscimo de informação, sinalizar em "sugestao_consolidacao" os ids "em" envolvidos, com a redação consolidada proposta. Não excluir nada por conta própria.
-- Se um texto já estiver adequado, repeti-lo igual no campo "texto" e marcar "_inalterado": true.
+${blocoRedacaoAndamento}
 
-## Diretrizes de redação
-- Sem itálico, sem negrito, sem emoji, sem markdown dentro dos textos.
-- Frases curtas e diretas. Máximo 3 frases por andamento, salvo necessidade técnica.
-- Não usar a palavra "determino". Preferir "solicitou-se", "encaminhou-se", "foi acordado".
+### Quando consolidar
+Quando dois ou mais andamentos consecutivos tratarem do mesmo fato sem acréscimo de informação, sinalize em "sugestao_consolidacao" os ISOs envolvidos e proponha a redação consolidada. Não excluir nada por conta própria.
 
-## Schema da resposta (devolver ESTE JSON, e nada mais)
+### Como sinalizar texto já adequado
+Se o texto já estiver adequado, repita-o idêntico em "texto" e marque "_inalterado": true.
+
+### Schema da resposta (devolva APENAS este JSON, sem markdown, sem comentários)
 {
   "andamentos_revisados": [
     {
       "id": "<id da tarefa>",
       "andamentos": [
-        { "em": "<ISO original, inalterado>", "texto": "<texto revisado>", "_inalterado": false }
+        { "em": "<ISO original, inalterado>", "texto": "<texto revisado em português>", "_inalterado": false }
       ],
       "sugestao_consolidacao": [
         { "em_origem": ["<ISO1>","<ISO2>"], "texto_consolidado": "<redação única proposta>" }
@@ -3122,22 +3158,24 @@ function gerarPromptIA() {
   ]
 }
 
-IMPORTANTE: inclua em "andamentos_revisados" APENAS tarefas em que pelo menos um andamento foi alterado ou que receberam sugestão de consolidação. Mantenha o id original da tarefa e o "em" original de cada andamento. Não invente ids nem datas. "sugestao_consolidacao" é opcional — omita o campo quando não houver sugestão.
+Incluir em "andamentos_revisados" APENAS tarefas em que pelo menos um andamento foi alterado OU receberam sugestão de consolidação. Manter id original da tarefa e "em" original de cada andamento. "sugestao_consolidacao" é opcional — omita o campo quando não houver sugestão.
 
-## Tarefas com andamentos (${listaComAnd.length} tarefa(s), ${totalAnd} andamento(s))
+### Tarefas com andamentos (${listaComAnd.length} tarefa(s), ${totalAnd} andamento(s))
 ${JSON.stringify(listaComAnd.map(t => _riaTarefaSlim(t, { soAndamentos: true })), null, 2)}
 `;
     const taA = $('#ria-prompt');
     if (taA) taA.value = promptAnd;
     $('#ria-copiar').disabled = false;
     $('#ria-resumo-gerar').textContent =
-      `${listaComAnd.length} tarefa(s) com andamentos · ${totalAnd} andamento(s) · ${promptAnd.length.toLocaleString('pt-BR')} caracteres.`;
+      `${listaComAnd.length} tarefa(s) com andamentos · ${totalAnd} andamento(s) · ${promptAnd.length.toLocaleString('pt-BR')} caracteres${incluiConc ? '' : ' · concluídas excluídas'}.`;
     _riaOriginais = new Map(lista.map(t => [t.id, t]));
     _riaModoAndamentos = true;
     return;
   }
 
+  // ---------------- Modo padrão (campos da tarefa, opcionalmente com andamentos) ----------------
   _riaModoAndamentos = false;
+  _riaModoAndamentosJunto = comAndamentosJunto;
 
   const fazQuad = $('#ria-rev-quad')?.checked;
   const fazPad = $('#ria-rev-pad')?.checked;
@@ -3156,10 +3194,27 @@ ${JSON.stringify(listaComAnd.map(t => _riaTarefaSlim(t, { soAndamentos: true }))
     fazVazios ? '- Sugerir prazo realista (ISO YYYY-MM-DD, considerando hoje = ' + hojeISO() + ') quando vazio. Sugerir OE da lista oficial quando vazio.\n' : '';
   const orfasTxt =
     fazOrfas ? '- Apontar duplicatas (pares com mesmo objeto/propósito) e tarefas órfãs (sem responsável ou sem OE).\n' : '';
+  const andamentosTxt =
+    comAndamentosJunto ? '- Revisar os textos do array "andamentos" de cada tarefa segundo o padrão de redação abaixo. Devolver os andamentos revisados no campo "andamentos_revisados".\n' : '';
+
+  const blocoAndOpc = comAndamentosJunto ? `\n${blocoRedacaoAndamento}\n` : '';
+  const schemaAndOpc = comAndamentosJunto
+    ? `,
+  "andamentos_revisados": [
+    {
+      "id": "<id da tarefa>",
+      "andamentos": [
+        { "em": "<ISO original>", "texto": "<texto revisado em português>", "_inalterado": false }
+      ]
+    }
+  ]`
+    : '';
+
+  const escopoInfo = incluiConc ? '' : ' (concluídas e canceladas excluídas)';
 
   const prompt =
 `Você é assistente de análise de tarefas estratégicas do Cebraspe (Plano de Ação 2026).
-Revise as tarefas abaixo conforme as regras e devolva APENAS um JSON válido (sem markdown, sem comentários) seguindo o schema indicado.
+Revise as tarefas abaixo conforme as regras e devolva APENAS um JSON válido (sem markdown, sem comentários) seguindo o schema indicado. Responda SEMPRE em português brasileiro.
 
 ## Taxonomia de quadrantes (Camila)
 - Q1 — Crise e Contenção: decidir rápido, reduzir danos. Importante e urgente.
@@ -3172,12 +3227,12 @@ Revise as tarefas abaixo conforme as regras e devolva APENAS um JSON válido (se
 ${oesRef}
 
 ## Regras de revisão (aplique todas as marcadas)
-${escopoTxt}${padTxt}${vaziosTxt}${orfasTxt}
-## Diretrizes de redação
+${escopoTxt}${padTxt}${vaziosTxt}${orfasTxt}${andamentosTxt}
+## Diretrizes de redação (campos da tarefa)
 - Português brasileiro formal, voz ativa, sem itálico, sem gírias.
-- Título começa com verbo no infinitivo (“Elaborar...”, “Revisar...”, “Aprovar...”).
+- Título começa com verbo no infinitivo ("Elaborar...", "Revisar...", "Aprovar...").
 - Resultado esperado descreve o produto final concreto, não a ação.
-
+${blocoAndOpc}
 ## Schema da resposta (devolver ESTE JSON, e nada mais)
 {
   "tarefas": [
@@ -3197,22 +3252,29 @@ ${escopoTxt}${padTxt}${vaziosTxt}${orfasTxt}
   ],
   "orfas": [
     { "id": "<id>", "problema": "sem responsavel|sem oe|sem prazo|..." }
-  ]
+  ]${schemaAndOpc}
 }
 
-IMPORTANTE: inclua na lista "tarefas" APENAS as tarefas que sofreram alguma alteração. Se nada mudou em uma tarefa, não a inclua. Mantenha o id original. Não invente ids.
+IMPORTANTE:
+- Incluir na lista "tarefas" APENAS as tarefas que sofreram alguma alteração em campos da tarefa. Se nada mudou em uma tarefa, não a inclua.
+- Mantenha o id original. Não invente ids.
+- ${comAndamentosJunto ? 'No bloco "andamentos_revisados", inclua APENAS andamentos que mudaram. Manter "em" original. Manter id original da tarefa.' : 'Não incluir o campo "andamentos_revisados" nesta resposta.'}
 
-## Tarefas atuais (${lista.length})
-${JSON.stringify(lista.map(_riaTarefaSlim), null, 2)}
+## Tarefas atuais (${lista.length}${escopoInfo})
+${JSON.stringify(lista.map(t => _riaTarefaSlim(t, { comAndamentos: comAndamentosJunto })), null, 2)}
 `;
 
   const ta = $('#ria-prompt');
   if (ta) ta.value = prompt;
   $('#ria-copiar').disabled = false;
-  $('#ria-resumo-gerar').textContent = `${lista.length} tarefa(s) incluídas. Cerca de ${prompt.length.toLocaleString('pt-BR')} caracteres.`;
-  // Guarda originais (para diff) após gerar
+  const totalAnd = comAndamentosJunto
+    ? lista.reduce((acc, t) => acc + (Array.isArray(t.andamentos) ? t.andamentos.length : 0), 0)
+    : 0;
+  $('#ria-resumo-gerar').textContent =
+    `${lista.length} tarefa(s) incluídas${comAndamentosJunto ? ' · ' + totalAnd + ' andamento(s)' : ''}${incluiConc ? '' : ' · concluídas excluídas'} · ${prompt.length.toLocaleString('pt-BR')} caracteres.`;
   _riaOriginais = new Map(lista.map(t => [t.id, t]));
 }
+
 
 async function copiarPromptIA() {
   const ta = $('#ria-prompt');
@@ -3664,6 +3726,7 @@ function abrirPainelRevisaoIA() {
   _riaRevisao = null;
   _riaOriginais = null;
   _riaModoAndamentos = false;
+  _riaModoAndamentosJunto = false;
   const cbAnd = $('#ria-rev-andamentos');
   if (cbAnd) cbAnd.checked = false;
   _riaAtualizarToggleAndamentos?.();
