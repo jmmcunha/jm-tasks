@@ -5854,15 +5854,6 @@ function renderDelegacoes() {
     return true;
   });
 
-  // Ordena: vermelho > amarelo > verde > cinza; dentro de cada cor, prazo asc (nulos no fim)
-  filtrados.sort((a, b) => {
-    const dr = _rankRisco(a.risco) - _rankRisco(b.risco);
-    if (dr !== 0) return dr;
-    const ap = a.t.prazo || '9999-12-31';
-    const bp = b.t.prazo || '9999-12-31';
-    return ap.localeCompare(bp);
-  });
-
   // Mantém seleção apenas para tarefas visíveis (drop IDs que sumiram do filtro).
   const visiveis = new Set(filtrados.map(({t}) => t.id));
   Array.from(_delegSel).forEach(id => { if (!visiveis.has(id)) _delegSel.delete(id); });
@@ -5873,7 +5864,91 @@ function renderDelegacoes() {
     return;
   }
 
-  tbody.innerHTML = filtrados.map(({t, risco}) => {
+  // Agrupa por responsável. Cada grupo é ordenado internamente por risco e prazo.
+  // A ordem dos grupos: pelo pior risco do grupo (vermelho primeiro); empate, alfabético.
+  const grupos = new Map();
+  filtrados.forEach(item => {
+    const nome = (item.t.responsavel || '').trim() || '(sem responsável)';
+    if (!grupos.has(nome)) grupos.set(nome, []);
+    grupos.get(nome).push(item);
+  });
+  grupos.forEach(lista => lista.sort((a, b) => {
+    const dr = _rankRisco(a.risco) - _rankRisco(b.risco);
+    if (dr !== 0) return dr;
+    const ap = a.t.prazo || '9999-12-31';
+    const bp = b.t.prazo || '9999-12-31';
+    return ap.localeCompare(bp);
+  }));
+  const gruposOrdenados = Array.from(grupos.entries()).sort((A, B) => {
+    const piorA = Math.min(...A[1].map(x => _rankRisco(x.risco)));
+    const piorB = Math.min(...B[1].map(x => _rankRisco(x.risco)));
+    if (piorA !== piorB) return piorA - piorB;
+    return A[0].localeCompare(B[0], 'pt-BR');
+  });
+
+  if (!window._delegGrupoCol) window._delegGrupoCol = new Set();
+  const colapsados = window._delegGrupoCol;
+
+  tbody.innerHTML = gruposOrdenados.map(([nome, itens]) => {
+    const contGr = { vermelho:0, amarelo:0, verde:0, cinza:0 };
+    itens.forEach(({risco}) => { contGr[risco] = (contGr[risco]||0) + 1; });
+    const colapsado = colapsados.has(nome);
+    const chave = nome.replace(/"/g, '&quot;');
+    const chips = [
+      contGr.vermelho ? `<span class="deleg-grupo-chip deleg-grupo-chip--vermelho" title="Em risco">● ${contGr.vermelho}</span>` : '',
+      contGr.amarelo  ? `<span class="deleg-grupo-chip deleg-grupo-chip--amarelo" title="Em atenção">● ${contGr.amarelo}</span>` : '',
+      contGr.verde    ? `<span class="deleg-grupo-chip deleg-grupo-chip--verde" title="Em dia">● ${contGr.verde}</span>` : '',
+      contGr.cinza    ? `<span class="deleg-grupo-chip deleg-grupo-chip--cinza" title="Sem dado">● ${contGr.cinza}</span>` : '',
+    ].filter(Boolean).join(' ');
+    const cabecalho = `
+      <tr class="deleg-grupo-row" data-deleg-grupo="${escapeHTML(chave)}">
+        <td colspan="8" class="deleg-grupo-td">
+          <button type="button" class="deleg-grupo-toggle" data-deleg-grupo-toggle="${escapeHTML(chave)}" aria-expanded="${colapsado ? 'false' : 'true'}">
+            <span class="deleg-grupo-caret">${colapsado ? '▸' : '▾'}</span>
+            <span class="deleg-grupo-nome">${escapeHTML(nome)}</span>
+            <span class="deleg-grupo-total">${itens.length} ${itens.length === 1 ? 'delegação' : 'delegações'}</span>
+            <span class="deleg-grupo-chips">${chips}</span>
+          </button>
+          <button type="button" class="deleg-grupo-selall" data-deleg-grupo-selall="${escapeHTML(chave)}" title="Selecionar todas as delegações deste responsável">selecionar grupo</button>
+        </td>
+      </tr>`;
+    if (colapsado) return cabecalho;
+    return cabecalho + itens.map(({t, risco}) => _renderLinhaDelegacao(t, risco)).join('');
+  }).join('');
+
+  // Liga handlers da tabela (delegado uma vez via dataset flag).
+  if (!tbody.dataset.boundGrupo) {
+    tbody.dataset.boundGrupo = '1';
+    tbody.addEventListener('click', (e) => {
+      const tog = e.target.closest('[data-deleg-grupo-toggle]');
+      if (tog) {
+        const nome = tog.getAttribute('data-deleg-grupo-toggle');
+        if (colapsados.has(nome)) colapsados.delete(nome); else colapsados.add(nome);
+        renderDelegacoes();
+        return;
+      }
+      const sa = e.target.closest('[data-deleg-grupo-selall]');
+      if (sa) {
+        const nome = sa.getAttribute('data-deleg-grupo-selall');
+        const grupoItens = grupos.get(nome) || [];
+        grupoItens.forEach(({t}) => _delegSel.add(t.id));
+        renderDelegacoes();
+        return;
+      }
+    });
+  }
+
+  // Mantém os handlers antigos via fluxo abaixo (binding único na seção a seguir).
+  // O código abaixo segue executando handlers de risco/edição/checkbox.
+  _bindHandlersDelegacaoLinhas(tbody);
+  _atualizarBulkBar();
+  _atualizarCheckTodas();
+  return;
+}
+
+// Render de uma única linha de delegação (mesmo TR de antes, só extraído).
+function _renderLinhaDelegacao(t, risco) {
+  {
     const manual = !!t.riscoManual;
     const vencida = t.prazo && t.status !== 'concluida' && t.prazo < hojeISO();
     const stRot = STATUS_ROTULOS[t.status] || t.status || '—';
@@ -5909,68 +5984,63 @@ function renderDelegacoes() {
             ${t.decisaoNec ? '' : 'data-vazio="1"'}>${escapeHTML(t.decisaoNec || '')}</td>
       </tr>
     `;
-  }).join('');
-
-  // Liga handlers da tabela (delegado uma vez via dataset flag).
-  if (!tbody.dataset.bound) {
-    tbody.dataset.bound = '1';
-    tbody.addEventListener('click', (e) => {
-      // Não intercepta cliques em células editáveis nem em checkboxes
-      if (e.target.closest('.deleg-td--editavel')) return;
-      if (e.target.matches('input[type="checkbox"]')) return;
-      const bol = e.target.closest('[data-risco-bolinha]');
-      if (bol) { _ciclarRiscoManual(bol.getAttribute('data-risco-bolinha')); return; }
-      const ab = e.target.closest('[data-abrir]');
-      if (ab) { abrirEdicao(ab.getAttribute('data-abrir')); return; }
-    });
-    tbody.addEventListener('keydown', (e) => {
-      // Em célula editável, Enter salva e sai do foco (sem quebrar linha).
-      const cell = e.target.closest && e.target.closest('.deleg-td--editavel');
-      if (cell && e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        cell.blur();
-        return;
-      }
-      if (cell && e.key === 'Escape') {
-        e.preventDefault();
-        // Restaura valor original e sai sem salvar
-        const id = cell.getAttribute('data-edit-id');
-        const campo = cell.getAttribute('data-edit-campo');
-        const t = tarefas.find(x => x.id === id);
-        cell.textContent = (t && t[campo]) || '';
-        if (!cell.textContent) cell.setAttribute('data-vazio', '1');
-        cell.blur();
-        return;
-      }
-      if (e.key !== 'Enter' && e.key !== ' ') return;
-      const bol = e.target.closest('[data-risco-bolinha]');
-      if (bol) { e.preventDefault(); _ciclarRiscoManual(bol.getAttribute('data-risco-bolinha')); }
-    });
-    // Foco em célula editável: limpa placeholder.
-    tbody.addEventListener('focusin', (e) => {
-      const cell = e.target.closest && e.target.closest('.deleg-td--editavel');
-      if (cell) cell.removeAttribute('data-vazio');
-    });
-    // Blur: salva valor.
-    tbody.addEventListener('focusout', (e) => {
-      const cell = e.target.closest && e.target.closest('.deleg-td--editavel');
-      if (cell) _salvarEdicaoInline(cell);
-    });
-    // Seleção por checkbox.
-    tbody.addEventListener('change', (e) => {
-      const cb = e.target.closest('[data-deleg-sel]');
-      if (!cb) return;
-      const id = cb.getAttribute('data-deleg-sel');
-      if (cb.checked) _delegSel.add(id); else _delegSel.delete(id);
-      const tr = cb.closest('tr');
-      if (tr) tr.classList.toggle('deleg-row--sel', cb.checked);
-      _atualizarBulkBar();
-      _atualizarCheckTodas();
-    });
   }
+}
 
-  _atualizarBulkBar();
-  _atualizarCheckTodas();
+// Liga handlers da tabela de delegações (linhas), uma vez só via flag.
+function _bindHandlersDelegacaoLinhas(tbody) {
+  if (tbody.dataset.bound) return;
+  tbody.dataset.bound = '1';
+  tbody.addEventListener('click', (e) => {
+    // Não intercepta cliques em células editáveis, checkboxes ou no cabeçalho do grupo
+    if (e.target.closest('.deleg-td--editavel')) return;
+    if (e.target.matches('input[type="checkbox"]')) return;
+    if (e.target.closest('[data-deleg-grupo-toggle]')) return;
+    if (e.target.closest('[data-deleg-grupo-selall]')) return;
+    const bol = e.target.closest('[data-risco-bolinha]');
+    if (bol) { _ciclarRiscoManual(bol.getAttribute('data-risco-bolinha')); return; }
+    const ab = e.target.closest('[data-abrir]');
+    if (ab) { abrirEdicao(ab.getAttribute('data-abrir')); return; }
+  });
+  tbody.addEventListener('keydown', (e) => {
+    const cell = e.target.closest && e.target.closest('.deleg-td--editavel');
+    if (cell && e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      cell.blur();
+      return;
+    }
+    if (cell && e.key === 'Escape') {
+      e.preventDefault();
+      const id = cell.getAttribute('data-edit-id');
+      const campo = cell.getAttribute('data-edit-campo');
+      const t = tarefas.find(x => x.id === id);
+      cell.textContent = (t && t[campo]) || '';
+      if (!cell.textContent) cell.setAttribute('data-vazio', '1');
+      cell.blur();
+      return;
+    }
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const bol = e.target.closest('[data-risco-bolinha]');
+    if (bol) { e.preventDefault(); _ciclarRiscoManual(bol.getAttribute('data-risco-bolinha')); }
+  });
+  tbody.addEventListener('focusin', (e) => {
+    const cell = e.target.closest && e.target.closest('.deleg-td--editavel');
+    if (cell) cell.removeAttribute('data-vazio');
+  });
+  tbody.addEventListener('focusout', (e) => {
+    const cell = e.target.closest && e.target.closest('.deleg-td--editavel');
+    if (cell) _salvarEdicaoInline(cell);
+  });
+  tbody.addEventListener('change', (e) => {
+    const cb = e.target.closest('[data-deleg-sel]');
+    if (!cb) return;
+    const id = cb.getAttribute('data-deleg-sel');
+    if (cb.checked) _delegSel.add(id); else _delegSel.delete(id);
+    const tr = cb.closest('tr');
+    if (tr) tr.classList.toggle('deleg-row--sel', cb.checked);
+    _atualizarBulkBar();
+    _atualizarCheckTodas();
+  });
 }
 
 // Salva a edição inline de Próxima ação / Decisão necessária.

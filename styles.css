@@ -3044,3 +3044,70 @@ select {
   resize: vertical;
 }
 .deleg-email-preview__field textarea { min-height: 180px; line-height: 1.5; }
+
+/* Cabeçalhos de grupo na tabela de Delegações (Leva 34.3) */
+.deleg-grupo-row { background: transparent; }
+.deleg-grupo-td {
+  padding: 0 !important;
+  border-bottom: 1px solid #cbd5e1;
+}
+.deleg-grupo-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: calc(100% - 140px);
+  padding: 10px 14px;
+  background: #f1f5f9;
+  border: 0;
+  border-left: 4px solid #475569;
+  text-align: left;
+  font: inherit;
+  color: #0f172a;
+  cursor: pointer;
+}
+.deleg-grupo-toggle:hover { background: #e2e8f0; }
+.deleg-grupo-caret {
+  display: inline-block;
+  min-width: 14px;
+  color: #64748b;
+  font-size: 0.9em;
+}
+.deleg-grupo-nome {
+  font-weight: 700;
+  font-size: 0.98em;
+  color: #0f172a;
+}
+.deleg-grupo-total {
+  color: #64748b;
+  font-size: 0.85em;
+}
+.deleg-grupo-chips {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.deleg-grupo-chip {
+  font-size: 0.8em;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+}
+.deleg-grupo-chip--vermelho { color: #b91c1c; border-color: #fecaca; }
+.deleg-grupo-chip--amarelo  { color: #b45309; border-color: #fde68a; }
+.deleg-grupo-chip--verde    { color: #047857; border-color: #bbf7d0; }
+.deleg-grupo-chip--cinza    { color: #475569; border-color: #cbd5e1; }
+.deleg-grupo-selall {
+  display: inline-block;
+  margin: 6px 12px 6px 6px;
+  padding: 4px 10px;
+  background: transparent;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.78em;
+  cursor: pointer;
+}
+.deleg-grupo-selall:hover { background: #e2e8f0; color: #0f172a; }
