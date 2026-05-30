@@ -5803,6 +5803,9 @@ function _populaDropdownResponsaveis(delegacoes) {
   if (atual && nomes.includes(atual)) sel.value = atual;
 }
 
+// Estado de seleção em lote (Leva 34.2)
+const _delegSel = new Set();
+
 // Render principal da aba Delegações.
 function renderDelegacoes() {
   const tbody = $('#deleg-tbody');
@@ -5818,13 +5821,16 @@ function renderDelegacoes() {
   const fStatus = $('#deleg-status')?.value || '';
   const fRisco  = $('#deleg-risco')?.value || '';
   const fResp   = $('#deleg-responsavel')?.value || '';
+  const mostrarConcl = !!$('#deleg-mostrar-concluidas')?.checked;
 
-  // Calcula risco e aplica filtros
-  const enriquecidas = delegacoes.map(t => ({ t, risco: calcularRisco(t) }));
+  // Calcula risco e aplica filtros (esconde concluídas por padrão).
+  const ativas = mostrarConcl ? delegacoes : delegacoes.filter(t => t.status !== 'concluida');
+  const enriquecidas = ativas.map(t => ({ t, risco: calcularRisco(t) }));
 
-  // Contadores (sobre conjunto pré-filtro)
+  // Contadores (sobre conjunto pré-filtro, ignorando concluídas)
   const cont = { vermelho:0, amarelo:0, verde:0, cinza:0 };
   enriquecidas.forEach(({risco}) => { cont[risco] = (cont[risco]||0) + 1; });
+  const totalConcl = delegacoes.filter(t => t.status === 'concluida').length;
   if (contad) {
     contad.innerHTML = `
       <span class="deleg-cont deleg-cont--vermelho" title="Vermelho — exige atenção urgente">● <strong>${cont.vermelho}</strong> em risco</span>
@@ -5832,6 +5838,7 @@ function renderDelegacoes() {
       <span class="deleg-cont deleg-cont--verde" title="Verde — fluindo no prazo">● <strong>${cont.verde}</strong> em dia</span>
       ${cont.cinza ? `<span class="deleg-cont deleg-cont--cinza" title="Sem dados suficientes">● <strong>${cont.cinza}</strong> sem dado</span>` : ''}
       <span class="deleg-cont" title="Total de delegações ativas"><strong>${enriquecidas.length}</strong> no total</span>
+      ${totalConcl && !mostrarConcl ? `<span class="deleg-cont" title="Concluídas (ocultas — ative o toggle para ver)"><strong>${totalConcl}</strong> concluídas (ocultas)</span>` : ''}
     `;
   }
 
@@ -5856,8 +5863,13 @@ function renderDelegacoes() {
     return ap.localeCompare(bp);
   });
 
+  // Mantém seleção apenas para tarefas visíveis (drop IDs que sumiram do filtro).
+  const visiveis = new Set(filtrados.map(({t}) => t.id));
+  Array.from(_delegSel).forEach(id => { if (!visiveis.has(id)) _delegSel.delete(id); });
+
   if (!filtrados.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="deleg-vazio">${delegacoes.length ? 'Nenhuma delegação corresponde aos filtros.' : 'Ainda não há delegações. Crie uma tarefa preenchendo o campo Responsável.'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="deleg-vazio">${delegacoes.length ? 'Nenhuma delegação corresponde aos filtros.' : 'Ainda não há delegações. Crie uma tarefa preenchendo o campo Responsável.'}</td></tr>`;
+    _atualizarBulkBar();
     return;
   }
 
@@ -5867,8 +5879,10 @@ function renderDelegacoes() {
     const stRot = STATUS_ROTULOS[t.status] || t.status || '—';
     const stClass = 'badge--' + (t.status === 'em-andamento' ? 'andamento' : t.status === 'concluida' ? 'concluida' : t.status === 'bloqueada' ? 'bloqueada' : '');
     const obj = OBJETIVOS.find(o => o.id === t.oeId);
+    const sel = _delegSel.has(t.id);
     return `
-      <tr data-id="${t.id}" class="${t.status === 'concluida' ? 'deleg-row--concluida' : ''} ${vencida ? 'deleg-row--vencida' : ''}">
+      <tr data-id="${t.id}" class="${t.status === 'concluida' ? 'deleg-row--concluida' : ''} ${vencida ? 'deleg-row--vencida' : ''} ${sel ? 'deleg-row--sel' : ''}">
+        <td class="deleg-td--sel"><input type="checkbox" data-deleg-sel="${t.id}" ${sel ? 'checked' : ''} aria-label="Selecionar delegação" /></td>
         <td class="deleg-td--risco">
           <span class="risco-bolinha risco-bolinha--${risco} ${manual ? 'risco-bolinha--manual' : ''}"
                 role="button" tabindex="0"
@@ -5883,8 +5897,16 @@ function renderDelegacoes() {
         </td>
         <td class="deleg-td--prazo">${_delegRotuloPrazo(t.prazo)}</td>
         <td class="deleg-td--status"><span class="badge ${stClass}">${escapeHTML(stRot)}</span></td>
-        <td class="deleg-td--prox">${t.proximaAcao ? escapeHTML(t.proximaAcao) : '<em>—</em>'}</td>
-        <td class="deleg-td--decisao">${t.decisaoNec ? escapeHTML(t.decisaoNec) : '<em>—</em>'}</td>
+        <td class="deleg-td--prox deleg-td--editavel"
+            contenteditable="true" spellcheck="true"
+            data-edit-campo="proximaAcao" data-edit-id="${t.id}"
+            data-placeholder="clique para anotar a próxima ação…"
+            ${t.proximaAcao ? '' : 'data-vazio="1"'}>${escapeHTML(t.proximaAcao || '')}</td>
+        <td class="deleg-td--decisao deleg-td--editavel"
+            contenteditable="true" spellcheck="true"
+            data-edit-campo="decisaoNec" data-edit-id="${t.id}"
+            data-placeholder="clique para anotar a decisão necessária…"
+            ${t.decisaoNec ? '' : 'data-vazio="1"'}>${escapeHTML(t.decisaoNec || '')}</td>
       </tr>
     `;
   }).join('');
@@ -5893,17 +5915,116 @@ function renderDelegacoes() {
   if (!tbody.dataset.bound) {
     tbody.dataset.bound = '1';
     tbody.addEventListener('click', (e) => {
+      // Não intercepta cliques em células editáveis nem em checkboxes
+      if (e.target.closest('.deleg-td--editavel')) return;
+      if (e.target.matches('input[type="checkbox"]')) return;
       const bol = e.target.closest('[data-risco-bolinha]');
       if (bol) { _ciclarRiscoManual(bol.getAttribute('data-risco-bolinha')); return; }
       const ab = e.target.closest('[data-abrir]');
       if (ab) { abrirEdicao(ab.getAttribute('data-abrir')); return; }
     });
     tbody.addEventListener('keydown', (e) => {
+      // Em célula editável, Enter salva e sai do foco (sem quebrar linha).
+      const cell = e.target.closest && e.target.closest('.deleg-td--editavel');
+      if (cell && e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        cell.blur();
+        return;
+      }
+      if (cell && e.key === 'Escape') {
+        e.preventDefault();
+        // Restaura valor original e sai sem salvar
+        const id = cell.getAttribute('data-edit-id');
+        const campo = cell.getAttribute('data-edit-campo');
+        const t = tarefas.find(x => x.id === id);
+        cell.textContent = (t && t[campo]) || '';
+        if (!cell.textContent) cell.setAttribute('data-vazio', '1');
+        cell.blur();
+        return;
+      }
       if (e.key !== 'Enter' && e.key !== ' ') return;
       const bol = e.target.closest('[data-risco-bolinha]');
       if (bol) { e.preventDefault(); _ciclarRiscoManual(bol.getAttribute('data-risco-bolinha')); }
     });
+    // Foco em célula editável: limpa placeholder.
+    tbody.addEventListener('focusin', (e) => {
+      const cell = e.target.closest && e.target.closest('.deleg-td--editavel');
+      if (cell) cell.removeAttribute('data-vazio');
+    });
+    // Blur: salva valor.
+    tbody.addEventListener('focusout', (e) => {
+      const cell = e.target.closest && e.target.closest('.deleg-td--editavel');
+      if (cell) _salvarEdicaoInline(cell);
+    });
+    // Seleção por checkbox.
+    tbody.addEventListener('change', (e) => {
+      const cb = e.target.closest('[data-deleg-sel]');
+      if (!cb) return;
+      const id = cb.getAttribute('data-deleg-sel');
+      if (cb.checked) _delegSel.add(id); else _delegSel.delete(id);
+      const tr = cb.closest('tr');
+      if (tr) tr.classList.toggle('deleg-row--sel', cb.checked);
+      _atualizarBulkBar();
+      _atualizarCheckTodas();
+    });
   }
+
+  _atualizarBulkBar();
+  _atualizarCheckTodas();
+}
+
+// Salva a edição inline de Próxima ação / Decisão necessária.
+function _salvarEdicaoInline(cell) {
+  const id = cell.getAttribute('data-edit-id');
+  const campo = cell.getAttribute('data-edit-campo');
+  const t = tarefas.find(x => x.id === id);
+  if (!t) return;
+  const novoTxt = (cell.textContent || '').trim();
+  const atual = (t[campo] || '').trim();
+  if (novoTxt === atual) {
+    if (!novoTxt) cell.setAttribute('data-vazio', '1');
+    return;
+  }
+  cell.classList.add('deleg-td--saving');
+  if (novoTxt) {
+    t[campo] = novoTxt;
+  } else {
+    delete t[campo];
+  }
+  t.atualizadaEm = new Date().toISOString();
+  t._lwm = Date.now();
+  try {
+    salvarTarefas();
+    cell.classList.remove('deleg-td--saving');
+    cell.classList.add('deleg-td--saved');
+    setTimeout(() => cell.classList.remove('deleg-td--saved'), 600);
+    if (!novoTxt) cell.setAttribute('data-vazio', '1');
+  } catch (err) {
+    console.error('[delegacoes] falha ao salvar edição inline:', err);
+    cell.classList.remove('deleg-td--saving');
+    mostrarMsg('Falha ao salvar. Verifique a conexão.', true);
+  }
+}
+
+// Atualiza a barra de ações em lote.
+function _atualizarBulkBar() {
+  const bar = $('#deleg-bulk-bar');
+  const cnt = $('#deleg-bulk-count');
+  if (!bar) return;
+  const n = _delegSel.size;
+  if (cnt) cnt.textContent = String(n);
+  bar.hidden = n === 0;
+}
+
+// Atualiza o checkbox 'selecionar todas' do thead.
+function _atualizarCheckTodas() {
+  const cb = $('#deleg-sel-todas');
+  if (!cb) return;
+  const vis = $$('#deleg-tbody [data-deleg-sel]');
+  if (!vis.length) { cb.checked = false; cb.indeterminate = false; return; }
+  const marcadas = vis.filter(x => x.checked).length;
+  cb.checked = marcadas === vis.length;
+  cb.indeterminate = marcadas > 0 && marcadas < vis.length;
 }
 
 // Ciclo do círculo de risco: automático → verde → amarelo → vermelho → automático.
@@ -5934,14 +6055,211 @@ function _ciclarRiscoManual(id) {
 
 // Bind dos filtros (chamado uma vez no boot).
 function bindDelegacoesFiltros() {
-  ['#deleg-busca', '#deleg-status', '#deleg-risco', '#deleg-responsavel'].forEach(sel => {
+  ['#deleg-busca', '#deleg-status', '#deleg-risco', '#deleg-responsavel', '#deleg-mostrar-concluidas'].forEach(sel => {
     const el = $(sel);
     if (el && !el.dataset.bound) {
       el.dataset.bound = '1';
-      const ev = el.tagName === 'SELECT' ? 'change' : 'input';
+      const ev = el.tagName === 'SELECT' ? 'change'
+               : el.type === 'checkbox' ? 'change' : 'input';
       el.addEventListener(ev, renderDelegacoes);
     }
   });
+
+  // Checkbox 'selecionar todas as visíveis' no thead.
+  const cbTodas = $('#deleg-sel-todas');
+  if (cbTodas && !cbTodas.dataset.bound) {
+    cbTodas.dataset.bound = '1';
+    cbTodas.addEventListener('change', () => {
+      const vis = $$('#deleg-tbody [data-deleg-sel]');
+      vis.forEach(cb => {
+        cb.checked = cbTodas.checked;
+        const id = cb.getAttribute('data-deleg-sel');
+        if (cbTodas.checked) _delegSel.add(id); else _delegSel.delete(id);
+        const tr = cb.closest('tr');
+        if (tr) tr.classList.toggle('deleg-row--sel', cbTodas.checked);
+      });
+      _atualizarBulkBar();
+    });
+  }
+
+  // Botões da barra de ações em lote.
+  const btnLimpar = $('#deleg-bulk-limpar');
+  if (btnLimpar && !btnLimpar.dataset.bound) {
+    btnLimpar.dataset.bound = '1';
+    btnLimpar.addEventListener('click', () => {
+      _delegSel.clear();
+      renderDelegacoes();
+    });
+  }
+  const btnEmail = $('#deleg-bulk-email');
+  if (btnEmail && !btnEmail.dataset.bound) {
+    btnEmail.dataset.bound = '1';
+    btnEmail.addEventListener('click', abrirEmailLote);
+  }
+  const btnPlanner = $('#deleg-bulk-planner');
+  if (btnPlanner && !btnPlanner.dataset.bound) {
+    btnPlanner.dataset.bound = '1';
+    btnPlanner.addEventListener('click', enviarPlannerLote);
+  }
+
+  // Fechar dialog de preview.
+  $$('[data-close-dlg-deleg-email]').forEach(b => {
+    if (b.dataset.bound) return;
+    b.dataset.bound = '1';
+    b.addEventListener('click', () => {
+      const d = $('#dlg-deleg-email');
+      if (d && d.open) d.close();
+    });
+  });
+  const btnConfirmar = $('#deleg-email-confirmar');
+  if (btnConfirmar && !btnConfirmar.dataset.bound) {
+    btnConfirmar.dataset.bound = '1';
+    btnConfirmar.addEventListener('click', confirmarEmailLote);
+  }
+}
+
+// =================================================================
+// LEVA 34.2 — envio em lote
+// =================================================================
+
+// Constrói preview agrupado por responsável e abre o modal.
+function abrirEmailLote() {
+  if (!_delegSel.size) { mostrarMsg('Selecione ao menos uma delegação.', true); return; }
+  const selecionadas = Array.from(_delegSel)
+    .map(id => tarefas.find(t => t.id === id))
+    .filter(Boolean);
+
+  // Agrupa por responsável.
+  const grupos = new Map();
+  selecionadas.forEach(t => {
+    const r = (t.responsavel || '').trim() || '(sem responsável)';
+    if (!grupos.has(r)) grupos.set(r, []);
+    grupos.get(r).push(t);
+  });
+
+  // Renderiza um bloco por responsável com assunto e corpo editáveis.
+  const cont = $('#deleg-email-previews');
+  if (!cont) return;
+  cont.innerHTML = '';
+  Array.from(grupos.entries()).sort((a,b) => a[0].localeCompare(b[0], 'pt-BR')).forEach(([resp, lista], idx) => {
+    const assunto = _gerarAssuntoLote(resp, lista);
+    const corpo = _gerarCorpoLote(resp, lista);
+    const div = document.createElement('div');
+    div.className = 'deleg-email-preview';
+    div.dataset.grupoIdx = String(idx);
+    div.innerHTML = `
+      <div class="deleg-email-preview__head">
+        <strong>${escapeHTML(resp)}</strong>
+        <span class="muted">${lista.length} ${lista.length === 1 ? 'entrega' : 'entregas'}</span>
+      </div>
+      <div class="deleg-email-preview__field">
+        <label>Destinatário (e-mail)</label>
+        <input type="email" class="deleg-email-to" placeholder="informe o e-mail de ${escapeHTML(resp)}" value="${escapeHTML(_emailDoResponsavel(resp))}" />
+      </div>
+      <div class="deleg-email-preview__field">
+        <label>Assunto</label>
+        <input type="text" class="deleg-email-assunto" value="${escapeHTML(assunto)}" />
+      </div>
+      <div class="deleg-email-preview__field">
+        <label>Corpo</label>
+        <textarea class="deleg-email-corpo" rows="12">${escapeHTML(corpo)}</textarea>
+      </div>
+    `;
+    cont.appendChild(div);
+  });
+
+  const dlg = $('#dlg-deleg-email');
+  if (dlg && typeof dlg.showModal === 'function') dlg.showModal();
+}
+
+// Confirma o envio: abre um mailto: por grupo.
+function confirmarEmailLote() {
+  const blocos = $$('#deleg-email-previews .deleg-email-preview');
+  if (!blocos.length) return;
+  let abertos = 0;
+  blocos.forEach((bloco, i) => {
+    const to = bloco.querySelector('.deleg-email-to')?.value.trim() || '';
+    const assunto = bloco.querySelector('.deleg-email-assunto')?.value.trim() || '';
+    const corpo = bloco.querySelector('.deleg-email-corpo')?.value || '';
+    if (!to) { return; }
+    const href = 'mailto:' + encodeURIComponent(to)
+      + '?subject=' + encodeURIComponent(assunto)
+      + '&body=' + encodeURIComponent(corpo);
+    // Espaça as aberturas para o navegador não bloquear.
+    setTimeout(() => window.open(href, '_blank', 'noopener'), i * 250);
+    abertos++;
+  });
+  const dlg = $('#dlg-deleg-email');
+  if (dlg && dlg.open) dlg.close();
+  if (abertos === 0) {
+    mostrarMsg('Nenhum e-mail tinha destinatário preenchido.', true);
+  } else {
+    mostrarMsg(`${abertos} e-mail(s) abertos no cliente de correio.`);
+  }
+}
+
+// Tenta resolver o e-mail do responsável a partir da aba Pessoas (CRM).
+function _emailDoResponsavel(nome) {
+  try {
+    if (typeof pessoas !== 'undefined' && Array.isArray(pessoas)) {
+      const p = pessoas.find(x => (x.nome || '').trim().toLowerCase() === nome.trim().toLowerCase());
+      if (p && p.email) return p.email;
+    }
+  } catch (_) {}
+  return '';
+}
+
+function _gerarAssuntoLote(resp, lista) {
+  const hoje = fmtData(hojeISO());
+  return `Acompanhamento de delegações — ${hoje}`;
+}
+
+function _gerarCorpoLote(resp, lista) {
+  const primeiroNome = (resp || '').split(/\s+/)[0] || '';
+  let txt = `Prezad${_inferirGenero(primeiroNome)} ${primeiroNome},\n\n`;
+  txt += `Solicito a gentileza de prestar atualização sobre as entregas abaixo, sob sua responsabilidade:\n\n`;
+  lista.sort((a,b) => (a.prazo || '9999-12-31').localeCompare(b.prazo || '9999-12-31'));
+  lista.forEach((t, i) => {
+    const num = i + 1;
+    const prazo = t.prazo ? fmtData(t.prazo) : 'sem prazo';
+    const status = STATUS_ROTULOS[t.status] || t.status || '—';
+    txt += `${num}. ${t.titulo || '(sem título)'}\n`;
+    txt += `   Prazo: ${prazo} · Status atual: ${status}\n`;
+    if (t.proximaAcao) txt += `   Próxima ação esperada: ${t.proximaAcao}\n`;
+    if (t.decisaoNec)  txt += `   Decisão pendente: ${t.decisaoNec}\n`;
+    txt += '\n';
+  });
+  txt += `Peço a gentileza de retornar com posicionamento até ${_calcularDataRetorno()}, indicando o andamento de cada item.\n\n`;
+  txt += `Atenciosamente.`;
+  return txt;
+}
+
+function _inferirGenero(primeiroNome) {
+  // Heurística simples: nomes terminados em 'a' → 'a', senão 'o'.
+  // Usuário pode ajustar manualmente no preview.
+  if (!primeiroNome) return 'o(a)';
+  return /a$/i.test(primeiroNome) ? 'a' : 'o';
+}
+
+function _calcularDataRetorno() {
+  const d = new Date();
+  d.setDate(d.getDate() + 3);
+  // pula fim de semana
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  return fmtData(d.toISOString().slice(0,10));
+}
+
+// Envia cada delegação selecionada para o Planner reutilizando enviarParaPlanner.
+function enviarPlannerLote() {
+  if (!_delegSel.size) { mostrarMsg('Selecione ao menos uma delegação.', true); return; }
+  const ids = Array.from(_delegSel);
+  if (ids.length > 8) {
+    if (!confirm(`Você selecionou ${ids.length} delegações. O navegador abrirá ${ids.length} janelas do Microsoft Forms (uma por tarefa). Continuar?`)) return;
+  }
+  ids.forEach((id, i) => {
+    setTimeout(() => enviarParaPlanner(id), i * 350);
+  });
+  mostrarMsg(`${ids.length} formulário(s) do Planner abertos. Envie cada um para criar a tarefa.`);
 }
 
 // ---- Render lista de reuniões ----

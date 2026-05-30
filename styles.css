@@ -2910,3 +2910,137 @@ select {
   padding: 32px 16px;
   color: #64748b;
 }
+
+/* =================================================================
+   LEVA 34.2 — Delegações operacional
+   Edição inline, seleção em lote, bulk bar.
+   ================================================================= */
+.deleg-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.88em;
+  color: #475569;
+  cursor: pointer;
+  user-select: none;
+}
+.deleg-toggle input { cursor: pointer; }
+
+.deleg-th--sel { width: 28px; padding-left: 12px; padding-right: 4px; }
+.deleg-td--sel { width: 28px; padding-left: 12px; padding-right: 4px; }
+.deleg-td--sel input { cursor: pointer; }
+
+/* Linha selecionada */
+.deleg-tabela tbody tr.deleg-row--sel { background: #eff6ff; }
+.deleg-tabela tbody tr.deleg-row--sel:hover { background: #e0ecff; }
+
+/* Células editáveis (Próxima ação, Decisão necessária) */
+.deleg-td--editavel {
+  cursor: text;
+  position: relative;
+  transition: background 0.1s ease;
+}
+.deleg-td--editavel:hover { background: #f8fafc; }
+.deleg-td--editavel:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+  background: #fff;
+}
+.deleg-td--editavel:empty::before,
+.deleg-td--editavel[data-vazio="1"]::before {
+  content: attr(data-placeholder);
+  color: #cbd5e1;
+  font-style: normal;
+  pointer-events: none;
+}
+.deleg-td--editavel.deleg-td--saving { background: #fef9c3; }
+.deleg-td--editavel.deleg-td--saved { background: #dcfce7; }
+
+/* Barra de ações em lote */
+.deleg-bulk-bar {
+  position: sticky;
+  bottom: 16px;
+  margin-top: 14px;
+  background: #0f172a;
+  color: #fff;
+  border-radius: 10px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 8px 24px rgba(15,23,42,0.18);
+  flex-wrap: wrap;
+}
+.deleg-bulk-bar__count { font-size: 0.95em; }
+.deleg-bulk-bar__count strong { font-size: 1.15em; color: #fbbf24; margin-right: 4px; }
+.deleg-bulk-bar__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.deleg-bulk-bar__actions .btn--ghost {
+  background: transparent;
+  color: #cbd5e1;
+  border: 1px solid #334155;
+}
+.deleg-bulk-bar__actions .btn--ghost:hover {
+  background: #1e293b;
+  color: #fff;
+}
+.deleg-bulk-bar__actions .btn--secondary {
+  background: #475569;
+  color: #fff;
+  border: 1px solid #475569;
+}
+.deleg-bulk-bar__actions .btn--secondary:hover {
+  background: #334155;
+}
+
+/* Preview de e-mail em lote */
+.modal--wide { max-width: 800px; width: 96vw; }
+.deleg-email-preview {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 14px;
+  background: #fff;
+}
+.deleg-email-preview__head {
+  background: #f8fafc;
+  padding: 10px 14px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.deleg-email-preview__head strong { color: #0f172a; }
+.deleg-email-preview__head .muted { color: #64748b; font-size: 0.85em; }
+.deleg-email-preview__field {
+  padding: 8px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.9em;
+}
+.deleg-email-preview__field label {
+  display: block;
+  font-weight: 600;
+  color: #475569;
+  font-size: 0.78em;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 4px;
+}
+.deleg-email-preview__field input,
+.deleg-email-preview__field textarea {
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 0.95em;
+  background: #fff;
+  color: #0f172a;
+  resize: vertical;
+}
+.deleg-email-preview__field textarea { min-height: 180px; line-height: 1.5; }
