@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260530c" />
+  <link rel="stylesheet" href="styles.css?v=20260530d" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a3d7a'/%3E%3Cpath d='M9 11h14M9 16h14M9 21h9' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='25.5' cy='21' r='2' fill='%23f08000'/%3E%3C/svg%3E" />
 
   <!-- Bibliotecas: jsPDF, html2canvas, SheetJS, Chart.js -->
@@ -433,7 +433,6 @@
       <div class="selecao-bar" id="selecao-bar" hidden>
         <span><strong id="selecao-count">0</strong> tarefa(s) selecionada(s)</span>
         <button class="btn btn--ghost btn--sm" id="btn-limpar-selecao">Limpar</button>
-        <button class="btn btn--primary btn--sm" id="btn-criar-reuniao">Criar reunião com selecionadas</button>
         <button class="btn btn--primary btn--sm" id="btn-emailar-lote">E-mail em lote</button>
       </div>
       </div><!-- /subpanel-pendentes -->
@@ -549,16 +548,14 @@
               <tr>
                 <th class="deleg-th deleg-th--sel"><input type="checkbox" id="deleg-sel-todas" title="Selecionar todas as delegações visíveis" /></th>
                 <th class="deleg-th deleg-th--risco" title="Clique no círculo para alternar verde→amarelo→vermelho→automático">Risco</th>
-                <th class="deleg-th">Responsável</th>
                 <th class="deleg-th">Entrega</th>
                 <th class="deleg-th">Prazo</th>
                 <th class="deleg-th">Status</th>
                 <th class="deleg-th">Próxima ação</th>
-                <th class="deleg-th">Decisão necessária</th>
               </tr>
             </thead>
             <tbody id="deleg-tbody">
-              <tr><td colspan="8" class="muted" style="padding:24px;text-align:center">Carregando delegações…</td></tr>
+              <tr><td colspan="6" class="muted" style="padding:24px;text-align:center">Carregando delegações…</td></tr>
             </tbody>
           </table>
         </div>
@@ -1225,7 +1222,7 @@
   <script src="firebase-config.js?v=20260506aa"></script>
   <script src="firebase-sync.js?v=20260528e"></script>
   <script src="ia-gemini.js?v=20260506aa"></script>
-  <script src="app.js?v=20260530c"></script>
+  <script src="app.js?v=20260530d"></script>
   <!-- Captura rápida em linguagem natural + voz -->
   <script src="quick-capture.js?v=20260506aa"></script>
   <!-- Leva 31: Decisões e CRM Pessoas -->

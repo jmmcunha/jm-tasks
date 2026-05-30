@@ -5859,7 +5859,7 @@ function renderDelegacoes() {
   Array.from(_delegSel).forEach(id => { if (!visiveis.has(id)) _delegSel.delete(id); });
 
   if (!filtrados.length) {
-    tbody.innerHTML = `<tr><td colspan="8" class="deleg-vazio">${delegacoes.length ? 'Nenhuma delegação corresponde aos filtros.' : 'Ainda não há delegações. Crie uma tarefa preenchendo o campo Responsável.'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="deleg-vazio">${delegacoes.length ? 'Nenhuma delegação corresponde aos filtros.' : 'Ainda não há delegações. Crie uma tarefa preenchendo o campo Responsável.'}</td></tr>`;
     _atualizarBulkBar();
     return;
   }
@@ -5902,7 +5902,7 @@ function renderDelegacoes() {
     ].filter(Boolean).join(' ');
     const cabecalho = `
       <tr class="deleg-grupo-row" data-deleg-grupo="${escapeHTML(chave)}">
-        <td colspan="8" class="deleg-grupo-td">
+        <td colspan="6" class="deleg-grupo-td">
           <button type="button" class="deleg-grupo-toggle" data-deleg-grupo-toggle="${escapeHTML(chave)}" aria-expanded="${colapsado ? 'false' : 'true'}">
             <span class="deleg-grupo-caret">${colapsado ? '▸' : '▾'}</span>
             <span class="deleg-grupo-nome">${escapeHTML(nome)}</span>
@@ -5965,7 +5965,6 @@ function _renderLinhaDelegacao(t, risco) {
                 title="${manual ? 'Risco manual: ' + risco + '. Clique para mudar (ciclo: verde → amarelo → vermelho → automático).' : 'Risco automático: ' + risco + '. Clique para sobrescrever manualmente.'}"
                 aria-label="Risco ${risco}${manual ? ' (manual)' : ' (automático)'}"></span>
         </td>
-        <td class="deleg-td--responsavel">${escapeHTML(t.responsavel || '')}</td>
         <td class="deleg-td--entrega">
           <span class="deleg-entrega-titulo" data-abrir="${t.id}">${escapeHTML(t.titulo || '(sem título)')}</span>
           ${obj ? `<span class="deleg-oe">OE ${escapeHTML(obj.id)}</span>` : ''}
@@ -5977,11 +5976,6 @@ function _renderLinhaDelegacao(t, risco) {
             data-edit-campo="proximaAcao" data-edit-id="${t.id}"
             data-placeholder="clique para anotar a próxima ação…"
             ${t.proximaAcao ? '' : 'data-vazio="1"'}>${escapeHTML(t.proximaAcao || '')}</td>
-        <td class="deleg-td--decisao deleg-td--editavel"
-            contenteditable="true" spellcheck="true"
-            data-edit-campo="decisaoNec" data-edit-id="${t.id}"
-            data-placeholder="clique para anotar a decisão necessária…"
-            ${t.decisaoNec ? '' : 'data-vazio="1"'}>${escapeHTML(t.decisaoNec || '')}</td>
       </tr>
     `;
   }
