@@ -6055,6 +6055,11 @@ function _salvarEdicaoInline(cell) {
   } else {
     delete t[campo];
   }
+  // Leva 34.6: salvar Próxima ação também registra um andamento na tarefa.
+  if (campo === 'proximaAcao' && novoTxt) {
+    if (!Array.isArray(t.andamentos)) t.andamentos = [];
+    t.andamentos.push({ em: new Date().toISOString(), texto: 'Próxima ação: ' + novoTxt });
+  }
   t.atualizadaEm = new Date().toISOString();
   t._lwm = Date.now();
   try {
