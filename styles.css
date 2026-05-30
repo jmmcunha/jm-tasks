@@ -2794,3 +2794,119 @@ select {
   padding: 0.5rem;
 }
 .diff-row--sug .diff-row__label { color: #7a5a00; }
+
+/* =================================================================
+   LEVA 34.1 — Aba Delegações (substitui Reuniões)
+   Tabela densa com risco automático/manual, edição inline futura.
+   ================================================================= */
+.deleg-contadores {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  font-size: 0.85em;
+}
+.deleg-contadores .deleg-cont {
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #f8fafc;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #334155;
+  font-weight: 500;
+}
+.deleg-contadores .deleg-cont strong { color: #0f172a; }
+.deleg-contadores .deleg-cont--vermelho { border-color: #fca5a5; background: #fef2f2; color: #991b1b; }
+.deleg-contadores .deleg-cont--vermelho strong { color: #7f1d1d; }
+.deleg-contadores .deleg-cont--amarelo { border-color: #fde68a; background: #fffbeb; color: #854d0e; }
+.deleg-contadores .deleg-cont--amarelo strong { color: #713f12; }
+.deleg-contadores .deleg-cont--verde { border-color: #bbf7d0; background: #f0fdf4; color: #166534; }
+.deleg-contadores .deleg-cont--verde strong { color: #14532d; }
+.deleg-contadores .deleg-cont--cinza { border-color: #e2e8f0; background: #f8fafc; color: #475569; }
+
+.deleg-tabela-wrap {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.deleg-tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92em;
+  background: #fff;
+}
+.deleg-tabela thead th.deleg-th {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  font-weight: 600;
+  color: #334155;
+  padding: 9px 10px;
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.deleg-tabela tbody td {
+  border-bottom: 1px solid #f1f5f9;
+  padding: 8px 10px;
+  vertical-align: top;
+  color: #0f172a;
+}
+.deleg-tabela tbody tr:hover { background: #f8fafc; }
+.deleg-tabela tbody tr.deleg-row--concluida { opacity: 0.55; }
+.deleg-tabela tbody tr.deleg-row--vencida td.deleg-td--prazo { color: #b91c1c; font-weight: 600; }
+
+.deleg-td--risco { width: 36px; text-align: center; padding-left: 12px; }
+.deleg-td--responsavel { min-width: 130px; font-weight: 500; color: #1e293b; }
+.deleg-td--entrega { min-width: 240px; }
+.deleg-td--entrega .deleg-entrega-titulo {
+  color: #0f172a;
+  cursor: pointer;
+  display: inline;
+}
+.deleg-td--entrega .deleg-entrega-titulo:hover { text-decoration: underline; }
+.deleg-td--entrega .deleg-oe {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 0.75em;
+  color: #64748b;
+}
+.deleg-td--prazo { min-width: 110px; white-space: nowrap; color: #475569; }
+.deleg-td--prazo .deleg-prazo-rel { display: block; font-size: 0.78em; color: #64748b; }
+.deleg-td--status { min-width: 120px; }
+.deleg-td--status .badge { font-size: 0.78em; }
+.deleg-td--prox, .deleg-td--decisao { min-width: 180px; color: #334155; font-size: 0.92em; }
+.deleg-td--prox em, .deleg-td--decisao em { color: #94a3b8; font-style: normal; }
+
+/* Círculo de risco — clicável */
+.risco-bolinha {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid rgba(0,0,0,0.08);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.04) inset;
+  vertical-align: middle;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.risco-bolinha:hover { transform: scale(1.15); }
+.risco-bolinha:focus { outline: 2px solid #2563eb; outline-offset: 2px; }
+.risco-bolinha--verde   { background: #16a34a; }
+.risco-bolinha--amarelo { background: #eab308; }
+.risco-bolinha--vermelho{ background: #dc2626; }
+.risco-bolinha--cinza   { background: #94a3b8; }
+.risco-bolinha--manual {
+  border-color: #0f172a;
+  box-shadow: 0 0 0 1px #fff inset, 0 0 0 2px #0f172a;
+}
+
+.deleg-vazio {
+  text-align: center;
+  padding: 32px 16px;
+  color: #64748b;
+}

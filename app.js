@@ -716,6 +716,7 @@ function initApp() {
   bindModaisGlobais();
   bindReunioes();
   bindReuniaoViewToggle();
+  bindDelegacoesFiltros();
   bindGuiaOEs();
   bindSecurityConfig();
   preencherDataInicioPadrao();
@@ -778,10 +779,12 @@ function trocarAba(nome) {
   if (nome === 'revisao') renderRevisao();
   if (nome === 'config') renderConfig();
   if (nome === 'reunioes') {
+    // Leva 34.1: aba Reuniões removida da UI; fallback caso algum link antigo persista.
     const vComp = $('#view-compromissos');
     if (vComp && !vComp.hidden) renderPainelCompromissos();
     else renderReunioes();
   }
+  if (nome === 'delegacoes') renderDelegacoes();
 }
 
 // Leva 27.1: ativa a navegacao mobile (barra inferior, FAB e folha
@@ -2078,13 +2081,12 @@ function renderGrupos(lista) {
     el.querySelector('.tarefa__titulo').addEventListener('click', () => abrirEdicao(id));
     el.querySelector('[data-edit]').addEventListener('click', () => abrirEdicao(id));
     el.querySelector('[data-del]').addEventListener('click', () => excluirTarefa(id));
-    el.querySelector('[data-email]').addEventListener('click', () => abrirIAEmailDireto(id));
+    // Leva 34.1: botões E-mail e Planner removidos do card de tarefa.
+    // Essas ações serão reintroduzidas em lote dentro da aba Delegações (Leva 2).
     // Leva 33.12: botão "Andamento vinculado" substitui o antigo "Histórico".
     // Abre o modal de edição já na aba Andamento.
     const btnAnd = el.querySelector('[data-andamento]');
     if (btnAnd) btnAnd.addEventListener('click', () => abrirEdicao(id, 'andamento'));
-    const btnPlanner = el.querySelector('[data-planner]');
-    if (btnPlanner) btnPlanner.addEventListener('click', () => enviarParaPlanner(id));
     el.querySelector('.tarefa__status-sel').addEventListener('change', e => alterarStatus(id, e.target.value));
     const ck = el.querySelector('.tarefa-select');
     if (ck) ck.addEventListener('change', () => {
@@ -2144,9 +2146,7 @@ function renderTarefa(t) {
         <select class="tarefa__status-sel" aria-label="Alterar status">
           ${Object.entries(STATUS_ROTULOS).map(([v, r]) => `<option value="${v}" ${t.status === v ? 'selected' : ''}>${r}</option>`).join('')}
         </select>
-        <button class="btn btn--ghost btn--sm" data-email title="Gerar e-mail">E-mail</button>
         <button class="btn btn--ghost btn--sm" data-andamento title="Andamento vinculado a esta tarefa">Andamento${Array.isArray(t.andamentos) && t.andamentos.length ? ` (${t.andamentos.length})` : ''}</button>
-        <button class="btn btn--ghost btn--sm" data-planner title="Abrir Microsoft Forms pré-preenchido para criar tarefa no Planner">Planner</button>
         <button class="icon-btn" data-edit title="Editar"><svg viewBox="0 0 16 16"><path d="M11 1l4 4-9 9H2v-4l9-9z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></button>
         <button class="icon-btn danger" data-del title="Excluir"><svg viewBox="0 0 16 16"><path d="M3 4h10M5 4v9h6V4M6 4V2h4v2M6 7v4M10 7v4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
       </div>
@@ -5735,6 +5735,213 @@ function agendarReuniaoNoTeams(id) {
 // (sem registrar reunião no app — uso casual)
 function novaReuniaoDiretoNoTeams() {
   window.open('https://teams.microsoft.com/l/meeting/new', '_blank', 'noopener');
+}
+
+// =================================================================
+// LEVA 34.1 — Aba Delegações
+// Toda tarefa com `responsavel` preenchido é uma delegação.
+// Risco automático conservador, sobrescrevível pelo usuário (ciclo:
+// automático → verde → amarelo → vermelho → automático).
+// =================================================================
+
+// calcularRisco — devolve uma das cores: 'verde' | 'amarelo' | 'vermelho' | 'cinza'.
+// Se a tarefa tem `riscoManual=true` e `risco` definido, devolve esse valor.
+// Critérios automáticos (conservadores):
+//   • Sem prazo e sem andamento  → cinza
+//   • Vencida (prazo passou)     → vermelho
+//   • Sem andamento > 10 dias    → vermelho
+//   • Prazo nos próximos 3 dias  → amarelo
+//   • Sem andamento 6-10 dias    → amarelo
+//   • Demais casos no prazo      → verde
+// Tarefa concluída fica sempre verde, independente do prazo.
+function calcularRisco(t) {
+  if (!t) return 'cinza';
+  if (t.riscoManual && t.risco) return t.risco;
+  if (t.status === 'concluida') return 'verde';
+  const hoje = hojeISO();
+  const ultAnd = (Array.isArray(t.andamentos) && t.andamentos.length)
+    ? t.andamentos.map(a => a.em).sort().slice(-1)[0] : null;
+  const diasSemAnd = ultAnd ? diasEntre(ultAnd.slice(0,10), hoje) : null;
+  const diasAtePrazo = t.prazo ? diasEntre(hoje, t.prazo) : null; // negativo se passou
+  // Vermelho: vencida ou sem mexer há mais de 10 dias
+  if (diasAtePrazo !== null && diasAtePrazo < 0) return 'vermelho';
+  if (diasSemAnd !== null && diasSemAnd > 10) return 'vermelho';
+  // Amarelo: prazo apertado (<=3 dias) ou sem mexer 6-10 dias
+  if (diasAtePrazo !== null && diasAtePrazo <= 3) return 'amarelo';
+  if (diasSemAnd !== null && diasSemAnd >= 6) return 'amarelo';
+  // Sem prazo e sem andamento: cinza (sem dados para julgar)
+  if (diasAtePrazo === null && diasSemAnd === null) return 'cinza';
+  // Caso geral: verde
+  return 'verde';
+}
+
+// Devolve a posição da cor para ordenação (vermelho primeiro).
+function _rankRisco(c) {
+  return { vermelho: 0, amarelo: 1, verde: 2, cinza: 3 }[c] ?? 4;
+}
+
+function _delegRotuloPrazo(iso) {
+  if (!iso) return '<em>sem prazo</em>';
+  const dias = diasEntre(hojeISO(), iso);
+  let rel = '';
+  if (dias === 0) rel = 'hoje';
+  else if (dias === 1) rel = 'amanhã';
+  else if (dias === -1) rel = 'ontem';
+  else if (dias < 0) rel = `vencido há ${-dias} dias`;
+  else rel = `em ${dias} dias`;
+  return `${fmtData(iso)}<span class="deleg-prazo-rel">${rel}</span>`;
+}
+
+// Popula o dropdown de responsáveis com valores únicos.
+function _populaDropdownResponsaveis(delegacoes) {
+  const sel = $('#deleg-responsavel');
+  if (!sel) return;
+  const atual = sel.value;
+  const nomes = Array.from(new Set(delegacoes.map(t => (t.responsavel || '').trim()).filter(Boolean))).sort((a,b) => a.localeCompare(b, 'pt-BR'));
+  sel.innerHTML = '<option value="">Todos os responsáveis</option>' +
+    nomes.map(n => `<option value="${escapeHTML(n)}">${escapeHTML(n)}</option>`).join('');
+  if (atual && nomes.includes(atual)) sel.value = atual;
+}
+
+// Render principal da aba Delegações.
+function renderDelegacoes() {
+  const tbody = $('#deleg-tbody');
+  const contad = $('#deleg-contadores');
+  if (!tbody) return;
+
+  // Filtra apenas tarefas com responsável preenchido (= delegação).
+  const delegacoes = (tarefas || []).filter(t => (t.responsavel || '').trim().length > 0);
+  _populaDropdownResponsaveis(delegacoes);
+
+  // Lê filtros
+  const busca = ($('#deleg-busca')?.value || '').trim().toLowerCase();
+  const fStatus = $('#deleg-status')?.value || '';
+  const fRisco  = $('#deleg-risco')?.value || '';
+  const fResp   = $('#deleg-responsavel')?.value || '';
+
+  // Calcula risco e aplica filtros
+  const enriquecidas = delegacoes.map(t => ({ t, risco: calcularRisco(t) }));
+
+  // Contadores (sobre conjunto pré-filtro)
+  const cont = { vermelho:0, amarelo:0, verde:0, cinza:0 };
+  enriquecidas.forEach(({risco}) => { cont[risco] = (cont[risco]||0) + 1; });
+  if (contad) {
+    contad.innerHTML = `
+      <span class="deleg-cont deleg-cont--vermelho" title="Vermelho — exige atenção urgente">● <strong>${cont.vermelho}</strong> em risco</span>
+      <span class="deleg-cont deleg-cont--amarelo" title="Amarelo — acompanhar de perto">● <strong>${cont.amarelo}</strong> em atenção</span>
+      <span class="deleg-cont deleg-cont--verde" title="Verde — fluindo no prazo">● <strong>${cont.verde}</strong> em dia</span>
+      ${cont.cinza ? `<span class="deleg-cont deleg-cont--cinza" title="Sem dados suficientes">● <strong>${cont.cinza}</strong> sem dado</span>` : ''}
+      <span class="deleg-cont" title="Total de delegações ativas"><strong>${enriquecidas.length}</strong> no total</span>
+    `;
+  }
+
+  let filtrados = enriquecidas.filter(({t, risco}) => {
+    if (fStatus && t.status !== fStatus) return false;
+    if (fRisco && risco !== fRisco) return false;
+    if (fResp && (t.responsavel || '').trim() !== fResp) return false;
+    if (busca) {
+      const hay = [t.titulo, t.responsavel, t.resultado, t.proximaAcao, t.decisaoNec, t.oeId]
+        .map(x => String(x || '').toLowerCase()).join(' | ');
+      if (!hay.includes(busca)) return false;
+    }
+    return true;
+  });
+
+  // Ordena: vermelho > amarelo > verde > cinza; dentro de cada cor, prazo asc (nulos no fim)
+  filtrados.sort((a, b) => {
+    const dr = _rankRisco(a.risco) - _rankRisco(b.risco);
+    if (dr !== 0) return dr;
+    const ap = a.t.prazo || '9999-12-31';
+    const bp = b.t.prazo || '9999-12-31';
+    return ap.localeCompare(bp);
+  });
+
+  if (!filtrados.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="deleg-vazio">${delegacoes.length ? 'Nenhuma delegação corresponde aos filtros.' : 'Ainda não há delegações. Crie uma tarefa preenchendo o campo Responsável.'}</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtrados.map(({t, risco}) => {
+    const manual = !!t.riscoManual;
+    const vencida = t.prazo && t.status !== 'concluida' && t.prazo < hojeISO();
+    const stRot = STATUS_ROTULOS[t.status] || t.status || '—';
+    const stClass = 'badge--' + (t.status === 'em-andamento' ? 'andamento' : t.status === 'concluida' ? 'concluida' : t.status === 'bloqueada' ? 'bloqueada' : '');
+    const obj = OBJETIVOS.find(o => o.id === t.oeId);
+    return `
+      <tr data-id="${t.id}" class="${t.status === 'concluida' ? 'deleg-row--concluida' : ''} ${vencida ? 'deleg-row--vencida' : ''}">
+        <td class="deleg-td--risco">
+          <span class="risco-bolinha risco-bolinha--${risco} ${manual ? 'risco-bolinha--manual' : ''}"
+                role="button" tabindex="0"
+                data-risco-bolinha="${t.id}"
+                title="${manual ? 'Risco manual: ' + risco + '. Clique para mudar (ciclo: verde → amarelo → vermelho → automático).' : 'Risco automático: ' + risco + '. Clique para sobrescrever manualmente.'}"
+                aria-label="Risco ${risco}${manual ? ' (manual)' : ' (automático)'}"></span>
+        </td>
+        <td class="deleg-td--responsavel">${escapeHTML(t.responsavel || '')}</td>
+        <td class="deleg-td--entrega">
+          <span class="deleg-entrega-titulo" data-abrir="${t.id}">${escapeHTML(t.titulo || '(sem título)')}</span>
+          ${obj ? `<span class="deleg-oe">OE ${escapeHTML(obj.id)}</span>` : ''}
+        </td>
+        <td class="deleg-td--prazo">${_delegRotuloPrazo(t.prazo)}</td>
+        <td class="deleg-td--status"><span class="badge ${stClass}">${escapeHTML(stRot)}</span></td>
+        <td class="deleg-td--prox">${t.proximaAcao ? escapeHTML(t.proximaAcao) : '<em>—</em>'}</td>
+        <td class="deleg-td--decisao">${t.decisaoNec ? escapeHTML(t.decisaoNec) : '<em>—</em>'}</td>
+      </tr>
+    `;
+  }).join('');
+
+  // Liga handlers da tabela (delegado uma vez via dataset flag).
+  if (!tbody.dataset.bound) {
+    tbody.dataset.bound = '1';
+    tbody.addEventListener('click', (e) => {
+      const bol = e.target.closest('[data-risco-bolinha]');
+      if (bol) { _ciclarRiscoManual(bol.getAttribute('data-risco-bolinha')); return; }
+      const ab = e.target.closest('[data-abrir]');
+      if (ab) { abrirEdicao(ab.getAttribute('data-abrir')); return; }
+    });
+    tbody.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const bol = e.target.closest('[data-risco-bolinha]');
+      if (bol) { e.preventDefault(); _ciclarRiscoManual(bol.getAttribute('data-risco-bolinha')); }
+    });
+  }
+}
+
+// Ciclo do círculo de risco: automático → verde → amarelo → vermelho → automático.
+function _ciclarRiscoManual(id) {
+  const t = (tarefas || []).find(x => x.id === id);
+  if (!t) return;
+  const ordem = ['verde', 'amarelo', 'vermelho'];
+  if (!t.riscoManual) {
+    // Atualmente automático → começa em verde manual
+    t.risco = 'verde';
+    t.riscoManual = true;
+  } else {
+    const idx = ordem.indexOf(t.risco);
+    if (idx === -1 || idx === ordem.length - 1) {
+      // Era vermelho ou inválido → volta para automático
+      delete t.risco;
+      t.riscoManual = false;
+      delete t.riscoAtualizadoEm;
+    } else {
+      t.risco = ordem[idx + 1];
+    }
+  }
+  if (t.riscoManual) t.riscoAtualizadoEm = new Date().toISOString();
+  t.atualizadaEm = new Date().toISOString();
+  salvarTarefas();
+  renderDelegacoes();
+}
+
+// Bind dos filtros (chamado uma vez no boot).
+function bindDelegacoesFiltros() {
+  ['#deleg-busca', '#deleg-status', '#deleg-risco', '#deleg-responsavel'].forEach(sel => {
+    const el = $(sel);
+    if (el && !el.dataset.bound) {
+      el.dataset.bound = '1';
+      const ev = el.tagName === 'SELECT' ? 'change' : 'input';
+      el.addEventListener(ev, renderDelegacoes);
+    }
+  });
 }
 
 // ---- Render lista de reuniões ----
