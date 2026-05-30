@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260530d" />
+  <link rel="stylesheet" href="styles.css?v=20260530e" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a3d7a'/%3E%3Cpath d='M9 11h14M9 16h14M9 21h9' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='25.5' cy='21' r='2' fill='%23f08000'/%3E%3C/svg%3E" />
 
   <!-- Bibliotecas: jsPDF, html2canvas, SheetJS, Chart.js -->
@@ -210,7 +210,6 @@
           </div>
           <div class="spacer"></div>
           <button class="btn btn--ghost btn--sm" id="btn-sugerir-quadrantes" title="Sugerir quadrante automaticamente para tarefas não classificadas" type="button">Sugerir quadrantes</button>
-          <button class="btn btn--ghost btn--sm" id="btn-retro" title="Retrospectiva semanal" type="button">Retrospectiva</button>
           <div class="export-group">
             <button class="btn btn--export" id="btn-pdf" title="Exportar PDF">PDF</button>
             <button class="btn btn--export" id="btn-xlsx" title="Exportar Excel">Excel</button>
@@ -433,7 +432,6 @@
       <div class="selecao-bar" id="selecao-bar" hidden>
         <span><strong id="selecao-count">0</strong> tarefa(s) selecionada(s)</span>
         <button class="btn btn--ghost btn--sm" id="btn-limpar-selecao">Limpar</button>
-        <button class="btn btn--primary btn--sm" id="btn-emailar-lote">E-mail em lote</button>
       </div>
       </div><!-- /subpanel-pendentes -->
 
@@ -565,7 +563,6 @@
         <div class="deleg-bulk-bar__actions">
           <button type="button" class="btn btn--ghost btn--sm" id="deleg-bulk-limpar">Limpar</button>
           <button type="button" class="btn btn--primary btn--sm" id="deleg-bulk-email">E-mail em lote</button>
-          <button type="button" class="btn btn--secondary btn--sm" id="deleg-bulk-planner">Planner em lote</button>
         </div>
       </div>
     </section>
@@ -1222,7 +1219,7 @@
   <script src="firebase-config.js?v=20260506aa"></script>
   <script src="firebase-sync.js?v=20260528e"></script>
   <script src="ia-gemini.js?v=20260506aa"></script>
-  <script src="app.js?v=20260530d"></script>
+  <script src="app.js?v=20260530e"></script>
   <!-- Captura rápida em linguagem natural + voz -->
   <script src="quick-capture.js?v=20260506aa"></script>
   <!-- Leva 31: Decisões e CRM Pessoas -->
