@@ -475,6 +475,38 @@ function migrarV1ParaV3(t) {
   };
 }
 
+// Leva 34.7: helpers de normalização
+function _msFromAny(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number' && isFinite(v)) return v;
+  if (typeof v === 'string') {
+    const n = Number(v);
+    if (isFinite(n) && /^\d+$/.test(v.trim())) return n;
+    const t = Date.parse(v);
+    if (!isNaN(t)) return t;
+  }
+  return null;
+}
+function _oeIdFromAny(base) {
+  if (base.oeId != null && base.oeId !== '') {
+    const n = Number(base.oeId);
+    if (isFinite(n) && n >= 1 && n <= 8) return n;
+  }
+  if (base.objetivoId != null && base.objetivoId !== '') {
+    const n = Number(base.objetivoId);
+    if (isFinite(n) && n >= 1 && n <= 8) return n;
+  }
+  // Deriva de string como "OE 5" / "oe 5" / "5"
+  if (typeof base.objetivo === 'string') {
+    const m = base.objetivo.match(/(\d+)/);
+    if (m) {
+      const n = Number(m[1]);
+      if (isFinite(n) && n >= 1 && n <= 8) return n;
+    }
+  }
+  return null;
+}
+
 function normalizarTarefa(t) {
   // garante shape v3 — útil para imports e cargas
   // IMPORTANTE: precisa preservar TODOS os campos da tarefa.
@@ -487,10 +519,15 @@ function normalizarTarefa(t) {
   // perda na nuvem. Corrige preservando o objeto original por spread e
   // apenas normalizando os campos de shape v3.
   const base = (t && typeof t === 'object') ? t : {};
-  return Object.assign({}, base, {
+  // Leva 34.7: oeId é única fonte de verdade; remove campo 'objetivo' string redundante.
+  const oeId = _oeIdFromAny(base);
+  // Leva 34.7: datas viram ms (número), aceitando string ISO legada.
+  const criadaMs = _msFromAny(base.criadaEm) ?? _msFromAny(base.criadoEm) ?? Date.now();
+  const atualizadaMs = _msFromAny(base.atualizadaEm) ?? _msFromAny(base.atualizadoEm) ?? criadaMs;
+  const out = Object.assign({}, base, {
     id: base.id || uid(),
     titulo: base.titulo || '',
-    oeId: base.oeId ?? base.objetivoId ?? null,
+    oeId: oeId,
     importante: (base.importante === true || base.importante === false) ? base.importante : null,
     urgente: (base.urgente === true || base.urgente === false) ? base.urgente : null,
     responsavel: base.responsavel || '',
@@ -500,10 +537,16 @@ function normalizarTarefa(t) {
     status: base.status || 'a-fazer',
     revisitarEm: base.revisitarEm || '',
     resultado: base.resultado || '',
-    criadaEm: base.criadaEm || base.criadoEm || new Date().toISOString(),
-    atualizadaEm: base.atualizadaEm || base.atualizadoEm || new Date().toISOString(),
+    criadaEm: criadaMs,
+    atualizadaEm: atualizadaMs,
     andamentos: Array.isArray(base.andamentos) ? base.andamentos.slice() : []
   });
+  // Remove campos redundantes do shape final
+  delete out.objetivo;
+  delete out.objetivoId;
+  delete out.criadoEm;
+  delete out.atualizadoEm;
+  return out;
 }
 
 // Tombstones de tarefas excluídas: lista de { id, _del: timestamp }
@@ -3102,7 +3145,7 @@ function _riaTarefaSlim(t, opts) {
     id: t.id,
     titulo: t.titulo || '',
     quadrante: quadranteDe(t),
-    oe: t.objetivo || '',
+    oe: (t.oeId != null ? 'OE ' + t.oeId : ''),
     responsavel: t.responsavel || '',
     prazo: t.prazo || '',
     status: t.status || '',
@@ -3367,7 +3410,7 @@ function _riaCamposComparados(orig, rev) {
   const compara = [
     { k: 'titulo',      label: 'Título' },
     { k: 'quadrante',   label: 'Quadrante', antesFn: t => quadranteDe(t) },
-    { k: 'oe',          label: 'OE',        antesFn: t => t.objetivo || '' },
+    { k: 'oe',          label: 'OE',        antesFn: t => (t.oeId != null ? 'OE ' + t.oeId : '') },
     { k: 'responsavel', label: 'Responsável' },
     { k: 'prazo',       label: 'Prazo' },
     { k: 'resultado',   label: 'Resultado' },
@@ -3602,7 +3645,12 @@ async function aplicarRevisaoIA() {
       t.importante = iu.importante;
       t.urgente = iu.urgente;
     }
-    if (rev.oe !== undefined) t.objetivo = String(rev.oe || '').trim();
+    if (rev.oe !== undefined) {
+      const m = String(rev.oe || '').match(/(\d+)/);
+      const n = m ? Number(m[1]) : null;
+      t.oeId = (n != null && n >= 1 && n <= 8) ? n : null;
+      delete t.objetivo;
+    }
     if (rev.responsavel !== undefined) t.responsavel = String(rev.responsavel || '').trim();
     if (rev.prazo !== undefined) t.prazo = String(rev.prazo || '').trim();
     if (rev.resultado !== undefined) t.resultado = String(rev.resultado || '').trim();
@@ -5753,11 +5801,11 @@ function novaReuniaoDiretoNoTeams() {
 //   • Prazo nos próximos 3 dias  → amarelo
 //   • Sem andamento 6-10 dias    → amarelo
 //   • Demais casos no prazo      → verde
-// Tarefa concluída fica sempre verde, independente do prazo.
+// Tarefa concluída fica sempre cinza (já encerrada, sem risco em curso).
 function calcularRisco(t) {
   if (!t) return 'cinza';
+  if (t.status === 'concluida') return 'cinza';
   if (t.riscoManual && t.risco) return t.risco;
-  if (t.status === 'concluida') return 'verde';
   const hoje = hojeISO();
   const ultAnd = (Array.isArray(t.andamentos) && t.andamentos.length)
     ? t.andamentos.map(a => a.em).sort().slice(-1)[0] : null;
@@ -5778,6 +5826,20 @@ function calcularRisco(t) {
 // Devolve a posição da cor para ordenação (vermelho primeiro).
 function _rankRisco(c) {
   return { vermelho: 0, amarelo: 1, verde: 2, cinza: 3 }[c] ?? 4;
+}
+
+// Leva 34.7: espelho de 'próxima ação' — devolve a última ocorrência de
+// 'Próxima ação: ...' nos andamentos. Fallback: campo legado t.proximaAcao.
+function _proximaAcaoEspelho(t) {
+  if (!t) return '';
+  const ands = Array.isArray(t.andamentos) ? t.andamentos.slice() : [];
+  ands.sort((a, b) => (a.em || '').localeCompare(b.em || ''));
+  for (let i = ands.length - 1; i >= 0; i--) {
+    const txt = (ands[i] && ands[i].texto) || '';
+    const m = txt.match(/^\s*Pr[óo]xima a[cç]ão\s*:\s*(.+)$/i);
+    if (m) return m[1].trim();
+  }
+  return (t.proximaAcao || '').toString();
 }
 
 function _delegRotuloPrazo(iso) {
@@ -5847,7 +5909,7 @@ function renderDelegacoes() {
     if (fRisco && risco !== fRisco) return false;
     if (fResp && (t.responsavel || '').trim() !== fResp) return false;
     if (busca) {
-      const hay = [t.titulo, t.responsavel, t.resultado, t.proximaAcao, t.decisaoNec, t.oeId]
+      const hay = [t.titulo, t.responsavel, t.resultado, _proximaAcaoEspelho(t), t.oeId]
         .map(x => String(x || '').toLowerCase()).join(' | ');
       if (!hay.includes(busca)) return false;
     }
@@ -5975,7 +6037,7 @@ function _renderLinhaDelegacao(t, risco) {
             contenteditable="true" spellcheck="true"
             data-edit-campo="proximaAcao" data-edit-id="${t.id}"
             data-placeholder="clique para anotar a próxima ação…"
-            ${t.proximaAcao ? '' : 'data-vazio="1"'}>${escapeHTML(t.proximaAcao || '')}</td>
+            ${_proximaAcaoEspelho(t) ? '' : 'data-vazio="1"'}>${escapeHTML(_proximaAcaoEspelho(t))}</td>
       </tr>
     `;
   }
@@ -6294,7 +6356,7 @@ function _gerarCorpoLote(resp, lista) {
     const status = STATUS_ROTULOS[t.status] || t.status || '—';
     txt += `${num}. ${t.titulo || '(sem título)'}\n`;
     txt += `   Prazo: ${prazo} · Status atual: ${status}\n`;
-    if (t.proximaAcao) txt += `   Próxima ação esperada: ${t.proximaAcao}\n`;
+    { const pa = _proximaAcaoEspelho(t); if (pa) txt += `   Próxima ação esperada: ${pa}\n`; }
     if (t.decisaoNec)  txt += `   Decisão pendente: ${t.decisaoNec}\n`;
     txt += '\n';
   });
@@ -7374,6 +7436,30 @@ function bindSecurityConfig() {
   const btnTrocar = $('#btn-sec-trocar');
   const btnBloquear = $('#btn-sec-bloquear');
   const btnApagar = $('#btn-sec-apagar');
+  const btnResync = $('#btn-sec-resync');
+  const btnSair = $('#btn-sec-sair');
+
+  // Leva 34.7: botões de Resincronizar e Sair (antes na faixa do rodapé)
+  if (btnResync) {
+    btnResync.addEventListener('click', () => {
+      const fb = document.getElementById('fb-resync');
+      if (fb) { fb.click(); return; }
+      try { location.reload(); } catch {}
+    });
+  }
+  if (btnSair) {
+    btnSair.addEventListener('click', async () => {
+      if (!confirm('Sair da conta? Os dados sincronizados ficarão na nuvem.')) return;
+      const fb = document.getElementById('fb-logout');
+      if (fb) { fb.click(); return; }
+      try {
+        if (window.firebase && window.firebase.auth) {
+          await window.firebase.auth().signOut();
+        }
+      } catch {}
+      try { location.reload(); } catch {}
+    });
+  }
 
   // Modo Firebase: cadeado local desativado.
   if (!window.Sec) {

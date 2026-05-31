@@ -219,14 +219,15 @@
   }
 
   function showUserBar(email) {
+    // Leva 34.7: faixa fixa no rodapé removida (redundante com Configurações).
+    // A função continua existindo para não quebrar chamadas, mas não renderiza nada visível.
     let el = document.getElementById('fb-userbar');
-    if (!el) {
-      el = document.createElement('div');
-      el.id = 'fb-userbar';
-      document.body.appendChild(el);
-    }
+    if (el) { el.remove(); }
+    el = document.createElement('div');
+    el.id = 'fb-userbar';
+    el.style.display = 'none';
+    document.body.appendChild(el);
     el.innerHTML = `<span>☁️ ${email}</span><button id="fb-resync" title="Buscar atualizações da equipe agora">Resincronizar</button><button id="fb-logout">Sair</button>`;
-    el.classList.add('show');
     el.querySelector('#fb-resync').addEventListener('click', async () => {
       showStatus('☁️ buscando atualizações…');
       try {
