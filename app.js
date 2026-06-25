@@ -3890,12 +3890,33 @@ async function importarJSON(e) {
     const dados = JSON.parse(txt);
     if (!Array.isArray(dados)) throw new Error();
     const escolha = await escolherImport(dados.length);
+    // Leva 34.10: ao importar, carimbamos _lwm e atualizadaEm com "agora"
+    // em TODAS as tarefas importadas. Sem isso, o _lwm antigo vindo do JSON
+    // perde no merge contra a versão remota e a importação "desaparece".
+    const agoraMs = Date.now();
+    const agoraIso = new Date(agoraMs).toISOString();
+    const carimbarImportada = (norm) => {
+      norm._lwm = agoraMs;
+      norm.atualizadaEm = agoraIso;
+      if (!norm.criadaEm) norm.criadaEm = agoraIso;
+      return norm;
+    };
     if (escolha === 'substituir') {
       // backup do estado atual antes de substituir
       _write(KEY_TAREFAS_V3 + '_backup', { tarefas, salvoEm: new Date().toISOString() });
+      // Tombstones para tudo que sai (ids que estavam locais e não voltam),
+      // para o remoto não ressuscitar essas tarefas após o snapshot.
+      const idsImportados = new Set(
+        dados.map(t => (t && t.id) ? String(t.id) : '').filter(Boolean)
+      );
+      for (const t of tarefas) {
+        if (t && t.id && !idsImportados.has(String(t.id))) {
+          adicionarTombstone(t.id);
+        }
+      }
       tarefas = [];
       for (const t of dados) {
-        const norm = normalizarTarefa(t);
+        const norm = carimbarImportada(normalizarTarefa(t));
         if (!norm.id) norm.id = uid();
         tarefas.push(norm);
       }
@@ -3907,7 +3928,7 @@ async function importarJSON(e) {
       const existentes = new Set(tarefas.map(t => t.id));
       let novas = 0;
       for (const t of dados) {
-        const norm = normalizarTarefa(t);
+        const norm = carimbarImportada(normalizarTarefa(t));
         if (!norm.id || existentes.has(norm.id)) norm.id = uid();
         tarefas.push(norm);
         novas++;
