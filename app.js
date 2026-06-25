@@ -3899,6 +3899,11 @@ async function importarJSON(e) {
       norm._lwm = agoraMs;
       norm.atualizadaEm = agoraIso;
       if (!norm.criadaEm) norm.criadaEm = agoraIso;
+      // Leva 34.10: import sempre reinicia status para 'a-fazer' (decisão do
+      // usuário: JSON pode trazer 'concluida' indevidamente e empurrar tudo
+      // para a aba Concluídas). Limpa concluidaEm correspondente.
+      norm.status = 'a-fazer';
+      delete norm.concluidaEm;
       return norm;
     };
     if (escolha === 'substituir') {
