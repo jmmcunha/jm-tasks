@@ -3899,11 +3899,8 @@ async function importarJSON(e) {
       norm._lwm = agoraMs;
       norm.atualizadaEm = agoraIso;
       if (!norm.criadaEm) norm.criadaEm = agoraIso;
-      // Leva 34.10: import sempre reinicia status para 'a-fazer' (decisão do
-      // usuário: JSON pode trazer 'concluida' indevidamente e empurrar tudo
-      // para a aba Concluídas). Limpa concluidaEm correspondente.
-      norm.status = 'a-fazer';
-      delete norm.concluidaEm;
+      // Leva 34.10c: respeita o status do JSON. Se vier 'concluida' por engano,
+      // basta usar a ação "Reabrir" ou "Apagar" na aba Concluídas.
       return norm;
     };
     if (escolha === 'substituir') {
@@ -8176,6 +8173,9 @@ window.renderTudo = renderTudo;
 window.salvarTarefas = salvarTarefas;
 window.popularResponsaveis = popularResponsaveis;
 window.uid = uid;
+// Leva 34.10c: exposicoes para o modulo de Concluidas (apagar/reabrir/limpar tudo).
+window.adicionarTombstone = adicionarTombstone;
+window.excluirTarefa = excluirTarefa;
 Object.defineProperty(window, 'tarefas', {
   get(){ return tarefas; },
   set(v){ tarefas = v; }

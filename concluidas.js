@@ -134,8 +134,9 @@
     const oeIdRaw = (t.oeId !== undefined && t.oeId !== null) ? t.oeId : t.objetivoId;
     const oeLabel = rotuloOE(oeIdRaw);
     const responsavel = (t.responsavel || '').trim();
+    const idEsc = esc(t.id || '');
     return `
-      <article class="task task--done" style="display:grid;grid-template-columns:1fr auto;gap:0.4rem 0.8rem;padding:0.7rem 0.9rem;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;margin-bottom:0.5rem;">
+      <article class="task task--done" data-id="${idEsc}" style="display:grid;grid-template-columns:1fr auto;gap:0.4rem 0.8rem;padding:0.7rem 0.9rem;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;margin-bottom:0.5rem;">
         <div>
           <div style="font-weight:600;color:#1e293b;">${esc(t.titulo || '(sem título)')}</div>
           <div class="muted" style="font-size:0.85em;margin-top:0.2rem;">
@@ -148,9 +149,118 @@
         <div style="text-align:right;font-size:0.82em;color:#475569;white-space:nowrap;">
           <div>Concluída em</div>
           <div style="font-weight:600;">${esc(dataExibida)}</div>
+          <div style="margin-top:0.45rem;display:flex;gap:0.3rem;justify-content:flex-end;">
+            <button type="button" data-acao="reabrir" data-id="${idEsc}" title="Reabrir (volta para A fazer)" style="border:1px solid #cbd5e1;background:#fff;color:#1e40af;padding:0.25rem 0.55rem;border-radius:6px;font-size:0.82em;cursor:pointer;">Reabrir</button>
+            <button type="button" data-acao="apagar" data-id="${idEsc}" title="Excluir tarefa permanentemente" style="border:1px solid #fecaca;background:#fff;color:#b91c1c;padding:0.25rem 0.55rem;border-radius:6px;font-size:0.82em;cursor:pointer;">Excluir</button>
+          </div>
         </div>
       </article>
     `;
+  }
+
+  // -----------------------------------------------------------------
+  // Ações (Leva 34.10c)
+  // -----------------------------------------------------------------
+
+  function _commitTarefas(arr) {
+    // Atualiza o estado em memória do app principal e persiste (carimba _lwm).
+    if (Array.isArray(window.tarefas)) {
+      // substitui in-place para não quebrar referências
+      window.tarefas.length = 0;
+      for (const x of arr) window.tarefas.push(x);
+    }
+    if (typeof window.salvarTarefas === 'function') {
+      window.salvarTarefas();
+    } else {
+      try { localStorage.setItem(KEY_TAR, JSON.stringify(arr)); } catch (e) {}
+    }
+    if (typeof window.renderTudo === 'function') window.renderTudo();
+    window.dispatchEvent(new Event('cebraspe:tarefas-atualizadas'));
+    render();
+  }
+
+  function apagarItem(id) {
+    const todas = carregarTarefas();
+    const t = todas.find(x => x && x.id === id);
+    if (!t) return;
+    const ok = window.confirm(`Excluir definitivamente:\n\n"${t.titulo || '(sem título)'}"?\n\nEssa ação não pode ser desfeita.`);
+    if (!ok) return;
+    const filtradas = todas.filter(x => x && x.id !== id);
+    if (typeof window.adicionarTombstone === 'function') {
+      window.adicionarTombstone(id);
+    }
+    _commitTarefas(filtradas);
+  }
+
+  function reabrirItem(id) {
+    const todas = carregarTarefas();
+    const t = todas.find(x => x && x.id === id);
+    if (!t) return;
+    const ok = window.confirm(`Reabrir tarefa:\n\n"${t.titulo || '(sem título)'}"?\n\nEla volta para "A fazer".`);
+    if (!ok) return;
+    const agoraIso = new Date().toISOString();
+    const novas = todas.map(x => {
+      if (!x || x.id !== id) return x;
+      const c = Object.assign({}, x);
+      c.status = 'a-fazer';
+      delete c.concluidaEm;
+      c.atualizadaEm = agoraIso;
+      // força _lwm novo para vencer o snapshot remoto
+      c._lwm = Date.now();
+      return c;
+    });
+    _commitTarefas(novas);
+  }
+
+  function apagarTodasConcluidas() {
+    const concl = listaConcluidas();
+    if (concl.length === 0) {
+      window.alert('Não há tarefas concluídas para apagar.');
+      return;
+    }
+    const ok1 = window.confirm(`Apagar ${concl.length} tarefa(s) concluída(s)?\n\nEssa ação não pode ser desfeita.`);
+    if (!ok1) return;
+    const palavra = window.prompt('Para confirmar, digite APAGAR (em maiúsculas):');
+    if (palavra !== 'APAGAR') {
+      window.alert('Cancelado.');
+      return;
+    }
+    const todas = carregarTarefas();
+    const idsAlvo = new Set(concl.map(x => x.id));
+    const filtradas = todas.filter(x => x && !idsAlvo.has(x.id));
+    if (typeof window.adicionarTombstone === 'function') {
+      for (const id of idsAlvo) window.adicionarTombstone(id);
+    }
+    _commitTarefas(filtradas);
+  }
+
+  function injetarBotaoLimparTudo() {
+    // Adiciona um botão "Apagar todas" ao lado dos botões de exportar.
+    const bExp = $('#btn-exp-concluidas-pdf') || $('#btn-exp-concluidas-xlsx');
+    if (!bExp) return;
+    if (document.getElementById('btn-concluidas-apagar-tudo')) return;
+    const btn = document.createElement('button');
+    btn.id = 'btn-concluidas-apagar-tudo';
+    btn.type = 'button';
+    btn.textContent = 'Apagar todas';
+    btn.title = 'Excluir definitivamente todas as tarefas concluídas';
+    btn.style.cssText = 'border:1px solid #fecaca;background:#fff;color:#b91c1c;padding:0.45rem 0.8rem;border-radius:6px;font-size:0.9em;cursor:pointer;margin-left:0.5rem;';
+    btn.addEventListener('click', apagarTodasConcluidas);
+    bExp.parentNode.insertBefore(btn, bExp.nextSibling);
+  }
+
+  function bindAcoesLista() {
+    const lista = $('#concluidas-lista');
+    if (!lista || lista.dataset.bindAcoes === '1') return;
+    lista.dataset.bindAcoes = '1';
+    lista.addEventListener('click', (ev) => {
+      const b = ev.target.closest('button[data-acao]');
+      if (!b) return;
+      const id = b.dataset.id;
+      if (!id) return;
+      if (b.dataset.acao === 'apagar') apagarItem(id);
+      else if (b.dataset.acao === 'reabrir') reabrirItem(id);
+    });
   }
 
   function render() {
@@ -287,6 +397,9 @@
     const bXls = $('#btn-exp-concluidas-xlsx');
     if (bPdf && !bPdf.dataset.bound) { bPdf.dataset.bound = '1'; bPdf.addEventListener('click', exportarPDF); }
     if (bXls && !bXls.dataset.bound) { bXls.dataset.bound = '1'; bXls.addEventListener('click', exportarXLSX); }
+    // Leva 34.10c
+    injetarBotaoLimparTudo();
+    bindAcoesLista();
   }
 
   function init() {
