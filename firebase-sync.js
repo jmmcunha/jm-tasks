@@ -48,7 +48,8 @@
   const SDK_URLS = [
     `https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-app-compat.js`,
     `https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-auth-compat.js`,
-    `https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-firestore-compat.js`
+    `https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-firestore-compat.js`,
+    `https://www.gstatic.com/firebasejs/${FB_VERSION}/firebase-storage-compat.js`
   ];
 
   let app = null;

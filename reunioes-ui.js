@@ -277,6 +277,12 @@
           `<ol class="re-pauta">${naPauta.map(a => itemPauta(a, r)).join('')}</ol>`}
       </section>
 
+      <section class="re-block">
+        <h3 class="re-subtitle">Anexos da reunião</h3>
+        <p class="re-hint">Suba PDFs, imagens ou áudios. A IA pode propor assuntos, decisões e tarefas a partir do conteúdo.</p>
+        <div id="re-anexos-box"></div>
+      </section>
+
       <div class="re-acoes-fim">
         <button class="btn btn-primary" id="re-ir-revisao" ${naPauta.length === 0 ? 'disabled' : ''}>
           Ir para revisão e encerramento →
@@ -312,6 +318,12 @@
       toast('Assunto adicionado à pauta.');
       render();
     });
+
+    // Caixa de anexos (nível reunião)
+    const boxAnx = $('#re-anexos-box', root);
+    if (boxAnx && window.ReunioesAnexosUI) {
+      window.ReunioesAnexosUI.montarBox(boxAnx, r, { onMudou: () => render() });
+    }
 
     $$('[data-pauta-acao]', root).forEach(btn => {
       btn.addEventListener('click', () => {
@@ -388,6 +400,11 @@
             <label class="re-radio"><input type="radio" name="trat" value="arquivar"> Arquivar (sem ação)</label>
           </fieldset>
 
+          <fieldset class="re-modal-grupo">
+            <legend>Anexos deste assunto</legend>
+            <div id="re-modal-anexos"></div>
+          </fieldset>
+
           <fieldset class="re-modal-grupo" id="re-grupo-decisoes">
             <legend>Decisões deste assunto</legend>
             <div id="re-decs-lista">
@@ -439,6 +456,13 @@
       $('#re-nova-texto', modal).value = '';
     });
     bindDecisaoLinhas(modal);
+
+    // Caixa de anexos vinculados a este assunto
+    const boxAnxModal = $('#re-modal-anexos', modal);
+    if (boxAnxModal && window.ReunioesAnexosUI) {
+      const r = R.getReuniao(reuniaoId);
+      window.ReunioesAnexosUI.montarBox(boxAnxModal, r, { assuntoId, onMudou: () => {} });
+    }
 
     $('#re-modal-salvar', modal).addEventListener('click', () => {
       const sel = $('input[name=trat]:checked', modal).value;

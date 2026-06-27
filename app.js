@@ -8190,6 +8190,8 @@ window.carregarTombstones = carregarTombstones;
 window.renderTudo = renderTudo;
 // para o módulo quick-capture.js
 window.salvarTarefas = salvarTarefas;
+// Leva 36: exposto para reunioes-ia-ui.js criar tarefas a partir das sugestões da IA
+window.normalizarTarefa = normalizarTarefa;
 window.popularResponsaveis = popularResponsaveis;
 window.uid = uid;
 // Leva 34.10c: exposicoes para o modulo de Concluidas (apagar/reabrir/limpar tudo).
