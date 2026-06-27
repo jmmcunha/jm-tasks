@@ -19,6 +19,7 @@
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="reunioes.css?v=20260626a">
 </head>
 <body>
   <header class="topbar">
@@ -59,6 +60,7 @@
       <button class="tab is-active" data-tab="tarefas" role="tab" aria-selected="true">Tarefas</button>
       <button class="tab" data-tab="agenda" role="tab" aria-selected="false">Agenda</button>
       <button class="tab" data-tab="delegacoes" role="tab" aria-selected="false">Delegações</button>
+      <button class="tab" data-tab="reunioes" role="tab" aria-selected="false">Reuniões</button>
       <button class="tab" data-tab="revisao" role="tab" aria-selected="false">Revisão Semanal</button>
       <button class="tab" data-tab="config" role="tab" aria-selected="false">Configurações</button>
     </nav>
@@ -718,6 +720,9 @@
       </div>
     </section>
 
+    <!-- =================== ABA REUNIÕES =================== -->
+    <section class="tab-panel" id="panel-reunioes" role="tabpanel" hidden></section>
+
   </main>
 
   <footer class="footer">
@@ -1195,6 +1200,10 @@
     <div class="sheet__inner">
       <div class="sheet__grip" aria-hidden="true"></div>
       <h3 class="sheet__title">Mais</h3>
+      <button type="button" class="sheet__item tab" data-tab="reunioes">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 5h16v3H4zm0 5h16v9H4zm3 3v3h4v-3zm6 0v3h4v-3z"/></svg>
+        <span>Reuniões</span>
+      </button>
       <button type="button" class="sheet__item tab" data-tab="revisao">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 4h18v2H3zm0 5h18v2H3zm0 5h12v2H3zm0 5h18v2H3z"/></svg>
         <span>Revisão Semanal</span>
@@ -1209,14 +1218,18 @@
 
   <!-- Firebase: config + sync compartilhado (equipe) -->
   <script src="firebase-config.js?v=20260506aa"></script>
-  <script src="firebase-sync.js?v=20260625d"></script>
+  <script src="firebase-sync.js?v=20260626a"></script>
   <script src="ia-gemini.js?v=20260506aa"></script>
-  <script src="app.js?v=20260625d"></script>
+  <script src="app.js?v=20260626a"></script>
   <!-- Captura rápida em linguagem natural + voz -->
   <script src="quick-capture.js?v=20260506aa"></script>
   <!-- Leva 31: Decisões e CRM Pessoas -->
-  <script src="decisoes-pessoas.js?v=20260625d"></script>
+  <script src="decisoes-pessoas.js?v=20260626a"></script>
   <script src="revisao-interativa.js?v=20260526b"></script>
-  <script src="concluidas.js?v=20260625d"></script>
+  <script src="concluidas.js?v=20260626a"></script>
+  <!-- Leva 35: Sistema de Ciclo de Reuniões -->
+  <script src="reunioes.js?v=20260626a"></script>
+  <script src="reunioes-pdf.js?v=20260626a"></script>
+  <script src="reunioes-ui.js?v=20260626a"></script>
 </body>
 </html>

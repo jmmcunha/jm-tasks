@@ -1,0 +1,249 @@
+/* reunioes.css — estilos do Sistema de Reuniões (Leva 35) */
+
+.reunioes-wrap { padding: 16px 0 40px; }
+
+/* --- cabeçalhos --- */
+.re-header {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin: 0 0 18px;
+}
+.re-header .re-title { font-size: 22px; font-weight: 700; margin: 0; flex: 1; }
+.re-title-wrap { flex: 1; min-width: 200px; }
+.re-title-wrap .re-title { font-size: 18px; }
+.re-sub { font-size: 13px; color: #555; margin: 4px 0 0; }
+.re-subtitle {
+  font-size: 14px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em; color: #444; margin: 18px 0 8px;
+  display: flex; align-items: center; gap: 8px;
+}
+.re-count {
+  display: inline-block; background: #ececec; color: #555;
+  padding: 1px 8px; border-radius: 10px; font-size: 12px;
+  letter-spacing: 0; text-transform: none;
+}
+
+/* --- seções --- */
+.re-section, .re-block {
+  background: #fff; border: 1px solid #e5e5e5; border-radius: 8px;
+  padding: 14px 16px; margin: 0 0 14px;
+}
+.re-empty {
+  color: #888; font-style: normal; margin: 4px 0;
+}
+.re-hint { font-size: 12px; color: #777; margin: 4px 0; }
+
+/* --- listas de reuniões --- */
+.re-list { display: grid; gap: 10px; }
+.re-card {
+  border: 1px solid #e5e5e5; border-radius: 6px;
+  padding: 12px 14px; background: #fafafa;
+}
+.re-card__head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+}
+.re-card__num {
+  font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: .06em;
+}
+.re-card__title { font-size: 15px; font-weight: 600; color: #222; margin-top: 2px; }
+.re-card__meta { font-size: 12px; color: #666; margin-top: 4px; }
+.re-card__stats {
+  display: flex; flex-direction: column; gap: 2px;
+  font-size: 12px; color: #555; text-align: right;
+}
+.re-card__acoes {
+  margin-top: 10px;
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+
+/* --- tags --- */
+.re-tag {
+  display: inline-block; font-size: 11px; padding: 2px 8px;
+  border-radius: 10px; background: #eee; color: #444;
+  vertical-align: middle; margin-left: 4px;
+}
+.re-tag--sens { background: #fde2e2; color: #8a1a1a; }
+.re-tag--ok   { background: #dff5e1; color: #1d6b2c; }
+.re-tag--orig { background: #e6efff; color: #1a3a8a; }
+
+/* --- formulários --- */
+.re-form { display: flex; flex-direction: column; gap: 10px; }
+.re-form--inline { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; }
+.re-form--inline input, .re-form--inline select { flex: 1; min-width: 120px; }
+.re-novo-notas { width: 100%; margin-top: 8px; }
+.re-field { display: flex; flex-direction: column; gap: 4px; }
+.re-field > span { font-size: 12px; font-weight: 600; color: #333; }
+.re-field input[type="text"],
+.re-field input[type="date"],
+.re-field input[type="time"],
+.re-field input[type="number"],
+.re-field textarea,
+.re-field select {
+  border: 1px solid #ccc; border-radius: 5px; padding: 8px 10px; font: inherit;
+}
+.re-field--inline { flex-direction: row; align-items: center; gap: 8px; }
+.re-row { display: flex; gap: 12px; }
+.re-row .re-field { flex: 1; }
+.re-form__acoes { display: flex; gap: 8px; margin-top: 8px; }
+
+/* --- pendências --- */
+.re-pendencias {
+  display: grid; gap: 6px; margin-bottom: 10px;
+  max-height: 280px; overflow-y: auto;
+  border: 1px solid #eee; border-radius: 5px;
+  padding: 8px;
+}
+.re-pend-item {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 6px 8px; border-radius: 4px;
+  cursor: pointer; transition: background .15s;
+}
+.re-pend-item:hover { background: #f4f6fb; }
+.re-pend-meta { flex: 1; }
+.re-pend-tit { font-size: 13px; font-weight: 500; color: #222; }
+.re-pend-sub { font-size: 11px; color: #777; margin-top: 2px; }
+
+/* --- pauta --- */
+.re-pauta { list-style: none; counter-reset: pauta; padding: 0; margin: 0; }
+.re-pauta-item {
+  counter-increment: pauta;
+  border: 1px solid #e5e5e5; border-radius: 6px;
+  padding: 10px 12px; margin-bottom: 8px;
+  background: #fafafa;
+}
+.re-pauta-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.re-pauta-tit {
+  font-size: 14px; font-weight: 600; color: #222;
+}
+.re-pauta-tit::before {
+  content: counter(pauta) '. '; color: #888; font-weight: 500;
+}
+.re-pauta-sub { font-size: 12px; color: #666; margin-top: 2px; }
+.re-pauta-acoes { display: flex; gap: 6px; align-items: flex-start; }
+.re-pauta-notas {
+  font-size: 12px; color: #555; margin-top: 6px;
+  padding: 6px 8px; background: #fff; border-left: 3px solid #ddd; border-radius: 0 4px 4px 0;
+}
+.re-pauta-decs {
+  list-style: none; padding: 6px 0 0; margin: 0;
+  font-size: 12px; color: #444;
+}
+.re-pauta-decs li { padding: 3px 0; }
+
+/* --- urgências --- */
+.re-urg {
+  display: inline-block; font-size: 10px; padding: 1px 6px;
+  border-radius: 8px; text-transform: uppercase; letter-spacing: .04em;
+  margin-left: 4px;
+}
+.re-urg--alta { background: #fce0e0; color: #8a1a1a; }
+.re-urg--media { background: #fdeed0; color: #8a5e0a; }
+.re-urg--baixa { background: #e6f4e6; color: #1d6b2c; }
+
+/* --- categorias de decisão --- */
+.re-cat {
+  display: inline-block; font-size: 11px; padding: 1px 8px;
+  border-radius: 10px; font-weight: 600;
+  margin-right: 4px;
+}
+.re-cat--decisao_externa  { background: #e6efff; color: #1a3a8a; }
+.re-cat--delegacao_interna { background: #fdeed0; color: #8a5e0a; }
+.re-cat--encaminhamento    { background: #e8e2fb; color: #4a2a8a; }
+.re-cat--informe           { background: #ececec; color: #555; }
+
+/* --- modal --- */
+.re-modal {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+}
+.re-modal__bg {
+  position: absolute; inset: 0; background: rgba(0, 0, 0, .45);
+}
+.re-modal__box {
+  position: relative; background: #fff; border-radius: 10px;
+  width: min(640px, 92vw); max-height: 88vh; overflow: hidden;
+  display: flex; flex-direction: column;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, .25);
+}
+.re-modal__head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 18px; border-bottom: 1px solid #eee;
+}
+.re-modal__head h3 { margin: 0; font-size: 16px; }
+.re-modal__body { padding: 16px 18px; overflow-y: auto; flex: 1; }
+.re-modal__foot {
+  padding: 12px 18px; border-top: 1px solid #eee;
+  display: flex; gap: 10px; justify-content: flex-end;
+}
+.re-modal-assunto {
+  padding: 8px 10px; background: #f5f5f5; border-radius: 5px; margin-bottom: 12px;
+}
+.re-modal-tit { font-weight: 600; font-size: 14px; }
+.re-modal-sub { font-size: 12px; color: #666; margin-top: 2px; }
+.re-modal-grupo {
+  border: 1px solid #e5e5e5; border-radius: 6px;
+  padding: 10px 14px; margin: 0 0 12px;
+}
+.re-modal-grupo legend {
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  color: #555; padding: 0 6px;
+}
+.re-radio {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 0; font-size: 13px; cursor: pointer;
+}
+.re-add-dec {
+  display: flex; gap: 6px; align-items: center; margin-top: 8px; flex-wrap: wrap;
+}
+.re-add-dec select, .re-add-dec input { font: inherit; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; }
+.re-add-dec input { flex: 1; min-width: 180px; }
+.re-dec-linha {
+  display: flex; gap: 6px; align-items: center;
+  margin: 6px 0; padding: 4px 0;
+}
+.re-dec-text { flex: 1; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font: inherit; }
+
+/* --- revisão --- */
+.re-rev-assuntos { list-style: none; padding: 0; margin: 0; }
+.re-rev-assuntos > li {
+  border-bottom: 1px solid #eee; padding: 8px 0;
+}
+.re-rev-notas { font-size: 12px; color: #666; margin-top: 4px; }
+.re-rev-decs { display: grid; gap: 8px; }
+.re-dec-rev {
+  border: 1px solid #e5e5e5; border-radius: 5px;
+  padding: 8px 10px; background: #fafafa;
+}
+.re-dec-rev-head { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.re-dec-rev-texto { font-size: 13px; color: #222; }
+.re-dec-rev-form {
+  display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 12px;
+}
+.re-dec-rev-form input, .re-dec-rev-form select {
+  padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; font: inherit;
+}
+.re-dec-rev-resp { min-width: 160px; }
+.re-dec-rev-info { font-size: 12px; }
+
+/* --- ações finais --- */
+.re-acoes-fim {
+  margin-top: 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+}
+.re-acoes-fim .btn { font-size: 14px; }
+
+/* --- rótulo "Reunião nº X" nas tarefas --- */
+.tarefa-reuniao-tag {
+  display: inline-block; font-size: 10px; padding: 1px 6px;
+  background: #eef4ff; color: #1a3a8a; border-radius: 8px;
+  margin-left: 6px; cursor: pointer; vertical-align: middle;
+}
+.tarefa-reuniao-tag:hover { background: #d8e4ff; }
+
+/* --- responsivo --- */
+@media (max-width: 700px) {
+  .re-row { flex-direction: column; }
+  .re-card__head { flex-direction: column; }
+  .re-card__stats { text-align: left; }
+  .re-form--inline { flex-direction: column; align-items: stretch; }
+  .re-add-dec input, .re-add-dec select { width: 100%; }
+}

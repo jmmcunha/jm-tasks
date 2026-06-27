@@ -20,7 +20,11 @@
     'cebraspe_ia_config',
     'decisoes_v1',
     'cebraspe_pessoas_v1',
-    'cebraspe_categorias_v1'
+    'cebraspe_categorias_v1',
+    // Leva 35: Sistema de Ciclo de Reuniões
+    'cebraspe_reunioes_v2',
+    'cebraspe_assuntos_v1',
+    'cebraspe_decisoes_v1'
   ];
 
   // Chave de tombstones de tarefas excluídas (sincronizada à parte)
@@ -263,9 +267,11 @@
         if (typeof window.carregarTarefas === 'function') window.carregarTarefas();
         if (typeof window.carregarRevisoes === 'function') window.carregarRevisoes();
         if (typeof window.carregarReunioes === 'function') window.carregarReunioes();
+        if (typeof window.carregarReunioesSistema === 'function') window.carregarReunioesSistema();
         if (typeof window.carregarConfig === 'function') window.carregarConfig();
         if (typeof window.carregarTombstones === 'function') window.carregarTombstones();
         if (typeof window.renderTudo === 'function') window.renderTudo();
+        if (typeof window.renderReunioes === 'function') window.renderReunioes();
         showStatus('☁️ atualizado');
       } catch (e) {
         console.error('[firebase-sync] resync falhou', e);
@@ -711,9 +717,11 @@
           if (typeof window.carregarTarefas === 'function') window.carregarTarefas();
           if (typeof window.carregarRevisoes === 'function') window.carregarRevisoes();
           if (typeof window.carregarReunioes === 'function') window.carregarReunioes();
+          if (typeof window.carregarReunioesSistema === 'function') window.carregarReunioesSistema();
           if (typeof window.carregarConfig === 'function') window.carregarConfig();
           if (typeof window.carregarTombstones === 'function') window.carregarTombstones();
           if (typeof window.renderTudo === 'function') window.renderTudo();
+          if (typeof window.renderReunioes === 'function') window.renderReunioes();
           showStatus('☁️ atualizado por outra pessoa');
         } catch (e) { console.warn('[firebase-sync] erro ao re-renderizar', e); }
       }

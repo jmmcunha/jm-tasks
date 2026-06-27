@@ -825,7 +825,7 @@ function trocarAba(nome) {
     // Leva 34.1: aba Reuniões removida da UI; fallback caso algum link antigo persista.
     const vComp = $('#view-compromissos');
     if (vComp && !vComp.hidden) renderPainelCompromissos();
-    else renderReunioes();
+    else { if (typeof window.renderReunioes === 'function') window.renderReunioes(); }
   }
   if (nome === 'delegacoes') renderDelegacoes();
 }
@@ -2137,6 +2137,14 @@ function renderGrupos(lista) {
       else selecaoTarefasIds.delete(id);
       atualizarSelecaoBar();
     });
+    // Leva 35: clique na tag de reunião abre a aba Reuniões naquela memória.
+    const tagR = el.querySelector('.tarefa-reuniao-tag');
+    if (tagR) tagR.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const rid = tagR.getAttribute('data-rid');
+      if (rid && typeof window.abrirReuniao === 'function') window.abrirReuniao(rid);
+      else if (rid) { trocarAba('reunioes'); }
+    });
   });
 }
 
@@ -2147,6 +2155,16 @@ function atualizarSelecaoBar() {
   bar.hidden = n === 0;
   const cnt = $('#selecao-count');
   if (cnt) cnt.textContent = n;
+}
+
+// Leva 35: renderiza tag clicável "Reunião nº X" quando a tarefa veio de uma reunião.
+function renderTagReuniao(reuniaoId) {
+  try {
+    const r = (window.Reunioes && window.Reunioes.getReuniao) ? window.Reunioes.getReuniao(reuniaoId) : null;
+    if (!r) return '';
+    const num = r.numero || '?';
+    return `<span class="tarefa-reuniao-tag" data-rid="${reuniaoId}" title="Abrir memória da reunião">Reunião nº ${num}</span>`;
+  } catch { return ''; }
 }
 
 function renderTarefa(t) {
@@ -2170,9 +2188,10 @@ function renderTarefa(t) {
   return `
     <div class="tarefa ${done ? 'done' : ''}" data-id="${t.id}">
       <div class="tarefa__main">
-        <div style="display:flex;align-items:baseline;gap:6px">
+        <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap">
           <input type="checkbox" class="tarefa-select" data-select-id="${t.id}" title="Selecionar para reunião" ${selecaoTarefasIds.has(t.id) ? 'checked' : ''} />
           <div class="tarefa__titulo">${escapeHTML(t.titulo)}</div>
+          ${t.reuniao_id ? renderTagReuniao(t.reuniao_id) : ''}
         </div>
         <div class="tarefa__meta">
           <span class="badge badge--${q.toLowerCase()}">${q === 'NC' ? 'Não class.' : q + ' · ' + QUADRANTES[q].nome}</span>
@@ -5468,7 +5487,7 @@ function bindReunioes() {
 
   // Filtro de status
   const filtro = $('#filtro-reuniao-status');
-  if (filtro) filtro.addEventListener('change', renderReunioes);
+  if (filtro) filtro.addEventListener('change', renderReunioesAntigo);
 
   // Fechar modal
   const rfCancelar = $('#rf-cancelar');
@@ -5653,7 +5672,7 @@ function salvarReuniaoDoModal() {
   }
   salvarReunioes();
   $('#dlg-reuniao').close();
-  renderReunioes();
+  renderReunioesAntigo();
   if (reuniaoAtivaId) renderDetalheReuniao(reuniaoAtivaId);
 }
 
@@ -6417,7 +6436,7 @@ function enviarPlannerLote() {
 }
 
 // ---- Render lista de reuniões ----
-function renderReunioes() {
+function renderReunioesAntigo() {
   const filtro = $('#filtro-reuniao-status');
   const fStatus = filtro ? filtro.value : '';
   const lista = reunioes.filter(r => !fStatus || r.status === fStatus);
@@ -6443,7 +6462,7 @@ function renderReunioes() {
   cont.querySelectorAll('.reuniao-item').forEach(el => {
     el.addEventListener('click', () => {
       reuniaoAtivaId = el.dataset.rid;
-      renderReunioes();
+      renderReunioesAntigo();
       renderDetalheReuniao(reuniaoAtivaId);
     });
   });
@@ -6790,7 +6809,7 @@ function setReuniaoView(view) {
     btn.setAttribute('aria-selected', ativo ? 'true' : 'false');
   });
   if (v === 'compromissos') renderPainelCompromissos();
-  else renderReunioes();
+  else renderReunioesAntigo();
 }
 
 function bindReuniaoViewToggle() {
@@ -6927,7 +6946,7 @@ function bindDetalheReuniaoEventos(id) {
       if (r.status === 'realizada' && !r.realizadaEm) r.realizadaEm = new Date().toISOString();
       r.atualizadaEm = new Date().toISOString();
       salvarReunioes();
-      renderReunioes();
+      renderReunioesAntigo();
       renderDetalheReuniao(id);
     });
   }
@@ -6949,7 +6968,7 @@ function bindDetalheReuniaoEventos(id) {
       reunioes = reunioes.filter(x => x.id !== id);
       reuniaoAtivaId = null;
       salvarReunioes();
-      renderReunioes();
+      renderReunioesAntigo();
       const ph = $('#reuniao-detalhe-placeholder');
       const cont = $('#reuniao-detalhe-conteudo');
       if (ph) ph.hidden = false;
@@ -7015,7 +7034,7 @@ function bindDetalheReuniaoEventos(id) {
       r.realizadaEm = r.realizadaEm || new Date().toISOString();
       r.atualizadaEm = new Date().toISOString();
       salvarReunioes();
-      renderReunioes();
+      renderReunioesAntigo();
       renderDetalheReuniao(id);
     });
   }
