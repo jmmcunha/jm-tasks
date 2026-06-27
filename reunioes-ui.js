@@ -90,10 +90,25 @@
           if (r && window.ReunioesPDF) window.ReunioesPDF.gerar(r);
         }
         else if (acao === 'excluir') {
-          if (confirm('Excluir o rascunho desta reunião? Esta ação não pode ser desfeita.')) {
+          const rAtual = window.Reunioes.getReuniao(id);
+          const aviso = rAtual && rAtual.status === 'encerrada'
+            ? 'Excluir esta reunião ENCERRADA? A memória, decisões e assuntos vinculados serão removidos. As tarefas geradas NÃO serão excluídas. Esta ação não pode ser desfeita.'
+            : 'Excluir o rascunho desta reunião? Esta ação não pode ser desfeita.';
+          if (confirm(aviso)) {
             const ok = window.Reunioes.excluirReuniao(id);
-            if (ok) { toast('Rascunho excluído.'); render(); }
+            if (ok) { toast('Reunião excluída.'); render(); }
             else toast('Não foi possível excluir.');
+          }
+        }
+        else if (acao === 'reabrir') {
+          if (confirm('Reabrir esta reunião? A aprovação será desfeita e você poderá editar resumo, observações e decisões. As tarefas já geradas são mantidas.')) {
+            const ok = window.Reunioes.reabrirReuniao(id);
+            if (ok) {
+              toast('Reunião reaberta para edição.');
+              _reuniaoAtivaId = id;
+              _vista = 'revisao';
+              render();
+            } else toast('Não foi possível reabrir.');
           }
         }
       });
@@ -113,7 +128,9 @@
          <button class="btn btn-sm" data-acao="revisar" data-id="${r.id}">Revisar e encerrar</button>
          <button class="btn btn-sm btn-ghost" data-acao="excluir" data-id="${r.id}">Excluir</button>`
       : `<button class="btn btn-sm" data-acao="ver" data-id="${r.id}">Abrir memória</button>
-         <button class="btn btn-sm" data-acao="pdf" data-id="${r.id}">PDF</button>`;
+         <button class="btn btn-sm" data-acao="pdf" data-id="${r.id}">PDF</button>
+         <button class="btn btn-sm btn-ghost" data-acao="reabrir" data-id="${r.id}">Reabrir</button>
+         <button class="btn btn-sm btn-ghost" data-acao="excluir" data-id="${r.id}">Excluir</button>`;
     return `
       <article class="re-card">
         <div class="re-card__head">
@@ -531,7 +548,7 @@
 
       <section class="re-block">
         <h3 class="re-subtitle">Resumo executivo</h3>
-        <textarea id="re-executivo" rows="4" placeholder="Breve resumo do que foi discutido (aparece no PDF)." ${encerrada ? 'readonly' : ''}>${esc(r.memoria && r.memoria.executivo || '')}</textarea>
+        <textarea id="re-executivo" rows="4" placeholder="Breve resumo do que foi discutido (aparece no PDF).">${esc(r.memoria && r.memoria.executivo || '')}</textarea>
       </section>
 
       <section class="re-block">
@@ -549,11 +566,65 @@
         <h3 class="re-subtitle">Decisões e geração de tarefas (${decs.length})</h3>
         ${decs.length === 0 ? '<p class="re-empty">Nenhuma decisão registrada.</p>' :
           `<div class="re-rev-decs">${decs.map(d => decisaoRev(d, defaultGerar(d), encerrada)).join('')}</div>`}
+
+        <details class="re-add-dec" ${decs.length === 0 ? 'open' : ''}>
+          <summary>+ Adicionar decisão</summary>
+          <div class="re-add-dec__form">
+            <label class="re-fld">
+              <span>Vincular a um assunto da pauta</span>
+              <select id="re-add-dec-assunto">
+                ${assuntosP.length === 0
+                  ? '<option value="">(sem assuntos na pauta)</option>'
+                  : assuntosP.map(a => `<option value="${esc(a.id)}">${esc(a.titulo)}</option>`).join('')}
+              </select>
+            </label>
+            <label class="re-fld">
+              <span>Categoria</span>
+              <select id="re-add-dec-cat">
+                <option value="delegacao_interna">Delegação interna</option>
+                <option value="decisao_externa">Decisão</option>
+                <option value="encaminhamento">Encaminhamento</option>
+                <option value="informe">Informe</option>
+              </select>
+            </label>
+            <label class="re-fld">
+              <span>Texto da decisão</span>
+              <textarea id="re-add-dec-txt" rows="3" placeholder="Descreva a decisão, delegação, encaminhamento ou informe."></textarea>
+            </label>
+            ${encerrada ? `
+              <label class="re-fld re-fld--check">
+                <input type="checkbox" id="re-add-dec-gerar" checked>
+                <span>Gerar tarefa para esta decisão</span>
+              </label>
+              <div class="re-add-dec__tarefa">
+                <label class="re-fld">
+                  <span>Responsável</span>
+                  <input type="text" id="re-add-dec-resp" placeholder="Ex.: Fábio">
+                </label>
+                <label class="re-fld">
+                  <span>Prazo</span>
+                  <input type="date" id="re-add-dec-prazo">
+                </label>
+                <label class="re-fld">
+                  <span>Prioridade</span>
+                  <select id="re-add-dec-prio">
+                    <option value="media">Média</option>
+                    <option value="alta">Alta</option>
+                    <option value="baixa">Baixa</option>
+                  </select>
+                </label>
+              </div>
+            ` : ''}
+            <button class="btn btn-primary btn-sm" id="re-add-dec-salvar" ${assuntosP.length === 0 ? 'disabled' : ''}>
+              ${encerrada ? 'Adicionar decisão e atualizar memória' : 'Adicionar decisão'}
+            </button>
+          </div>
+        </details>
       </section>
 
       <section class="re-block">
         <h3 class="re-subtitle">Observações adicionais</h3>
-        <textarea id="re-obs" rows="3" placeholder="Observações livres (aparece no PDF)." ${encerrada ? 'readonly' : ''}>${esc(r.memoria && r.memoria.observacoes || '')}</textarea>
+        <textarea id="re-obs" rows="3" placeholder="Observações livres (aparece no PDF).">${esc(r.memoria && r.memoria.observacoes || '')}</textarea>
       </section>
 
       ${!encerrada && decs.length === 0 ? `
@@ -572,8 +643,9 @@
           </button>
           ${!podeEncer ? `<p class="re-hint">Acesso restrito a ${esc(R.EMAIL_ENCERRADOR)}. Detectado: <strong>${esc(R.emailLogado && R.emailLogado() || 'não detectado')}</strong></p>` : ''}
         ` : `
+          <button class="btn btn-secondary" id="re-salvar-obs" title="Salva alterações no resumo/observações">Salvar alterações</button>
           <button class="btn btn-primary" id="re-pdf">Gerar PDF da memória</button>
-          <span class="re-hint">Aprovada em ${r.memoria && r.memoria.aprovada_em ? new Date(r.memoria.aprovada_em).toLocaleString('pt-BR') : '—'} por ${esc(r.memoria && r.memoria.aprovada_por || '—')}</span>
+          <span class="re-hint">${r.memoria && r.memoria.aprovada_em ? 'Aprovada em ' + new Date(r.memoria.aprovada_em).toLocaleString('pt-BR') + ' por ' + esc(r.memoria.aprovada_por || '—') : 'Memória sem aprovação ativa.'}${r.memoria && r.memoria.reaberta_em ? ' · Reaberta em ' + new Date(r.memoria.reaberta_em).toLocaleString('pt-BR') : ''}</span>
         `}
       </div>`;
 
@@ -586,8 +658,69 @@
     });
     const btnPdf = $('#re-pdf', root);
     if (btnPdf) btnPdf.addEventListener('click', () => {
-      if (window.ReunioesPDF) window.ReunioesPDF.gerar(r);
-      else toast('Módulo de PDF não carregado.');
+      if (!window.ReunioesPDF) { toast('Módulo de PDF não carregado.'); return; }
+      // Persiste eventuais alterações no resumo/obs antes de regerar
+      try {
+        const exec = ($('#re-executivo', root) || {}).value;
+        const obs = ($('#re-obs', root) || {}).value;
+        if (exec !== undefined || obs !== undefined) {
+          R.atualizarMemoriaTexto && R.atualizarMemoriaTexto(r.id, { executivo: exec, observacoes: obs });
+        }
+      } catch {}
+      window.ReunioesPDF.gerar(window.Reunioes.getReuniao(r.id) || r);
+    });
+
+    const btnSalvarObs = $('#re-salvar-obs', root);
+    if (btnSalvarObs) btnSalvarObs.addEventListener('click', () => {
+      try {
+        const exec = ($('#re-executivo', root) || {}).value;
+        const obs = ($('#re-obs', root) || {}).value;
+        R.atualizarMemoriaTexto && R.atualizarMemoriaTexto(r.id, { executivo: exec, observacoes: obs });
+        toast('Alterações salvas.');
+      } catch (err) {
+        toast('Falha ao salvar.');
+      }
+    });
+
+    const btnAddDec = $('#re-add-dec-salvar', root);
+    if (btnAddDec) btnAddDec.addEventListener('click', () => {
+      const assId = ($('#re-add-dec-assunto', root) || {}).value;
+      const cat = ($('#re-add-dec-cat', root) || {}).value;
+      const txt = (($('#re-add-dec-txt', root) || {}).value || '').trim();
+      if (!assId) { toast('Selecione um assunto da pauta.'); return; }
+      if (!txt) { toast('Escreva o texto da decisão.'); return; }
+      try {
+        const dec = R.criarDecisao({ texto: txt, categoria: cat, assunto_id: assId, reuniao_id: r.id });
+        // Se encerrada e usuário marcou "gerar tarefa", cria a tarefa.
+        if (encerrada) {
+          const gerar = ($('#re-add-dec-gerar', root) || {}).checked;
+          if (gerar && typeof window.normalizarTarefa === 'function' && Array.isArray(window.tarefas)) {
+            const resp = (($('#re-add-dec-resp', root) || {}).value || '').trim();
+            const prazo = ($('#re-add-dec-prazo', root) || {}).value || null;
+            const prio = ($('#re-add-dec-prio', root) || {}).value || 'media';
+            const novaT = window.normalizarTarefa({
+              titulo: txt.slice(0, 140),
+              responsavel: resp,
+              prazo: prazo,
+              prioridade: prio,
+              status: 'pendente',
+              reuniao_id: r.id,
+              decisao_id: dec.id,
+              origem: 'reuniao_pos_encerramento'
+            });
+            window.tarefas.push(novaT);
+            if (typeof window.salvarTarefas === 'function') window.salvarTarefas();
+            // Vincula a tarefa à decisão e à memória da reunião.
+            try { R.atualizarDecisao && R.atualizarDecisao(dec.id, { tarefas_geradas_ids: [novaT.id] }); } catch {}
+            try { R.adicionarTarefaNaMemoria && R.adicionarTarefaNaMemoria(r.id, novaT.id); } catch {}
+            if (typeof window.renderTudo === 'function') window.renderTudo();
+          }
+        }
+        toast('Decisão adicionada.');
+        render();
+      } catch (err) {
+        toast('Falha ao adicionar decisão: ' + (err.message || err));
+      }
     });
     const btnPrevia = $('#re-previa-pdf', root);
     if (btnPrevia) btnPrevia.addEventListener('click', () => {

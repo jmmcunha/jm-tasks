@@ -141,19 +141,66 @@
     return reunioes[idx];
   }
   function excluirReuniao(id) {
-    // Só pode excluir rascunho.
+    // Exclui reunião em qualquer status (rascunho ou encerrada).
     const r = reunioes.find(x => x.id === id);
     if (!r) return false;
-    if (r.status !== 'rascunho') return false;
-    // Também remove assuntos criados nesta reunião (origem_ref.reuniao_origem_id) que estão em pauta apenas dela.
+    // Remove assuntos criados nesta reunião.
     const assuntosDaReuniao = assuntos.filter(a => a.origem_ref && a.origem_ref.reuniao_origem_id === id);
     for (const a of assuntosDaReuniao) {
-      // Remove o assunto se ele não foi resolvido/arquivado e está apenas neste rascunho.
       const idxA = assuntos.findIndex(x => x.id === a.id);
       if (idxA !== -1) assuntos.splice(idxA, 1);
     }
     salvarAssuntos();
+    // Remove decisões vinculadas a esta reunião.
+    decisoes = decisoes.filter(d => d.reuniao_id !== id);
+    salvarDecisoes();
     reunioes = reunioes.filter(x => x.id !== id);
+    salvarReunioes();
+    return true;
+  }
+
+  function atualizarMemoriaTexto(id, { executivo, observacoes } = {}) {
+    const idx = reunioes.findIndex(r => r.id === id);
+    if (idx === -1) return false;
+    const r = reunioes[idx];
+    r.memoria = r.memoria || {};
+    if (typeof executivo === 'string') r.memoria.executivo = executivo;
+    if (typeof observacoes === 'string') r.memoria.observacoes = observacoes;
+    r.atualizadaEm = nowMs();
+    reunioes[idx] = r;
+    salvarReunioes();
+    return true;
+  }
+
+  function adicionarTarefaNaMemoria(id, tarefaId) {
+    const idx = reunioes.findIndex(r => r.id === id);
+    if (idx === -1) return false;
+    const r = reunioes[idx];
+    r.memoria = r.memoria || {};
+    r.memoria.tarefas_geradas_ids = Array.isArray(r.memoria.tarefas_geradas_ids) ? r.memoria.tarefas_geradas_ids : [];
+    if (r.memoria.tarefas_geradas_ids.indexOf(tarefaId) === -1) {
+      r.memoria.tarefas_geradas_ids.push(tarefaId);
+    }
+    r.atualizadaEm = nowMs();
+    reunioes[idx] = r;
+    salvarReunioes();
+    return true;
+  }
+
+  function reabrirReuniao(id) {
+    // Volta a reunião ao status 'rascunho', apagando a aprovação.
+    // Decisões e tarefas geradas permanecem; apenas o lacre da memória é desfeito.
+    const idx = reunioes.findIndex(r => r.id === id);
+    if (idx === -1) return false;
+    const r = reunioes[idx];
+    r.status = 'rascunho';
+    r.memoria = r.memoria || {};
+    r.memoria.aprovada_em = null;
+    r.memoria.aprovada_por = '';
+    r.memoria.reaberta_em = nowMs();
+    r.memoria.reaberta_por = emailLogado() || '';
+    r.atualizadaEm = nowMs();
+    reunioes[idx] = r;
     salvarReunioes();
     return true;
   }
@@ -498,7 +545,7 @@
     emailLogado,
     EMAIL_ENCERRADOR,
     // CRUD
-    criarReuniao, atualizarReuniao, excluirReuniao, getReuniao, listaReunioes, proximoNumero,
+    criarReuniao, atualizarReuniao, excluirReuniao, reabrirReuniao, atualizarMemoriaTexto, adicionarTarefaNaMemoria, getReuniao, listaReunioes, proximoNumero,
     criarAssunto, atualizarAssunto, excluirAssunto, getAssunto, assuntosDaReuniao, assuntosAbertos,
     criarDecisao, atualizarDecisao, excluirDecisao, decisoesDaReuniao, decisoesDoAssunto,
     // pauta

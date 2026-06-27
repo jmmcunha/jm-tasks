@@ -239,6 +239,39 @@
 .re-aviso-amarelo strong { color: #5a3f00; }
 .re-aviso-amarelo .btn { margin-left: auto; }
 
+/* --- Bloco "Adicionar decisão" (Leva 36.3) --- */
+.re-add-dec {
+  margin-top: 14px; border: 1px dashed #c8d2dd; border-radius: 6px;
+  padding: 6px 12px; background: #fafbfc;
+}
+.re-add-dec > summary {
+  cursor: pointer; font-size: 13px; font-weight: 600; color: #0b5394;
+  padding: 6px 0; outline: none; list-style: none;
+}
+.re-add-dec > summary::-webkit-details-marker { display: none; }
+.re-add-dec[open] > summary { border-bottom: 1px solid #e3e8ee; margin-bottom: 10px; }
+.re-add-dec__form { display: flex; flex-direction: column; gap: 10px; padding: 4px 0 10px; }
+.re-add-dec__form .re-fld { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #4a5563; }
+.re-add-dec__form .re-fld span { font-weight: 600; }
+.re-add-dec__form input[type="text"],
+.re-add-dec__form input[type="date"],
+.re-add-dec__form select,
+.re-add-dec__form textarea {
+  font-size: 14px; padding: 8px 10px; border: 1px solid #cdd6e0;
+  border-radius: 4px; background: white; font-family: inherit;
+}
+.re-add-dec__form textarea { resize: vertical; min-height: 60px; }
+.re-add-dec__form .re-fld--check { flex-direction: row; align-items: center; gap: 8px; }
+.re-add-dec__form .re-fld--check input { width: auto; }
+.re-add-dec__tarefa {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;
+  padding: 8px; background: #eef4fb; border-radius: 4px;
+}
+@media (max-width: 540px) {
+  .re-add-dec__tarefa { grid-template-columns: 1fr; }
+}
+.re-add-dec__form > .btn { align-self: flex-start; }
+
 /* --- rótulo "Reunião nº X" nas tarefas --- */
 .tarefa-reuniao-tag {
   display: inline-block; font-size: 10px; padding: 1px 6px;
