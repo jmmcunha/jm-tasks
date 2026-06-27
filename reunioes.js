@@ -18,7 +18,7 @@
   const KEY_DECISOES = 'cebraspe_decisoes_v1';
 
   // Apenas este email pode encerrar reuniões.
-  const EMAIL_ENCERRADOR = 'joaomarcelo2008@gmail.com';
+  const EMAIL_ENCERRADOR = 'joao.cunha@cebraspe.org.br';
 
   // ---------- estado em memória ----------
   let reunioes = [];
