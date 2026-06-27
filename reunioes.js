@@ -31,14 +31,48 @@
   function _r(key, fb) { return (typeof window._read === 'function') ? window._read(key, fb) : fb; }
   function _w(key, v) { if (typeof window._write === 'function') window._write(key, v); }
   function emailLogado() {
+    // 1) Firebase Auth ao vivo
     try {
-      return (window.firebase && window.firebase.auth && window.firebase.auth().currentUser && window.firebase.auth().currentUser.email) || '';
-    } catch { return ''; }
+      const live = window.firebase && window.firebase.auth && window.firebase.auth().currentUser && window.firebase.auth().currentUser.email;
+      if (live) return live;
+    } catch {}
+    // 2) Fallback: sessão persistida do Firebase no localStorage (sobrevive a hidratação tardia no mobile)
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.indexOf('firebase:authUser:') === 0) {
+          const v = JSON.parse(localStorage.getItem(k) || '{}');
+          if (v && v.email) return v.email;
+        }
+      }
+    } catch {}
+    // 3) Fallback adicional: e-mail salvo pelo próprio app
+    try {
+      const u = JSON.parse(localStorage.getItem('cebraspe_user') || 'null');
+      if (u && u.email) return u.email;
+    } catch {}
+    return '';
   }
   function podeEncerrar() {
     const e = (emailLogado() || '').toLowerCase();
     return e === EMAIL_ENCERRADOR.toLowerCase();
   }
+
+  // Re-renderiza quando o Auth resolver (caso a Tela 5 tenha sido pintada antes)
+  try {
+    if (window.firebase && window.firebase.auth) {
+      let _jaRendered = false;
+      window.firebase.auth().onAuthStateChanged(function (u) {
+        if (_jaRendered) return;
+        if (u && u.email) {
+          _jaRendered = true;
+          if (typeof window.renderReunioes === 'function') {
+            try { window.renderReunioes(); } catch {}
+          }
+        }
+      });
+    }
+  } catch {}
 
   // ---------- carga / persistência ----------
   function carregar() {

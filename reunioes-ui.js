@@ -556,12 +556,21 @@
         <textarea id="re-obs" rows="3" placeholder="Observações livres (aparece no PDF)." ${encerrada ? 'readonly' : ''}>${esc(r.memoria && r.memoria.observacoes || '')}</textarea>
       </section>
 
+      ${!encerrada && decs.length === 0 ? `
+        <div class="re-aviso-amarelo">
+          <strong>Nenhuma decisão registrada.</strong>
+          Encerrar agora gera memória sem tarefas. Volte aos assuntos da pauta para registrar decisões antes.
+          <button class="btn btn-sm" id="re-voltar-tratar">Voltar para tratar assuntos</button>
+        </div>
+      ` : ''}
+
       <div class="re-acoes-fim">
         ${!encerrada ? `
+          <button class="btn btn-secondary" id="re-previa-pdf" title="Visualiza o PDF sem encerrar">Prévia do PDF</button>
           <button class="btn btn-primary" id="re-encerrar" ${podeEncer ? '' : 'disabled title="Apenas o e-mail autorizado pode encerrar reuniões"'}>
             ${podeEncer ? 'Encerrar reunião e gerar memória' : 'Encerrar (acesso restrito)'}
           </button>
-          ${!podeEncer ? `<p class="re-hint">Acesso de encerramento restrito a ${esc(R.EMAIL_ENCERRADOR)}.</p>` : ''}
+          ${!podeEncer ? `<p class="re-hint">Acesso restrito a ${esc(R.EMAIL_ENCERRADOR)}. Detectado: <strong>${esc(R.emailLogado && R.emailLogado() || 'não detectado')}</strong></p>` : ''}
         ` : `
           <button class="btn btn-primary" id="re-pdf">Gerar PDF da memória</button>
           <span class="re-hint">Aprovada em ${r.memoria && r.memoria.aprovada_em ? new Date(r.memoria.aprovada_em).toLocaleString('pt-BR') : '—'} por ${esc(r.memoria && r.memoria.aprovada_por || '—')}</span>
@@ -571,10 +580,25 @@
     $('#re-voltar', root).addEventListener('click', () => {
       _vista = encerrada ? 'lista' : 'rascunho'; render();
     });
+    const btnVoltarTratar = $('#re-voltar-tratar', root);
+    if (btnVoltarTratar) btnVoltarTratar.addEventListener('click', () => {
+      _vista = 'rascunho'; render();
+    });
     const btnPdf = $('#re-pdf', root);
     if (btnPdf) btnPdf.addEventListener('click', () => {
       if (window.ReunioesPDF) window.ReunioesPDF.gerar(r);
       else toast('Módulo de PDF não carregado.');
+    });
+    const btnPrevia = $('#re-previa-pdf', root);
+    if (btnPrevia) btnPrevia.addEventListener('click', () => {
+      if (!window.ReunioesPDF) { toast('Módulo de PDF não carregado.'); return; }
+      // Monta uma cópia temporária com executivo/observações do formulário (sem persistir)
+      const previa = JSON.parse(JSON.stringify(r));
+      previa.memoria = previa.memoria || {};
+      previa.memoria.executivo = ($('#re-executivo', root) || {}).value || previa.memoria.executivo || '';
+      previa.memoria.observacoes = ($('#re-obs', root) || {}).value || previa.memoria.observacoes || '';
+      previa._previa = true;
+      window.ReunioesPDF.gerar(previa);
     });
 
     const btnEnc = $('#re-encerrar', root);
